@@ -1,0 +1,188 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Models\Employee;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+
+class UserController extends Controller
+{
+    public function index()
+    {
+        $users = User::with('manager:id,name')->get();
+
+        // Attach the linked employee record (name, position) for each user
+        $empByUserId = Employee::whereIn('user_id', $users->pluck('id'))
+            ->select('id', 'name', 'position', 'department', 'user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $users->each(function ($u) use ($empByUserId) {
+            $u->setAttribute('linked_employee', $empByUserId->get($u->id));
+        });
+
+        return response()->json($users);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name'       => 'required|string|max:255',
+            'email'      => 'required|email|unique:users',
+            'password'   => 'required|string|min:8',
+            'role'       => 'required|in:admin,depot_manager,manager,staff',
+            'department' => 'required|in:all,inventory,human_resources,maintenance,control',
+            'manager_id' => 'nullable|exists:users,id',
+        ]);
+
+        // Prevent self-assignment (no id yet on create, so nothing to check)
+        $data['password'] = Hash::make($data['password']);
+        $user = User::create($data);
+
+        return response()->json($user->load('manager:id,name'), 201);
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'name'       => 'sometimes|string|max:255',
+            'email'      => 'sometimes|email|unique:users,email,' . $user->id,
+            'role'       => 'sometimes|in:admin,depot_manager,manager,staff',
+            'department' => 'sometimes|in:all,inventory,human_resources,maintenance,control',
+            'is_active'  => 'sometimes|boolean',
+            'manager_id' => 'nullable|exists:users,id',
+        ]);
+
+        // Prevent a user from assigning themselves as their own manager
+        if (isset($data['manager_id']) && (int) $data['manager_id'] === $user->id) {
+            return response()->json(['message' => 'A user cannot be their own manager.'], 422);
+        }
+
+        $user->update($data);
+
+        return response()->json($user->load('manager:id,name'));
+    }
+
+    /**
+     * GET /api/users/subordinates
+     * Returns all users whose manager_id = the authenticated user.
+     */
+    public function subordinates(Request $request)
+    {
+        $subs = User::where('manager_id', $request->user()->id)
+            ->with('manager:id,name')
+            ->get();
+
+        return response()->json($subs);
+    }
+
+    /**
+     * GET /api/users/managers
+     * Returns all user accounts with a managerial role, with their assigned employee count.
+     */
+    public function managers()
+    {
+        $managers = User::whereIn('role', ['admin', 'depot_manager', 'manager'])
+            ->where('is_active', true)
+            ->withCount(['assignedEmployees'])
+            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager')")
+            ->get(['id', 'name', 'email', 'role', 'department']);
+
+        return response()->json($managers);
+    }
+
+    /**
+     * GET /api/users/{user}/assigned-employees
+     * Returns all employees assigned to this manager user.
+     */
+    public function assignedEmployees(User $user)
+    {
+        $employees = Employee::where('user_manager_id', $user->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'ibs_code', 'position', 'department', 'user_manager_id']);
+
+        return response()->json($employees);
+    }
+
+    /**
+     * POST /api/users/{user}/link-employee
+     * Link a user account to an employee record (sets employees.user_id = user.id).
+     * Body: { employee_id } — pass null to unlink.
+     */
+    public function linkEmployee(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'employee_id' => 'nullable|exists:employees,id',
+        ]);
+
+        // Clear previous link if any
+        Employee::where('user_id', $user->id)->update(['user_id' => null]);
+
+        if ($data['employee_id']) {
+            Employee::where('id', $data['employee_id'])->update(['user_id' => $user->id]);
+        }
+
+        $linked = $data['employee_id']
+            ? Employee::where('id', $data['employee_id'])->select('id', 'name', 'position', 'department')->first()
+            : null;
+
+        return response()->json(['success' => true, 'linked_employee' => $linked]);
+    }
+
+    /**
+     * POST /api/users/{user}/assign-employee
+     * Assign or unassign an employee to/from this manager user.
+     * Body: { employee_id, assign: true|false }
+     */
+    public function assignEmployee(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'assign'      => 'required|boolean',
+        ]);
+
+        Employee::where('id', $data['employee_id'])
+            ->update(['user_manager_id' => $data['assign'] ? $user->id : null]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function resetPassword(Request $request, User $user)
+    {
+        $request->validate([
+            'password'              => 'required|string|min:8|confirmed',
+            'password_confirmation' => 'required',
+        ]);
+
+        $user->update(['password' => Hash::make($request->password)]);
+
+        return response()->json(['message' => 'Password reset successfully']);
+    }
+
+    public function destroy(User $user)
+    {
+        if ($user->id === request()->user()->id) {
+            return response()->json(['message' => 'Cannot delete your own account'], 422);
+        }
+
+        $user->delete();
+        return response()->json(['message' => 'User deleted']);
+    }
+
+    /**
+     * POST /api/users/{user}/signature
+     * Admin sets e_signature for any user
+     */
+    public function saveSignature(Request $request, User $user)
+    {
+        $request->validate([
+            'e_signature' => 'required|string|max:524288',
+        ]);
+
+        $user->update(['e_signature' => $request->e_signature]);
+
+        return response()->json(['success' => true, 'message' => 'Signature saved.', 'data' => $user]);
+    }
+}

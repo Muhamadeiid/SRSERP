@@ -1,0 +1,81 @@
+# ───── Dependencies ─────────────────────────────────────────────────
+**/node_modules/
+**/vendor/
+**/composer.phar
+
+# ───── Build output ─────────────────────────────────────────────────
+**/dist/
+**/dist-ssr/
+**/build/
+**/public/build/
+**/public/hot/
+**/public/storage/
+
+# ───── Environment files (NEVER commit secrets) ─────────────────────
+**/.env
+**/.env.local
+**/.env.production
+**/.env.backup
+**/.env.*.local
+!**/.env.example
+
+# ───── SSL / certificates / keys ────────────────────────────────────
+ssl/
+**/*.pem
+**/*.key
+**/*.crt
+**/*.cer
+**/*.pfx
+
+# ───── Laravel storage / logs / cache ───────────────────────────────
+SRS-Backend/storage/*.key
+SRS-Backend/storage/logs/
+SRS-Backend/storage/framework/cache/data/
+SRS-Backend/storage/framework/sessions/
+SRS-Backend/storage/framework/testing/
+SRS-Backend/storage/framework/views/
+SRS-Backend/storage/app/public/
+SRS-Backend/bootstrap/cache/*.php
+!SRS-Backend/bootstrap/cache/.gitignore
+SRS-Backend/.phpunit.cache
+SRS-Backend/.phpunit.result.cache
+
+# ───── Logs ────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ───── Editor / IDE ────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.fleet/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ───── OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ───── Local scripts / scratch (don't commit) ──────────────────────
+_fw.ps1
+fw2.bat
+fix_firewall.bat
+add_firewall_rules.bat
+
+# ───── Database dumps / backups ────────────────────────────────────
+*.sql
+!SRS-Backend/database/migrations/*.sql
+mysql_reset.sql
+
+# ───── Misc generated / test artifacts ─────────────────────────────
+lrf_preview.png
+ERD.html
+*.local
