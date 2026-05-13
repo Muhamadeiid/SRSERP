@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
@@ -9,7 +10,7 @@ import { getEmployees, getEmployee } from '../services/employeeService'
 import {
   getLeaveRequests, createLeaveRequest,
   managerApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  getLeaveBalance,
+  getLeaveBalance, updateLeaveTrackingNo,
 } from '../services/leaveService'
 
 // ── constants ─────────────────────────────────────────────────
@@ -1181,11 +1182,13 @@ table{width:100%;border-collapse:collapse}
 .sig-name{height:6mm;color:#444;font-style:italic;padding:1.5mm 2.5mm}
 .foot{border-top:2px solid #000;margin-top:2mm;padding-top:1.5mm;font-size:8pt;font-weight:700;display:flex;justify-content:space-between}
 .red{color:#c00}
+.tracking{font-size:10pt;font-weight:900;margin:2mm 0 0;letter-spacing:.3pt}
 </style>
 </head>
 <body>
 <div class="page">
   <table class="hdr"><tr><td class="logo"><img src="${window.location.origin}/logo.svg" alt="Rotem SRS Egypt"></td><td class="title">Leave Request Form (LRF)<div class="ar" style="text-align:center;font-size:12pt;margin-top:2mm">نموذج طلب اجازة</div></td></tr></table>
+  <p class="tracking">Tracking No: ${esc(d.tracking_no) || '<span style="color:#888;font-weight:normal;font-style:italic">__________</span>'}</p>
   <div class="sub"><div style="display:flex;justify-content:space-between;font-weight:900"><span>■ Document purpose:</span><span dir="rtl">الغرض من النموذج:</span></div><div>This form is for employees to use to take a leave of annual, casual, sick leaves and early leave</div><div class="ar">هذا النموذج خاص برصيد الأجازات السنويه، الاجازات العارضه و الاجازات المرضي والأذونات</div><b>■ Details:</b></div>
   <table class="main"><tbody>
     <tr>${label('Employee Name:', 'إسم الموظف')}<td class="val">${esc(d.employee_name)}</td></tr>
@@ -1417,11 +1420,42 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onReject, onReschedule, onCancel, userRole, currentUserId, isDirectManager }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
   if (!req) return null
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
+  const isHR         = isDepotAdmin || userDepartment === 'human_resources'
   const canWithdraw  = ['pending','manager_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
+
+  // Tracking-number inline editor (HR only)
+  const [trackingDraft, setTrackingDraft]   = useState(req.tracking_no || '')
+  const [editingTracking, setEditingTracking] = useState(false)
+  const [savingTracking, setSavingTracking] = useState(false)
+
+  const saveTracking = async () => {
+    const value = trackingDraft.trim()
+    if (!value) { alert('Tracking number cannot be empty'); return }
+    setSavingTracking(true)
+    try {
+      await updateLeaveTrackingNo(req.id, value)
+      req.tracking_no = value          // optimistic local update
+      setEditingTracking(false)
+      onUpdated?.()
+    } catch (e) {
+      alert(e.message || 'Failed to update tracking number')
+    } finally {
+      setSavingTracking(false)
+    }
+  }
+
+  const trackingMissing = !req.tracking_no || /-(\s*)$/.test(req.tracking_no)
+  const handlePrintClick = () => {
+    if (trackingMissing) {
+      const ok = window.confirm('This request has no tracking number set. Print without it?')
+      if (!ok) return
+    }
+    return isLRF ? printOfficialLRFGrid(req) : generateOTR(req)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1430,11 +1464,43 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
-          <div>
+          <div className="min-w-0 flex-1 mr-3">
             <p className="text-sm font-bold text-secondary-700">{isLRF ? 'Leave Request (LRF)' : 'Overtime Request (OTR)'}</p>
-            <p className="text-xs text-neutral-400">{req.tracking_no}</p>
+
+            {isHR && editingTracking ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  value={trackingDraft}
+                  onChange={e => setTrackingDraft(e.target.value)}
+                  placeholder={isLRF ? 'LRF-GZ-0001' : 'OTR-EG1-0001'}
+                  autoFocus
+                  className="text-xs px-2 py-1 border border-primary rounded-md outline-none focus:ring-1 focus:ring-primary w-44"
+                  onKeyDown={e => { if (e.key === 'Enter') saveTracking(); if (e.key === 'Escape') { setEditingTracking(false); setTrackingDraft(req.tracking_no || '') } }}
+                />
+                <button onClick={saveTracking} disabled={savingTracking}
+                  className="px-2 py-1 text-[10px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50">
+                  {savingTracking ? '…' : 'Save'}
+                </button>
+                <button onClick={() => { setEditingTracking(false); setTrackingDraft(req.tracking_no || '') }}
+                  className="px-2 py-1 text-[10px] font-bold text-neutral-500 hover:bg-neutral-100 rounded-md">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 mt-1">
+                <p className={`text-xs ${trackingMissing ? 'text-amber-600 italic font-semibold' : 'text-neutral-400'}`}>
+                  {trackingMissing ? 'No tracking number' : req.tracking_no}
+                </p>
+                {isHR && (
+                  <button onClick={() => setEditingTracking(true)}
+                    className="text-[10px] font-bold text-primary hover:underline">
+                    {trackingMissing ? '+ Set' : 'Edit'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <StatusBadge status={req.status} />
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
           </div>
@@ -1481,7 +1547,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
         {/* Actions */}
         <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-between gap-3">
           <button
-          onClick={() => isLRF ? printOfficialLRFGrid(req) : generateOTR(req)}
+            onClick={handlePrintClick}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-neutral-500 hover:text-secondary border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all">
             <Printer className="w-4 h-4" /> Print
           </button>
@@ -1542,6 +1608,8 @@ export default function LeaveRequestsPage() {
   const { user }      = useSelector(s => s.auth)
   const isDepotAdmin  = user?.role === 'admin' || user?.role === 'depot_manager'
   const isManager     = isDepotAdmin  // keep for compat
+  const location      = useLocation()
+  const navigate      = useNavigate()
 
   const [tab,         setTab]         = useState('lrf')
   const [requests,    setRequests]    = useState([])
@@ -1626,21 +1694,28 @@ export default function LeaveRequestsPage() {
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
-  // Auto-open request modal if notification deep-link points to a specific request
+  // Auto-open request modal if notification deep-link points to a specific request.
+  // Re-runs whenever URL search OR requests change (so it works even if user is already on the page).
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(location.search)
     const reqId = params.get('req')
-    if (reqId && requests.length) {
+    if (!reqId) return
+
+    if (requests.length) {
       const found = requests.find(r => String(r.id) === String(reqId))
       if (found) {
         setViewReq(found)
-        // clean the URL so refreshing won't keep re-opening
-        const url = new URL(window.location.href)
-        url.searchParams.delete('req')
-        window.history.replaceState({}, '', url.pathname)
+        // Clean the URL so refresh / back-button won't re-trigger
+        navigate(location.pathname, { replace: true })
+      } else {
+        // Request not in current list — refresh once to fetch it
+        fetchRequests()
       }
+    } else if (!loadingReqs) {
+      // Requests not loaded yet and not currently loading → trigger fetch
+      fetchRequests()
     }
-  }, [requests])
+  }, [location.search, requests, loadingReqs])
 
   const handleSubmit = async (data) => {
     setSaving(true)
@@ -2002,8 +2077,10 @@ export default function LeaveRequestsPage() {
           onReschedule={(id) => { setRescheduleModal({ id }); setViewReq(null) }}
           onCancel={(id) => { setCancelModal({ id }); setViewReq(null) }}
           userRole={user?.role}
+          userDepartment={user?.department}
           currentUserId={user?.id}
           isDirectManager={isDirectManagerOf(viewReq)}
+          onUpdated={fetchRequests}
         />
       )}
 

@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
-  Users, Calendar, Clock, ShieldCheck,
-  AlertTriangle, ChevronLeft, ChevronRight,
-  LogOut, Bell, FileText, Package, Settings,
-  X, CheckCheck, GitBranch, Menu, ShoppingCart, FileSpreadsheet,
+  ChevronLeft, ChevronRight, LogOut, Bell, Menu, X, CheckCheck,
+  ShoppingCart, FilePlus2, LayoutDashboard, FileSpreadsheet,
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
 
-// ── time formatter ───────────────────────────────────────────────
+// ── time formatter (matches HRLayout) ─────────────────────────────────────────
 const fmtTime = (d) => {
   if (!d) return ''
   const dt = new Date(d)
@@ -23,34 +21,24 @@ const fmtTime = (d) => {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-// ── nav definition with per-role visibility ──────────────────────
-const ALL_NAV = [
-  { label: 'Workforce',          path: '/human-resources',                icon: Users,          end: true,  roles: ['admin','depot_manager'] },
-  { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText,                   roles: ['admin','depot_manager','manager','staff'] },
-  { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            roles: ['admin','depot_manager'] },
-  { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      roles: ['admin','depot_manager'] },
-  { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                roles: ['admin','depot_manager'] },
-  { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              roles: ['admin','depot_manager'] },
-  { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    roles: ['admin','depot_manager'] },
-  { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  roles: ['admin','depot_manager'] },
-  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,                   roles: ['admin','depot_manager','manager'] },
-  { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   roles: ['admin','depot_manager'] },
-  { label: 'Procurement',        path: '/procurement',                    icon: ShoppingCart,               roles: ['admin','depot_manager','manager','staff','procurement','ehs'] },
+const NAV = [
+  { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true },
+  { label: 'New PRF',      path: '/procurement/new',    icon: FilePlus2 },
+  { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet },
 ]
 
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
-export default function HRLayout() {
+export default function ProcurementLayout() {
   const { collapsed, setCollapsed, isMobile } = useSidebar()
   const navigate  = useNavigate()
-  const location  = useLocation()
   const dispatch  = useDispatch()
   const { user }  = useSelector(s => s.auth)
-  const sidebarW  = collapsed ? '68px' : '240px'
+  const sidebarW       = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
-  const mainOffset = isMobile ? 0 : sidebarW
+  const mainOffset     = isMobile ? 0 : sidebarW
 
-  // ── notifications ────────────────────────────────────────────
+  // ── notifications (shared with HRLayout pattern) ──────────────────────
   const [notifs, setNotifs] = useState([])
   const [open,   setOpen]   = useState(false)
   const panelRef = useRef()
@@ -66,9 +54,7 @@ export default function HRLayout() {
   }, [fetchNotifs])
 
   useEffect(() => {
-    const h = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
-    }
+    const h = (e) => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
@@ -87,19 +73,12 @@ export default function HRLayout() {
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     }
     setOpen(false)
-    if (n.data?.leave_request_id) {
+    if (n.data?.prf_id) {
+      navigate(`/procurement/${n.data.prf_id}`)
+    } else if (n.data?.leave_request_id) {
       navigate(`/human-resources/leave?req=${n.data.leave_request_id}`)
     }
   }
-
-  // ── filter nav by role ───────────────────────────────────────
-  const role     = user?.role ?? 'staff'
-  const navItems = ALL_NAV.filter(item => item.roles.includes(role))
-
-  const activeNav = navItems.find(n =>
-    n.end ? location.pathname === n.path : location.pathname.startsWith(n.path)
-  )
-  const pageLabel = activeNav?.label ?? 'Human Resources'
 
   const handleLogout = () => { dispatch(logout()); navigate('/login') }
 
@@ -113,7 +92,7 @@ export default function HRLayout() {
         />
       )}
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 bottom-0 bg-white border-r border-neutral-100 flex flex-col z-50 transition-all duration-200 overflow-hidden ${isMobile && !sidebarVisible ? '-translate-x-full' : 'translate-x-0'}`}
         style={{ width: sidebarW }}
@@ -128,8 +107,8 @@ export default function HRLayout() {
             {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
           <div className={`flex flex-col leading-tight overflow-hidden transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-            <span className="font-extrabold text-sm text-secondary-700 whitespace-nowrap">HR Module</span>
-            <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Human Resources</span>
+            <span className="font-extrabold text-sm text-secondary-700 whitespace-nowrap">Procurement</span>
+            <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Purchase Requests</span>
           </div>
         </div>
 
@@ -138,7 +117,7 @@ export default function HRLayout() {
           {!collapsed && (
             <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest px-3 py-1.5">Modules</p>
           )}
-          {navItems.map(item => (
+          {NAV.map(item => (
             <NavLink
               key={item.label}
               to={item.path}
@@ -168,12 +147,9 @@ export default function HRLayout() {
         </div>
       </aside>
 
-      {/* ── Main Area ── */}
+      {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-200" style={{ marginLeft: mainOffset }}>
-
-        {/* Topbar */}
         <header className="min-h-[60px] bg-white border-b border-neutral-100 flex items-center px-4 sm:px-6 gap-3 sticky top-0 z-30">
-
           {isMobile && (
             <button
               onClick={() => setCollapsed(false)}
@@ -183,18 +159,15 @@ export default function HRLayout() {
             </button>
           )}
 
-          {/* Breadcrumb */}
           <div className="hidden sm:flex items-center gap-1.5 text-sm text-neutral-400 min-w-0">
             <span className="text-secondary-700 font-medium">Rotem SRS</span>
             <span className="opacity-40">/</span>
-            <span className="text-neutral-500">Human Resources</span>
-            <span className="opacity-40">/</span>
-            <span className="text-secondary-700 font-semibold">{pageLabel}</span>
+            <span className="text-secondary-700 font-semibold">Procurement</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
 
-            {/* ── Notification Bell ── */}
+            {/* Notification Bell */}
             <div className="relative" ref={panelRef}>
               <button
                 onClick={() => setOpen(o => !o)}
@@ -210,7 +183,6 @@ export default function HRLayout() {
 
               {open && (
                 <div className="absolute right-0 top-10 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-neutral-200 shadow-2xl z-50 overflow-hidden">
-                  {/* Panel header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
                     <div className="flex items-center gap-2">
                       <Bell className="w-4 h-4 text-primary" />
@@ -231,7 +203,6 @@ export default function HRLayout() {
                     </div>
                   </div>
 
-                  {/* Notification list */}
                   <div className="max-h-80 overflow-y-auto divide-y divide-neutral-50">
                     {notifs.length === 0 ? (
                       <div className="py-12 text-center text-neutral-300">
@@ -242,7 +213,7 @@ export default function HRLayout() {
                       <button key={n.id} onClick={() => handleNotifClick(n)}
                         className={`w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors flex items-start gap-3 ${!n.read ? 'bg-blue-50/50' : ''}`}>
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!n.read ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
-                          <Bell className="w-3.5 h-3.5" />
+                          <ShoppingCart className="w-3.5 h-3.5" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-xs font-bold truncate ${!n.read ? 'text-secondary-700' : 'text-neutral-500'}`}>{n.title}</p>
@@ -253,22 +224,12 @@ export default function HRLayout() {
                       </button>
                     ))}
                   </div>
-
-                  {notifs.length > 0 && (
-                    <div className="px-4 py-2.5 border-t border-neutral-100 text-center">
-                      <button onClick={() => { setOpen(false); navigate('/human-resources/leave') }}
-                        className="text-[11px] text-primary font-semibold hover:underline">
-                        View all in Leave Requests →
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
             <div className="w-px h-6 bg-neutral-100" />
 
-            {/* User info */}
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-bold text-secondary-700 leading-none">{user?.name ?? 'User'}</p>

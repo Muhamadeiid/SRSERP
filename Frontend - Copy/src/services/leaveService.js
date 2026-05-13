@@ -34,6 +34,10 @@ export const rejectLeave         = (id, reason)  => request(`/leave-requests/${i
 export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const rescheduleLeave     = (id, reason)  => request(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
 
+// HR-only — manually set the tracking number before printing
+export const updateLeaveTrackingNo = (id, tracking_no) =>
+  request(`/leave-requests/${id}/tracking-no`, { method: 'PUT', body: JSON.stringify({ tracking_no }) })
+
 export const getNotifications  = ()  => request('/notifications')
 export const markAllRead       = ()  => request('/notifications/read-all', { method: 'POST' })
 export const markOneRead       = (id) => request(`/notifications/${id}/read`, { method: 'POST' })

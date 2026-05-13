@@ -9,6 +9,16 @@ import CalendarPage      from './pages/CalendarPage'
 import HRLayout          from './layout/HRLayout'
 import InventoryLayout   from './layout/InventoryLayout'
 import MainLayout        from './layout/MainLayout'
+import ProcurementLayout from './layout/ProcurementLayout'
+import PrfDashboard      from './pages/PrfDashboard'
+import PrfNewPage        from './pages/PrfNewPage'
+import PrfDetail         from './pages/PrfDetail'
+import PrfMasterList     from './pages/PrfMasterList'
+import PoNewPage         from './pages/PoNewPage'
+import PoDetail          from './pages/PoDetail'
+import IgiNewPage        from './pages/IgiNewPage'
+import IgiDetail         from './pages/IgiDetail'
+import LeaveMasterList   from './pages/LeaveMasterList'
 
 // HR tab components — each mounted at its own route
 import WorkforceTab      from './components/hr/WorkforceTab'
@@ -29,6 +39,9 @@ const DASH_ROLES    = ['admin', 'depot_manager']
 
 // Calendar / approvals: managers and above
 const MANAGE_ROLES  = ['admin', 'depot_manager', 'manager']
+
+// Procurement module: Admin, Depot Manager, Purchasing only
+const PROC_ROLES    = ['admin', 'depot_manager', 'purchasing']
 
 // Everyone (all authenticated users — leave requests, notifications)
 // No roles prop = no restriction beyond being logged in
@@ -90,6 +103,9 @@ export default function App() {
           {/* Leave Requests — all HR-authorized users */}
           <Route path="leave" element={<LeaveRequestsPage />} />
 
+          {/* Master List — Leaves & Overtime */}
+          <Route path="leave-master" element={<LeaveMasterList />} />
+
           {/* Calendar */}
           <Route path="calendar" element={<CalendarPage />} />
 
@@ -100,6 +116,30 @@ export default function App() {
           <Route path="assets"         element={<AssetsTab />} />
           <Route path="org-chart"      element={<OrgChartTab />} />
           <Route path="settings"       element={<SettingsPage />} />
+        </Route>
+
+        {/* New PRF — any authenticated user can submit */}
+        <Route element={
+          <ProtectedRoute redirect="/login">
+            <ProcurementLayout />
+          </ProtectedRoute>
+        }>
+          <Route path="/procurement/new" element={<PrfNewPage />} />
+        </Route>
+
+        {/* Procurement module — Admin, Depot Manager, Purchasing only */}
+        <Route path="/procurement" element={
+          <ProtectedRoute roles={PROC_ROLES} redirect="/login">
+            <ProcurementLayout />
+          </ProtectedRoute>
+        }>
+          <Route index                    element={<PrfDashboard />} />
+          <Route path="master"            element={<PrfMasterList />} />
+          <Route path="po/new/:prfId"     element={<PoNewPage    />} />
+          <Route path="po/:id"            element={<PoDetail     />} />
+          <Route path="igi/new/:poId"     element={<IgiNewPage   />} />
+          <Route path="igi/:id"           element={<IgiDetail    />} />
+          <Route path=":id"               element={<PrfDetail    />} />
         </Route>
 
         {/* Catch-all */}

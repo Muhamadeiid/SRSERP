@@ -264,10 +264,17 @@ export async function generateOTR(d) {
     spacing: { before: 120, after: 80 },
     children: [
       new TextRun({
-        text: `Tracking No: ${data.tracking_no || 'OTR-EG1-'}`,
+        text: 'Tracking No: ',
         bold: true,
         size: 22,
         font: 'Arial',
+      }),
+      new TextRun({
+        text: data.tracking_no || '__________',
+        bold: !!data.tracking_no,
+        size: 22,
+        font: 'Arial',
+        color: data.tracking_no ? '000000' : '888888',
       }),
     ],
   })

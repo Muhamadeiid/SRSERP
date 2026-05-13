@@ -69,4 +69,20 @@ class User extends Authenticatable
         if (in_array($this->role, ['admin', 'depot_manager']) || $this->department === 'human_resources') return true;
         return $this->department === $department;
     }
+
+    // ── Procurement role helpers ────────────────────────────
+    public function isProcurement(): bool
+    {
+        return $this->role === 'procurement' || $this->role === 'admin';
+    }
+
+    public function isEHS(): bool
+    {
+        return $this->role === 'ehs' || $this->role === 'admin';
+    }
+
+    public function isDepotManager(): bool
+    {
+        return $this->role === 'depot_manager' || $this->role === 'admin';
+    }
 }

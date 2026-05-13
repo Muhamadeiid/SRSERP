@@ -9,6 +9,9 @@ use App\Http\Controllers\ITAssetController;
 use App\Http\Controllers\ClearanceReportController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\LeaveBalanceController;
+use App\Http\Controllers\PrfController;
+use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\IgiController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +40,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leave-requests/{leaveRequest}/reject',          [LeaveRequestController::class, 'reject']);
     Route::post('/leave-requests/{leaveRequest}/cancel',          [LeaveRequestController::class, 'cancel']);
     Route::post('/leave-requests/{leaveRequest}/reschedule',      [LeaveRequestController::class, 'reschedule']);
+    Route::put('/leave-requests/{leaveRequest}/tracking-no',      [LeaveRequestController::class, 'updateTrackingNo']);
 
     // ── Notifications — every authenticated user ──────────────────────────────
     Route::get('/notifications',           [LeaveRequestController::class, 'notifications']);
@@ -45,6 +49,29 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Subordinates — any manager can fetch their own ────────────────────────
     Route::get('/users/subordinates', [UserController::class, 'subordinates']);
+
+    // ── Procurement (PRF) — every authenticated user can submit; approvals
+    //     gated inside the controller (procurement → ehs → depot_manager)
+    Route::prefix('procurement')->group(function () {
+        Route::get('/prfs',                  [PrfController::class, 'index']);
+        Route::post('/prfs',                 [PrfController::class, 'store']);
+        Route::get('/prfs/{prf}',            [PrfController::class, 'show']);
+        Route::post('/prfs/{prf}/approve',     [PrfController::class, 'approve']);
+        Route::post('/prfs/{prf}/reject',      [PrfController::class, 'reject']);
+        Route::put('/prfs/{prf}/tracking-no',  [PrfController::class, 'updateTrackingNo']);
+
+        // Purchase Orders — Admin, Depot Manager, Purchasing only (gated in controller)
+        Route::get('/pos',          [PurchaseOrderController::class, 'index']);
+        Route::post('/pos',         [PurchaseOrderController::class, 'store']);
+        Route::get('/pos/{po}',     [PurchaseOrderController::class, 'show']);
+        Route::put('/pos/{po}',     [PurchaseOrderController::class, 'update']);
+
+        // Incoming Goods Inspection — Admin, Depot Manager, Purchasing only (gated in controller)
+        Route::get('/igis',         [IgiController::class, 'index']);
+        Route::post('/igis',        [IgiController::class, 'store']);
+        Route::get('/igis/{igi}',   [IgiController::class, 'show']);
+        Route::put('/igis/{igi}',   [IgiController::class, 'update']);
+    });
 
     // ── HR Only — Admin, Depot Manager, HR department ─────────────────────────
     Route::middleware('hr.only')->group(function () {
