@@ -13,4 +13,12 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['exceljs'],
+  },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+  },
 })
