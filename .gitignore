@@ -79,3 +79,6 @@ mysql_reset.sql
 lrf_preview.png
 ERD.html
 *.local
+
+# ───── Claude Code internal ─────────────────────────────────────────
+.claude/worktrees/
