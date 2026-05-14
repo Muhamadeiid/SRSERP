@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   getPrf, approvePrf, rejectPrf, updatePrfNumber,
-  PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage,
+  PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
 import { generatePRF } from '../utils/generatePRF'
 
@@ -166,9 +166,9 @@ export default function PrfDetail() {
             ) : (
               <h1 className="text-xl font-extrabold text-secondary-700 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                {prf.prf_number}
+                {cleanPrfNumber(prf.prf_number)}
                 {isProcurementUser && (
-                  <button onClick={() => { setEditingNumber(true); setNumberDraft(prf.prf_number || '') }}
+                  <button onClick={() => { setEditingNumber(true); setNumberDraft(cleanPrfNumber(prf.prf_number)) }}
                     className="text-[10px] font-bold text-primary hover:underline ml-1">
                     Edit
                   </button>

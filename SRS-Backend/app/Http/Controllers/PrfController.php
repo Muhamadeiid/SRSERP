@@ -258,13 +258,17 @@ class PrfController extends Controller
                 'acted_at'    => now(),
             ]);
 
-            $prf->update(['status' => 'rejected']);
+            // Void the number so the next PRF can reuse it
+            $originalNumber = $prf->prf_number;
+            $voidNumber     = str_ends_with($originalNumber, '-VOID') ? $originalNumber : $originalNumber . '-VOID';
+
+            $prf->update(['status' => 'rejected', 'prf_number' => $voidNumber]);
 
             if ($prf->requested_by) {
                 Notification::notifyUser(
                     $prf->requested_by,
                     'prf_rejected',
-                    "PRF Rejected — {$prf->prf_number}",
+                    "PRF Rejected — {$originalNumber}",
                     "Your PRF was rejected by {$user->name} ({$stage['label']}): {$request->input('comment')}",
                     ['prf_id' => $prf->id]
                 );

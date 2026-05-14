@@ -196,6 +196,9 @@ class PurchaseOrderController extends Controller
         $data = $v->validated();
 
         return DB::transaction(function () use ($po, $data) {
+            $cancellingNow = ($data['status'] ?? null) === 'cancelled'
+                && $po->status !== 'cancelled';
+
             $po->update(array_filter([
                 'po_number'        => $data['po_number']        ?? null,
                 'date'             => $data['date']             ?? null,
@@ -210,6 +213,17 @@ class PurchaseOrderController extends Controller
                 'comments'         => $data['comments']         ?? null,
                 'status'           => $data['status']           ?? null,
             ], fn($v) => $v !== null));
+
+            // When PO is cancelled, void the linked PRF number so it can be reused
+            if ($cancellingNow && $po->prf_id) {
+                $prf = Prf::find($po->prf_id);
+                if ($prf && ! str_ends_with($prf->prf_number, '-VOID')) {
+                    $prf->update([
+                        'prf_number' => $prf->prf_number . '-VOID',
+                        'status'     => 'cancelled',
+                    ]);
+                }
+            }
 
             if (isset($data['items'])) {
                 $po->items()->delete();

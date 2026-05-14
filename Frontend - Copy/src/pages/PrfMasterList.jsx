@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
-import { getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES } from '../services/prfService'
+import { getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES, cleanPrfNumber } from '../services/prfService'
 
 const fmtShort = (d) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -47,7 +47,7 @@ export default function PrfMasterList() {
     if (search.trim()) {
       const q = search.toLowerCase()
       out = out.filter(p =>
-        (p.prf_number      || '').toLowerCase().includes(q) ||
+        cleanPrfNumber(p.prf_number).toLowerCase().includes(q) ||
         (p.requester?.name || '').toLowerCase().includes(q) ||
         (p.notes           || '').toLowerCase().includes(q)
       )
@@ -195,7 +195,7 @@ export default function PrfMasterList() {
                     className="cursor-pointer hover:bg-primary/5 transition-colors">
                     <td className="px-3 py-2.5 text-center font-bold text-neutral-400">{i + 1}</td>
                     <td className="px-3 py-2.5 font-mono font-bold text-secondary-700 whitespace-nowrap">
-                      {p.prf_number || <span className="text-neutral-300 italic font-normal">—</span>}
+                      {cleanPrfNumber(p.prf_number) || <span className="text-neutral-300 italic font-normal">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-secondary-700 font-semibold">{p.requester?.name || '—'}</td>
                     <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{fmtShort(p.date)}</td>

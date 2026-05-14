@@ -47,6 +47,7 @@ export const PRF_STATUS_LABELS = {
   pending_depot:        'Pending Depot Manager',
   approved:             'Approved',
   rejected:             'Rejected',
+  cancelled:            'Cancelled',
 }
 
 export const PRF_STATUS_STYLES = {
@@ -56,7 +57,11 @@ export const PRF_STATUS_STYLES = {
   pending_depot:        'bg-purple-50   text-purple-700  border-purple-200',
   approved:             'bg-green-50    text-green-700   border-green-200',
   rejected:             'bg-red-50      text-red-700     border-red-200',
+  cancelled:            'bg-neutral-100 text-neutral-500 border-neutral-300',
 }
+
+// Strip the internal -VOID suffix before displaying a PRF number
+export const cleanPrfNumber = (num) => (num ?? '').replace(/-VOID$/, '')
 
 // 8 default categories — matches the official PRF.pdf layout exactly (2 columns × 4 rows)
 export const MATERIAL_CATEGORIES = [
