@@ -3,8 +3,10 @@ import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Trash2, Loader2, CheckCircle, X, FileText, Image as ImageIcon, Upload, Pencil,
+  ChevronDown, ChevronUp, Zap,
 } from 'lucide-react'
 import { createPrf, MATERIAL_CATEGORIES } from '../services/prfService'
+import { PRF_TEMPLATES } from '../utils/prfTemplates'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
@@ -36,11 +38,27 @@ export default function PrfNewPage() {
     material_category: [],
     items: [ { ...EMPTY_ITEM }, { ...EMPTY_ITEM }, { ...EMPTY_ITEM } ],   // start with 3 rows
   })
-  const [saving, setSaving]       = useState(false)
-  const [submitted, setSubmitted] = useState(null)
-  const [err, setErr] = useState('')
+  const [saving, setSaving]         = useState(false)
+  const [submitted, setSubmitted]   = useState(null)
+  const [err, setErr]               = useState('')
+  const [templatesOpen, setTemplatesOpen] = useState(true)
+  const [addedTemplates, setAddedTemplates] = useState(new Set())
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const addTemplateItem = (tpl) => {
+    const key = tpl.description
+    setForm(f => {
+      // Replace the first fully-empty row, otherwise append
+      const emptyIdx = f.items.findIndex(it => !it.description.trim())
+      const newItem = { ...EMPTY_ITEM, ...tpl, quantity: String(tpl.quantity) }
+      const items = emptyIdx >= 0
+        ? f.items.map((it, i) => i === emptyIdx ? newItem : it)
+        : [...f.items, newItem]
+      return { ...f, items }
+    })
+    setAddedTemplates(prev => new Set(prev).add(key))
+  }
 
   const toggleCat = (cat) =>
     setForm(f => ({
@@ -176,6 +194,60 @@ export default function PrfNewPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Quick Add Templates (appears when categories are selected) ── */}
+        {form.material_category.filter(c => PRF_TEMPLATES[c]).length > 0 && (
+          <div className="border-b-2 border-neutral-200 bg-emerald-50/60">
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen(o => !o)}
+              className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-emerald-100/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-xs font-bold text-emerald-800">Quick Add — Common Items</span>
+                <span className="text-[10px] text-emerald-600 font-medium">
+                  Click any item to add it to the form instantly
+                </span>
+              </div>
+              {templatesOpen
+                ? <ChevronUp className="w-4 h-4 text-emerald-600" />
+                : <ChevronDown className="w-4 h-4 text-emerald-600" />}
+            </button>
+
+            {templatesOpen && (
+              <div className="px-4 pb-4 space-y-4">
+                {form.material_category.filter(c => PRF_TEMPLATES[c]).map(cat => (
+                  <div key={cat}>
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-2">{cat}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {PRF_TEMPLATES[cat].map(tpl => {
+                        const added = addedTemplates.has(tpl.description)
+                        return (
+                          <button
+                            key={tpl.description}
+                            type="button"
+                            onClick={() => !added && addTemplateItem(tpl)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                              added
+                                ? 'bg-green-50 border-green-300 text-green-700 cursor-default'
+                                : 'bg-white border-neutral-200 text-neutral-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 cursor-pointer'
+                            }`}
+                          >
+                            {added
+                              ? <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />
+                              : <Plus className="w-3 h-3 shrink-0" />}
+                            {tpl.description}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Material Detail / Items table ── */}
         <div className="border-b-2 border-neutral-200">
