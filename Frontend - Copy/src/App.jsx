@@ -59,16 +59,20 @@ export default function App() {
         {/* Public */}
         <Route path="/login" element={<Login />} />
 
-        {/* Main Layout — Dashboard + main sidebar (Admin & Depot Manager only) */}
+        {/* Main Layout — Dashboard + main sidebar (all authenticated users) */}
         <Route element={
-          <ProtectedRoute roles={DASH_ROLES} redirect="/human-resources/leave">
+          <ProtectedRoute redirect="/login">
             <MainLayout />
           </ProtectedRoute>
         }>
           <Route path="/"            element={<DashboardPage />} />
           <Route path="/maintenance" element={<ComingSoon title="Maintenance" />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
-          <Route path="/users"       element={<Users />} />
+          <Route path="/users"       element={
+            <ProtectedRoute roles={['admin']} redirect="/">
+              <Users />
+            </ProtectedRoute>
+          } />
         </Route>
 
         {/* Inventory Layout (Admin & Depot Manager only) */}

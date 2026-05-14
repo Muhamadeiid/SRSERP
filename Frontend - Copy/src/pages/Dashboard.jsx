@@ -76,6 +76,13 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useSelector(s => s.auth)
 
+  const role       = user?.role ?? 'staff'
+  const dept       = user?.department ?? ''
+  const isHRFull   = ['admin', 'depot_manager'].includes(role) || dept === 'human_resources'
+  const isProcFull = ['admin', 'depot_manager', 'purchasing'].includes(role)
+  const canSeeProc = isProcFull || role === 'ehs'
+  const isDashFull = ['admin', 'depot_manager'].includes(role)
+
   const [loading, setLoading] = useState(true)
   const [empStats,  setEmpStats]  = useState(null)
   const [employees, setEmployees] = useState([])
@@ -85,19 +92,24 @@ export default function DashboardPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const tasks = [
-      getEmployeeStats().then(r => setEmpStats(r?.data ?? r)).catch(() => {}),
-      getEmployees({ per_page: 500 }).then(r => {
-        const list = Array.isArray(r?.data?.data) ? r.data.data : Array.isArray(r?.data) ? r.data : []
-        setEmployees(list)
-      }).catch(() => {}),
-      getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}),
-      getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}),
-      getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}),
-    ]
+    const tasks = []
+    if (isHRFull) {
+      tasks.push(
+        getEmployeeStats().then(r => setEmpStats(r?.data ?? r)).catch(() => {}),
+        getEmployees({ per_page: 500 }).then(r => {
+          const list = Array.isArray(r?.data?.data) ? r.data.data : Array.isArray(r?.data) ? r.data : []
+          setEmployees(list)
+        }).catch(() => {}),
+        getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}),
+      )
+    }
+    if (canSeeProc) {
+      tasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
+    }
+    tasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
     await Promise.allSettled(tasks)
     setLoading(false)
-  }, [])
+  }, [isHRFull, canSeeProc])
 
   useEffect(() => {
     fetchAll()
@@ -135,46 +147,49 @@ export default function DashboardPage() {
   // ── Recent activity (synthesized from data) ───────────────────
   const recent = useMemo(() => {
     const items = []
-    reqs.slice(0, 30).forEach(r => {
-      const action = r.status === 'approved' ? 'approved' :
-                     r.status === 'rejected' ? 'rejected' :
-                     r.status === 'cancelled' ? 'cancelled' : 'submitted'
-      items.push({
-        type:  r.type === 'lrf' ? 'leave' : 'overtime',
-        title: r.type === 'lrf'
-          ? `${(r.leave_type||'leave').replace('_',' ')} — ${r.employee_name || ''}`
-          : `Overtime — ${r.employee_name || ''}`,
-        sub:   `${action.toUpperCase()} · ${r.tracking_no || ''}`,
-        date:  r.updated_at || r.created_at,
-        href:  '/human-resources/leave',
+    if (isHRFull) {
+      reqs.slice(0, 30).forEach(r => {
+        const action = r.status === 'approved' ? 'approved' :
+                       r.status === 'rejected' ? 'rejected' :
+                       r.status === 'cancelled' ? 'cancelled' : 'submitted'
+        items.push({
+          type:  r.type === 'lrf' ? 'leave' : 'overtime',
+          title: r.type === 'lrf'
+            ? `${(r.leave_type||'leave').replace('_',' ')} — ${r.employee_name || ''}`
+            : `Overtime — ${r.employee_name || ''}`,
+          sub:   `${action.toUpperCase()} · ${r.tracking_no || ''}`,
+          date:  r.updated_at || r.created_at,
+          href:  '/human-resources/leave',
+        })
       })
-    })
-    prfs.slice(0, 30).forEach(p => {
-      items.push({
-        type:  'prf',
-        title: `PRF — ${p.requester?.name || ''}`,
-        sub:   `${(p.status||'').replace(/_/g,' ').toUpperCase()} · ${p.prf_number || '—'}`,
-        date:  p.updated_at || p.created_at,
-        href:  `/procurement/${p.id}`,
+    }
+    if (canSeeProc) {
+      prfs.slice(0, 30).forEach(p => {
+        items.push({
+          type:  'prf',
+          title: `PRF — ${p.requester?.name || ''}`,
+          sub:   `${(p.status||'').replace(/_/g,' ').toUpperCase()} · ${p.prf_number || '—'}`,
+          date:  p.updated_at || p.created_at,
+          href:  `/procurement/${p.id}`,
+        })
       })
-    })
+    }
     return items
       .filter(i => i.date)
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 8)
-  }, [reqs, prfs])
+  }, [reqs, prfs, isHRFull, canSeeProc])
 
   // ── Alerts (computed) ─────────────────────────────────────────
   const alerts = useMemo(() => {
     const out = []
-    if (pendingLeaves > 0) out.push({ severity:'warning', message:`${pendingLeaves} leave/overtime request(s) awaiting approval`, href:'/human-resources/leave' })
-    if (pendingPrfs   > 0) out.push({ severity:'info',    message:`${pendingPrfs} PRF(s) awaiting next stage`,                  href:'/procurement' })
-    if (rejectedPrfs  > 0) out.push({ severity:'critical',message:`${rejectedPrfs} PRF(s) rejected — review needed`,             href:'/procurement?status=rejected' })
-
+    if (isHRFull && pendingLeaves > 0)  out.push({ severity:'warning',  message:`${pendingLeaves} leave/overtime request(s) awaiting approval`, href:'/human-resources/leave' })
+    if (canSeeProc && pendingPrfs > 0)  out.push({ severity:'info',     message:`${pendingPrfs} PRF(s) awaiting next stage`,                    href:'/procurement' })
+    if (canSeeProc && rejectedPrfs > 0) out.push({ severity:'critical', message:`${rejectedPrfs} PRF(s) rejected — review needed`,               href:'/procurement?status=rejected' })
     const unreadNotifs = notifs.filter(n => !n.read).length
-    if (unreadNotifs > 0) out.push({ severity:'info', message:`${unreadNotifs} unread notification(s)`, href:'/human-resources/leave' })
+    if (unreadNotifs > 0) out.push({ severity:'info', message:`${unreadNotifs} unread notification(s)`, href: isHRFull ? '/human-resources/leave' : '/procurement' })
     return out
-  }, [pendingLeaves, pendingPrfs, rejectedPrfs, notifs])
+  }, [pendingLeaves, pendingPrfs, rejectedPrfs, notifs, isHRFull, canSeeProc])
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -204,84 +219,111 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI tiles ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatTile
-          label="Total Workforce"
-          value={loading && totalStaff === 0 ? '…' : totalStaff}
-          sub={onSiteStaff >= 0 ? `${onSiteStaff} on site · ${onLeaveToday} on leave` : ''}
-          subColor="text-neutral-500"
-          icon={Users}
-          color="bg-blue-50 text-blue-600"
-          to
-          onClick={() => navigate('/human-resources')}
-        />
-        <StatTile
-          label="Pending Approvals"
-          value={loading ? '…' : pendingLeaves}
-          sub={`${pendingLrfCount} leaves · ${pendingOtCount} overtime`}
-          subColor="text-amber-600"
-          icon={Clock}
-          color="bg-amber-50 text-amber-600"
-          to
-          onClick={() => navigate('/human-resources/leave')}
-        />
-        <StatTile
-          label="Active PRFs"
-          value={loading ? '…' : pendingPrfs}
-          sub={`${approvedPrfs} approved · ${rejectedPrfs} rejected`}
-          subColor="text-neutral-500"
-          icon={ShoppingCart}
-          color="bg-purple-50 text-purple-600"
-          to
-          onClick={() => navigate('/procurement')}
-        />
-        <StatTile
-          label="On Leave Today"
-          value={loading ? '…' : onLeaveToday}
-          sub={`${approvedThisMonth} approved this month`}
-          subColor="text-green-600"
-          icon={Calendar}
-          color="bg-green-50 text-green-600"
-          to
-          onClick={() => navigate('/human-resources/calendar')}
-        />
-      </div>
+      {(isHRFull || canSeeProc) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {isHRFull && (
+            <StatTile
+              label="Total Workforce"
+              value={loading && totalStaff === 0 ? '…' : totalStaff}
+              sub={onSiteStaff >= 0 ? `${onSiteStaff} on site · ${onLeaveToday} on leave` : ''}
+              subColor="text-neutral-500"
+              icon={Users}
+              color="bg-blue-50 text-blue-600"
+              to
+              onClick={() => navigate('/human-resources')}
+            />
+          )}
+          {isHRFull && (
+            <StatTile
+              label="Pending Approvals"
+              value={loading ? '…' : pendingLeaves}
+              sub={`${pendingLrfCount} leaves · ${pendingOtCount} overtime`}
+              subColor="text-amber-600"
+              icon={Clock}
+              color="bg-amber-50 text-amber-600"
+              to
+              onClick={() => navigate('/human-resources/leave')}
+            />
+          )}
+          {canSeeProc && (
+            <StatTile
+              label="Active PRFs"
+              value={loading ? '…' : pendingPrfs}
+              sub={`${approvedPrfs} approved · ${rejectedPrfs} rejected`}
+              subColor="text-neutral-500"
+              icon={ShoppingCart}
+              color="bg-purple-50 text-purple-600"
+              to
+              onClick={() => navigate('/procurement')}
+            />
+          )}
+          {isHRFull && (
+            <StatTile
+              label="On Leave Today"
+              value={loading ? '…' : onLeaveToday}
+              sub={`${approvedThisMonth} approved this month`}
+              subColor="text-green-600"
+              icon={Calendar}
+              color="bg-green-50 text-green-600"
+              to
+              onClick={() => navigate('/human-resources/calendar')}
+            />
+          )}
+        </div>
+      )}
 
       {/* ── Modules grid ── */}
       <div>
         <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Modules</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          <ModuleTile
-            icon={Users}
-            title="Human Resources"
-            subtitle="Workforce, attendance, leaves, certifications, assets"
-            badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-            color="bg-blue-50 text-blue-600"
-            onClick={() => navigate('/human-resources')}
-          />
-          <ModuleTile
-            icon={ShoppingCart}
-            title="Procurement (PRF)"
-            subtitle="Purchase requests, approval pipeline, master list"
-            badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-            color="bg-purple-50 text-purple-600"
-            onClick={() => navigate('/procurement')}
-          />
-          <ModuleTile
-            icon={FileSpreadsheet}
-            title="Inventory Control"
-            subtitle="Stock, rotable parts, bad items, weekly imports"
-            badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-            color="bg-emerald-50 text-emerald-600"
-            onClick={() => navigate('/inventory')}
-          />
-          <ModuleTile
-            icon={Calendar}
-            title="Calendar"
-            subtitle="Approved leaves overview by date"
-            color="bg-orange-50 text-orange-600"
-            onClick={() => navigate('/human-resources/calendar')}
-          />
+          {isHRFull && (
+            <ModuleTile
+              icon={Users}
+              title="Human Resources"
+              subtitle="Workforce, attendance, leaves, certifications, assets"
+              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
+              color="bg-blue-50 text-blue-600"
+              onClick={() => navigate('/human-resources')}
+            />
+          )}
+          {isProcFull ? (
+            <ModuleTile
+              icon={ShoppingCart}
+              title="Procurement (PRF)"
+              subtitle="Purchase requests, approval pipeline, master list"
+              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
+              color="bg-purple-50 text-purple-600"
+              onClick={() => navigate('/procurement')}
+            />
+          ) : (
+            <ModuleTile
+              icon={ShoppingCart}
+              title="New Purchase Request"
+              subtitle="Submit and track your purchase request forms"
+              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
+              color="bg-purple-50 text-purple-600"
+              onClick={() => navigate('/procurement/new')}
+            />
+          )}
+          {isDashFull && (
+            <ModuleTile
+              icon={FileSpreadsheet}
+              title="Inventory Control"
+              subtitle="Stock, rotable parts, bad items, weekly imports"
+              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
+              color="bg-emerald-50 text-emerald-600"
+              onClick={() => navigate('/inventory')}
+            />
+          )}
+          {isHRFull && (
+            <ModuleTile
+              icon={Calendar}
+              title="Calendar"
+              subtitle="Approved leaves overview by date"
+              color="bg-orange-50 text-orange-600"
+              onClick={() => navigate('/human-resources/calendar')}
+            />
+          )}
           <ModuleTile
             icon={FileText}
             title="Leave & OT Requests"
@@ -289,14 +331,16 @@ export default function DashboardPage() {
             color="bg-pink-50 text-pink-600"
             onClick={() => navigate('/human-resources/leave')}
           />
-          <ModuleTile
-            icon={TrendingUp}
-            title="Maintenance"
-            subtitle="Corrective + preventive workflows"
-            badge="Coming Soon" badgeColor="bg-amber-50 text-amber-700 border border-amber-200"
-            color="bg-neutral-50 text-neutral-400"
-            disabled
-          />
+          {isDashFull && (
+            <ModuleTile
+              icon={TrendingUp}
+              title="Maintenance"
+              subtitle="Corrective + preventive workflows"
+              badge="Coming Soon" badgeColor="bg-amber-50 text-amber-700 border border-amber-200"
+              color="bg-neutral-50 text-neutral-400"
+              disabled
+            />
+          )}
         </div>
       </div>
 
@@ -307,7 +351,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-secondary-700">Recent Activity</h3>
-            <button onClick={() => navigate('/human-resources/leave')}
+            <button onClick={() => navigate(isHRFull ? '/human-resources/leave' : '/procurement')}
               className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
               View all <ArrowRight className="w-3 h-3" />
             </button>
