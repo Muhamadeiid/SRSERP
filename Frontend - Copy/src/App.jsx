@@ -34,17 +34,13 @@ import SettingsPage      from './pages/SettingsPage'
 const HR_FULL_ROLES = ['admin', 'depot_manager']
 const HR_FULL_DEPTS = ['human_resources']
 
-// Dashboard / Inventory: Admin & Depot Manager only (not HR dept)
+// Dashboard / Inventory: Admin & Depot Manager only
 const DASH_ROLES    = ['admin', 'depot_manager']
 
-// Calendar / approvals: managers and above
-const MANAGE_ROLES  = ['admin', 'depot_manager', 'manager']
-
-// Procurement module: Admin, Depot Manager, Purchasing only
+// Procurement full module: Admin, Depot Manager, Purchasing only
 const PROC_ROLES    = ['admin', 'depot_manager', 'purchasing']
 
-// Everyone (all authenticated users — leave requests, notifications)
-// No roles prop = no restriction beyond being logged in
+// Everyone (all authenticated users — no roles prop = just needs to be logged in)
 
 const ComingSoon = ({ title }) => (
   <div className="flex items-center justify-center h-64">
@@ -87,59 +83,102 @@ export default function App() {
           <Route path="reports" element={<ComingSoon title="Reports"       />} />
         </Route>
 
-        {/* HR Layout — HR Full access required to enter (Admin, Depot Manager, HR dept) */}
+        {/* HR Layout — any authenticated user can enter.
+            Sensitive sub-routes have their own per-route guards. */}
         <Route path="/human-resources" element={
-          <ProtectedRoute
-            roles={HR_FULL_ROLES}
-            departments={HR_FULL_DEPTS}
-            redirect="/login"
-          >
+          <ProtectedRoute redirect="/login">
             <HRLayout />
           </ProtectedRoute>
         }>
-          {/* Workforce — default HR home */}
-          <Route index element={<WorkforceTab />} />
+          {/* Workforce — HR Full only; non-HR users redirected to leave form */}
+          <Route index element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <WorkforceTab />
+            </ProtectedRoute>
+          } />
 
-          {/* Leave Requests — all HR-authorized users */}
-          <Route path="leave" element={<LeaveRequestsPage />} />
+          {/* Leave Requests & Calendar — all authenticated users */}
+          <Route path="leave"        element={<LeaveRequestsPage />} />
+          <Route path="leave-master" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <LeaveMasterList />
+            </ProtectedRoute>
+          } />
+          <Route path="calendar"     element={<CalendarPage />} />
 
-          {/* Master List — Leaves & Overtime */}
-          <Route path="leave-master" element={<LeaveMasterList />} />
-
-          {/* Calendar */}
-          <Route path="calendar" element={<CalendarPage />} />
-
-          {/* All other tabs — same HR Full access (already guarded at layout level) */}
-          <Route path="attendance"     element={<AttendanceTab />} />
-          <Route path="certifications" element={<CertificationsTab />} />
-          <Route path="disciplinary"   element={<DisciplinaryTab />} />
-          <Route path="assets"         element={<AssetsTab />} />
-          <Route path="org-chart"      element={<OrgChartTab />} />
-          <Route path="settings"       element={<SettingsPage />} />
+          {/* HR Full only */}
+          <Route path="attendance" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <AttendanceTab />
+            </ProtectedRoute>
+          } />
+          <Route path="certifications" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <CertificationsTab />
+            </ProtectedRoute>
+          } />
+          <Route path="disciplinary" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <DisciplinaryTab />
+            </ProtectedRoute>
+          } />
+          <Route path="assets" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <AssetsTab />
+            </ProtectedRoute>
+          } />
+          <Route path="org-chart" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <OrgChartTab />
+            </ProtectedRoute>
+          } />
+          <Route path="settings" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <SettingsPage />
+            </ProtectedRoute>
+          } />
         </Route>
 
-        {/* New PRF — any authenticated user can submit */}
-        <Route element={
+        {/* Procurement — any authenticated user can reach New PRF and PRF detail.
+            Dashboard, Master List, PO, IGI are restricted to PROC_ROLES inside. */}
+        <Route path="/procurement" element={
           <ProtectedRoute redirect="/login">
             <ProcurementLayout />
           </ProtectedRoute>
         }>
-          <Route path="/procurement/new" element={<PrfNewPage />} />
-        </Route>
-
-        {/* Procurement module — Admin, Depot Manager, Purchasing only */}
-        <Route path="/procurement" element={
-          <ProtectedRoute roles={PROC_ROLES} redirect="/login">
-            <ProcurementLayout />
-          </ProtectedRoute>
-        }>
-          <Route index                    element={<PrfDashboard />} />
-          <Route path="master"            element={<PrfMasterList />} />
-          <Route path="po/new/:prfId"     element={<PoNewPage    />} />
-          <Route path="po/:id"            element={<PoDetail     />} />
-          <Route path="igi/new/:poId"     element={<IgiNewPage   />} />
-          <Route path="igi/:id"           element={<IgiDetail    />} />
-          <Route path=":id"               element={<PrfDetail    />} />
+          <Route index element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <PrfDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="master" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <PrfMasterList />
+            </ProtectedRoute>
+          } />
+          <Route path="po/new/:prfId" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <PoNewPage />
+            </ProtectedRoute>
+          } />
+          <Route path="po/:id" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <PoDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="igi/new/:poId" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <IgiNewPage />
+            </ProtectedRoute>
+          } />
+          <Route path="igi/:id" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <IgiDetail />
+            </ProtectedRoute>
+          } />
+          {/* PRF detail and new PRF — all authenticated users (EHS, managers, staff, etc.) */}
+          <Route path="new" element={<PrfNewPage />} />
+          <Route path=":id" element={<PrfDetail  />} />
         </Route>
 
         {/* Catch-all */}

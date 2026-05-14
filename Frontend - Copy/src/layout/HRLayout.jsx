@@ -6,7 +6,7 @@ import {
   Users, Calendar, Clock, ShieldCheck,
   AlertTriangle, ChevronLeft, ChevronRight,
   LogOut, Bell, FileText, Package, Settings,
-  X, CheckCheck, GitBranch, Menu, ShoppingCart, FileSpreadsheet,
+  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet,
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
@@ -23,19 +23,25 @@ const fmtTime = (d) => {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-// ── nav definition with per-role visibility ──────────────────────
+// Roles that have full HR module access (workforce, attendance, assets, etc.)
+const HR_FULL_ROLES_NAV = ['admin', 'depot_manager']
+
+// ── nav definition ────────────────────────────────────────────────
+// hrOnly: true  → visible only to HR Full (admin / depot_manager / HR dept)
+// roles array   → visible to these specific roles
+// neither       → visible to all authenticated users
 const ALL_NAV = [
-  { label: 'Workforce',          path: '/human-resources',                icon: Users,          end: true,  roles: ['admin','depot_manager'] },
-  { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText,                   roles: ['admin','depot_manager','manager','staff'] },
-  { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            roles: ['admin','depot_manager'] },
-  { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      roles: ['admin','depot_manager'] },
-  { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                roles: ['admin','depot_manager'] },
-  { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              roles: ['admin','depot_manager'] },
-  { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    roles: ['admin','depot_manager'] },
-  { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  roles: ['admin','depot_manager'] },
-  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,                   roles: ['admin','depot_manager','manager'] },
-  { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   roles: ['admin','depot_manager'] },
-  { label: 'Procurement',        path: '/procurement',                    icon: ShoppingCart,               roles: ['admin','depot_manager','manager','staff','procurement','ehs'] },
+  { label: 'Workforce',          path: '/human-resources',                icon: Users,          end: true,  hrOnly: true },
+  { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText },
+  { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            hrOnly: true },
+  { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      hrOnly: true },
+  { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                hrOnly: true },
+  { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              hrOnly: true },
+  { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    hrOnly: true },
+  { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  hrOnly: true },
+  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,       roles: ['admin','depot_manager','manager'] },
+  { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   hrOnly: true },
+  { label: 'New PRF',            path: '/procurement/new',                icon: FilePlus2 },
 ]
 
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
@@ -93,8 +99,13 @@ export default function HRLayout() {
   }
 
   // ── filter nav by role ───────────────────────────────────────
-  const role     = user?.role ?? 'staff'
-  const navItems = ALL_NAV.filter(item => item.roles.includes(role))
+  const role      = user?.role ?? 'staff'
+  const isHRFull  = HR_FULL_ROLES_NAV.includes(role) || user?.department === 'human_resources'
+  const navItems  = ALL_NAV.filter(item => {
+    if (item.hrOnly) return isHRFull
+    if (item.roles)  return item.roles.includes(role)
+    return true   // no restriction → visible to all authenticated users
+  })
 
   const activeNav = navItems.find(n =>
     n.end ? location.pathname === n.path : location.pathname.startsWith(n.path)

@@ -21,10 +21,13 @@ const fmtTime = (d) => {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+// Full Procurement module access: Admin, Depot Manager, Purchasing
+const PROC_FULL_ROLES = ['admin', 'depot_manager', 'purchasing']
+
 const NAV = [
-  { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true },
+  { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },
   { label: 'New PRF',      path: '/procurement/new',    icon: FilePlus2 },
-  { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet },
+  { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet,             procOnly: true },
 ]
 
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
@@ -34,6 +37,8 @@ export default function ProcurementLayout() {
   const navigate  = useNavigate()
   const dispatch  = useDispatch()
   const { user }  = useSelector(s => s.auth)
+  const isProcFull = PROC_FULL_ROLES.includes(user?.role)
+  const navItems   = NAV.filter(item => !item.procOnly || isProcFull)
   const sidebarW       = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset     = isMobile ? 0 : sidebarW
@@ -117,7 +122,7 @@ export default function ProcurementLayout() {
           {!collapsed && (
             <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest px-3 py-1.5">Modules</p>
           )}
-          {NAV.map(item => (
+          {navItems.map(item => (
             <NavLink
               key={item.label}
               to={item.path}
