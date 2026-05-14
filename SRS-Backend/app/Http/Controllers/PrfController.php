@@ -99,6 +99,7 @@ class PrfController extends Controller
     public function store(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [
+            'prf_number'                    => 'nullable|string|max:64|unique:prfs,prf_number',
             'date'                          => 'nullable|date',
             'delivery_location'             => 'nullable|string|max:255',
             'delivery_contact'              => 'nullable|string|max:255',
@@ -126,7 +127,7 @@ class PrfController extends Controller
 
         return DB::transaction(function () use ($data, $user) {
             $prf = Prf::create([
-                'prf_number'        => Prf::generateNumber(),
+                'prf_number'        => filled($data['prf_number'] ?? null) ? $data['prf_number'] : Prf::generateNumber(),
                 'requested_by'      => $user->id,
                 'date'              => $data['date']              ?? now()->toDateString(),
                 'delivery_location' => $data['delivery_location'] ?? null,

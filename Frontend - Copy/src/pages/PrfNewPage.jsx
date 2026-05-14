@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Trash2, Loader2, CheckCircle, X, FileText, Image as ImageIcon, Upload,
+  Plus, Trash2, Loader2, CheckCircle, X, FileText, Image as ImageIcon, Upload, Pencil,
 } from 'lucide-react'
 import { createPrf, MATERIAL_CATEGORIES } from '../services/prfService'
 
@@ -22,7 +22,10 @@ export default function PrfNewPage() {
   const { user } = useSelector(s => s.auth)
   const navigate = useNavigate()
 
+  const canSetPrfNumber = user?.role === 'admin' || user?.role === 'procurement'
+
   const [form, setForm] = useState({
+    prf_number: '',
     date: today(),
     delivery_location: '',
     delivery_contact:  '',
@@ -94,7 +97,9 @@ export default function PrfNewPage() {
 
     setSaving(true)
     try {
-      const res = await createPrf({ ...form, items })
+      const payload = { ...form, items }
+      if (!payload.prf_number?.trim()) delete payload.prf_number
+      const res = await createPrf(payload)
       setSubmitted(res?.data ?? null)
       setTimeout(() => {
         navigate(`/procurement/${res?.data?.id}`)
@@ -128,7 +133,19 @@ export default function PrfNewPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-neutral-200 border-b-2 border-neutral-200">
           <div className="px-4 py-3">
             <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">PRF Number</p>
-            <p className="text-sm font-bold text-neutral-400 italic">Auto-generated</p>
+            {canSetPrfNumber ? (
+              <div className="relative">
+                <Pencil className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400 pointer-events-none" />
+                <input
+                  value={form.prf_number}
+                  onChange={e => set('prf_number', e.target.value)}
+                  placeholder="Auto-generated if blank"
+                  className="w-full pl-7 pr-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors"
+                />
+              </div>
+            ) : (
+              <p className="text-sm font-bold text-neutral-400 italic">Auto-generated</p>
+            )}
           </div>
           <div className="px-4 py-3">
             <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">Date</p>
