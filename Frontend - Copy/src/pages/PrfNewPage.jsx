@@ -24,7 +24,7 @@ export default function PrfNewPage() {
   const { user } = useSelector(s => s.auth)
   const navigate = useNavigate()
 
-  const canSetPrfNumber = user?.role === 'admin' || user?.role === 'procurement'
+  const canSetPrfNumber = user?.role === 'admin' || user?.role === 'purchasing'
 
   const [form, setForm] = useState({
     prf_number: '',
@@ -60,13 +60,15 @@ export default function PrfNewPage() {
     setAddedTemplates(prev => new Set(prev).add(key))
   }
 
-  const toggleCat = (cat) =>
+  const toggleCat = (cat) => {
+    setAddedTemplates(new Set())   // reset so templates can be re-added after category change
     setForm(f => ({
       ...f,
       material_category: f.material_category.includes(cat)
         ? f.material_category.filter(c => c !== cat)
         : [...f.material_category, cat],
     }))
+  }
 
   const updateItem = (idx, k, v) => setForm(f => ({
     ...f,

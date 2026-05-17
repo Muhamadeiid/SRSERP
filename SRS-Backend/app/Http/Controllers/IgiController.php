@@ -107,6 +107,11 @@ class IgiController extends Controller
             return response()->json(['success' => false, 'message' => 'PO not found'], 404);
         }
 
+        // PO must be received before an IGI can be created
+        if ($po->status !== 'received') {
+            return response()->json(['success' => false, 'message' => 'IGI can only be created for a received PO'], 422);
+        }
+
         // One IGI per PO
         if (IncomingGoodsInspection::where('po_id', $po->id)->exists()) {
             return response()->json(['success' => false, 'message' => 'An IGI already exists for this PO'], 422);

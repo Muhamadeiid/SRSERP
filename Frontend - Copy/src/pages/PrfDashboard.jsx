@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   ['pending_depot',       'Pending Depot'],
   ['approved',            'Approved'],
   ['rejected',            'Rejected'],
+  ['cancelled',           'Cancelled'],
 ]
 
 const STAT_DEFS = [

@@ -156,6 +156,7 @@ export default function IgiNewPage() {
       navigate(`/procurement/igi/${res.data.id}`)
     } catch (e) {
       setErr(e.message || 'Failed to create IGI')
+    } finally {
       setSaving(false)
     }
   }

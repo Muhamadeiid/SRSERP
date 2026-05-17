@@ -54,7 +54,7 @@ export default function PrfDetail() {
 
   const canAct           = prf && canActOnStage(user, prf.status)
   const isApproved       = prf?.status === 'approved'
-  const isProcurementUser = user?.role === 'procurement' || user?.role === 'admin'
+  const isProcurementUser = user?.role === 'purchasing' || user?.role === 'admin'
   const canCreatePO      = isApproved && ['admin', 'depot_manager', 'purchasing'].includes(user?.role)
   const hasLinkedPO      = !!prf?.purchase_order
 

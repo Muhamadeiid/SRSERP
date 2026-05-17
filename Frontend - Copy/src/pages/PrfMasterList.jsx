@@ -114,6 +114,7 @@ export default function PrfMasterList() {
     ['pending_depot',       'Pending Depot'],
     ['approved',            'Approved'],
     ['rejected',            'Rejected'],
+    ['cancelled',           'Cancelled'],
   ]
 
   return (

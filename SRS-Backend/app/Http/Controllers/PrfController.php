@@ -87,7 +87,7 @@ class PrfController extends Controller
             'requester:id,name,email,role,e_signature',
             'items',
             'approvals.approver:id,name,e_signature,role',
-            'purchaseOrder:id,po_number,status',
+            'purchaseOrder:id,prf_id,po_number,status',
         ]);
 
         return response()->json(['success' => true, 'data' => $prf]);
@@ -288,12 +288,12 @@ class PrfController extends Controller
     public function updateTrackingNo(Request $request, Prf $prf): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->isAdmin() && $user->role !== 'procurement') {
+        if (!$user->isAdmin() && $user->role !== 'purchasing') {
             return response()->json(['success' => false, 'message' => 'Only Procurement can edit the tracking number'], 403);
         }
 
         $v = Validator::make($request->all(), [
-            'prf_number' => 'required|string|max:64',
+            'prf_number' => 'required|string|max:64|unique:prfs,prf_number,' . $prf->id,
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
