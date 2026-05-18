@@ -26,10 +26,12 @@ return [
         'http://localhost:5174',
         'http://127.0.0.1:5174',
         'https://*.vercel.app',
+        'https://*.onrender.com',
     ],
 
     'allowed_origins_patterns' => [
         '#^https://.*\.vercel\.app$#',
+        '#^https://.*\.onrender\.com$#',
     ],
 
     'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
