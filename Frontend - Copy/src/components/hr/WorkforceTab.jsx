@@ -360,7 +360,8 @@ export default function WorkforceTab() {
   const [selected, setSelected] = useState(null); // employee for drawer
   const [selIdx, setSelIdx] = useState(0);
 
-  const [locFilter, setLocFilter] = useState("all");
+  const [locFilter,  setLocFilter]  = useState("all");
+  const [deptFilter, setDeptFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -407,8 +408,9 @@ export default function WorkforceTab() {
     setError(null);
     try {
       const res = await getEmployees({
-        location: locFilter !== "all" ? locFilter : undefined,
-        search: search || undefined,
+        location:   locFilter  !== "all" ? locFilter  : undefined,
+        department: deptFilter || undefined,
+        search:     search     || undefined,
         page,
         per_page: 12,
       });
@@ -419,7 +421,7 @@ export default function WorkforceTab() {
     } finally {
       setLoading(false);
     }
-  }, [locFilter, search, page]);
+  }, [locFilter, deptFilter, search, page]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -485,7 +487,8 @@ export default function WorkforceTab() {
     setExporting(true);
     try {
       const blob = await exportEmployees({
-        location: locFilter !== "all" ? locFilter : undefined,
+        location:   locFilter  !== "all" ? locFilter  : undefined,
+        department: deptFilter || undefined,
       });
       downloadBlob(
         blob,
@@ -591,6 +594,30 @@ export default function WorkforceTab() {
           />
         </div>
 
+        {/* Location filter */}
+        <select
+          value={locFilter}
+          onChange={e => { setLocFilter(e.target.value); setPage(1); }}
+          className="h-9 px-3 bg-white border border-neutral-200 rounded-lg text-sm text-secondary-700 outline-none hover:border-primary/40 transition-colors">
+          <option value="all">All Locations</option>
+          <option value="Kozzika">Kozzika</option>
+          <option value="Tura">Tura</option>
+          <option value="Ganz">Ganz</option>
+          <option value="Mainline">Mainline</option>
+        </select>
+
+        {/* Department filter */}
+        <select
+          value={deptFilter}
+          onChange={e => { setDeptFilter(e.target.value); setPage(1); }}
+          className="h-9 px-3 bg-white border border-neutral-200 rounded-lg text-sm text-secondary-700 outline-none hover:border-primary/40 transition-colors">
+          <option value="">All Departments</option>
+          <option value="cm">CM</option>
+          <option value="pm">PM</option>
+          <option value="warranty">Warranty</option>
+          <option value="cm_intervention">CM (Intervention)</option>
+          <option value="human_resources">Human Resources</option>
+        </select>
 
         <div className="ml-auto flex items-center gap-2">
           <p className="text-sm text-neutral-400 whitespace-nowrap">
