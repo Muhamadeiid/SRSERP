@@ -437,7 +437,7 @@ export default function WorkforceTab() {
   // Fetch all employees for the direct manager dropdown
   useEffect(() => {
     const token = localStorage.getItem('srs_token');
-    const base  = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api';
+    const base  = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api';
     const hdrs  = { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
     // Employees list for "Direct Manager" dropdown
