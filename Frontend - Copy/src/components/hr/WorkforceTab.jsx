@@ -505,10 +505,11 @@ export default function WorkforceTab() {
   const byLocation  = stats?.by_location ?? {};
   const total        = stats?.total ?? 0;
 
-  // Build location cards: "All" first, then one card per location
+  // Fixed location cards — always show all locations
+  const FIXED_LOCS = ['Kozzika', 'Tura', 'Ganz', 'Mainline']
   const locCards = [
     { key: 'all', label: 'All Staff', value: total, sub: `${stats?.by_status?.on_site ?? 0} on site` },
-    ...locations.map(loc => ({ key: loc, label: loc, value: byLocation[loc] ?? 0, sub: null })),
+    ...FIXED_LOCS.map(loc => ({ key: loc, label: loc, value: byLocation[loc] ?? 0, sub: null })),
   ];
 
   const pageNums = () => {
@@ -529,9 +530,9 @@ export default function WorkforceTab() {
     <div className="p-6 space-y-4">
 
       {/* ── Location filter cards ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {locCards.map(({ key, label, value, sub }, idx) => {
-          const colors = ['text-secondary-700','text-primary','text-purple-600','text-amber-600','text-blue-600','text-pink-600','text-teal-600']
+          const colors = ['text-secondary-700','text-primary','text-amber-600','text-blue-600','text-emerald-600','text-purple-600']
           const color  = colors[idx % colors.length]
           return (
             <button
@@ -547,6 +548,30 @@ export default function WorkforceTab() {
             </button>
           )
         })}
+      </div>
+
+      {/* ── Department filter pills ── */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { key: '',               label: 'All Departments' },
+          { key: 'cm',            label: 'CM' },
+          { key: 'pm',            label: 'PM' },
+          { key: 'warranty',      label: 'Warranty' },
+          { key: 'cm_intervention',label: 'CM (Intervention)' },
+          { key: 'human_resources',label: 'Human Resources' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => { setDeptFilter(key); setPage(1); }}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+              deptFilter === key
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-white text-neutral-500 border-neutral-200 hover:border-primary/40 hover:text-primary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* ── Registry Health bars ── */}
@@ -594,32 +619,7 @@ export default function WorkforceTab() {
           />
         </div>
 
-        {/* Location filter */}
-        <select
-          value={locFilter}
-          onChange={e => { setLocFilter(e.target.value); setPage(1); }}
-          className="h-9 px-3 bg-white border border-neutral-200 rounded-lg text-sm text-secondary-700 outline-none hover:border-primary/40 transition-colors">
-          <option value="all">All Locations</option>
-          <option value="Kozzika">Kozzika</option>
-          <option value="Tura">Tura</option>
-          <option value="Ganz">Ganz</option>
-          <option value="Mainline">Mainline</option>
-        </select>
-
-        {/* Department filter */}
-        <select
-          value={deptFilter}
-          onChange={e => { setDeptFilter(e.target.value); setPage(1); }}
-          className="h-9 px-3 bg-white border border-neutral-200 rounded-lg text-sm text-secondary-700 outline-none hover:border-primary/40 transition-colors">
-          <option value="">All Departments</option>
-          <option value="cm">CM</option>
-          <option value="pm">PM</option>
-          <option value="warranty">Warranty</option>
-          <option value="cm_intervention">CM (Intervention)</option>
-          <option value="human_resources">Human Resources</option>
-        </select>
-
-        <div className="ml-auto flex items-center gap-2">
+<div className="ml-auto flex items-center gap-2">
           <p className="text-sm text-neutral-400 whitespace-nowrap">
             <span className="font-semibold text-secondary-700">
               {pagination.total}
