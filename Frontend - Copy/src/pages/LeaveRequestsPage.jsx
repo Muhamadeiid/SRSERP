@@ -6,7 +6,7 @@ import {
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock
 } from 'lucide-react'
 import { generateOTR } from '../utils/generateOTR'
-import { getEmployees, getEmployee } from '../services/employeeService'
+import { getEmployees, getEmployee, searchEmployees } from '../services/employeeService'
 import {
   getLeaveRequests, createLeaveRequest,
   managerApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
@@ -53,8 +53,9 @@ const diffHours = (s, e) => {
 const earlyDays = (from, to) => { if (!from || !to) return ''; const [fh,fm]=from.split(':').map(Number); const [th,tm]=to.split(':').map(Number); const mins=(th*60+tm)-(fh*60+fm); if (mins<=0) return ''; return (mins/60/8).toFixed(2).replace(/\.?0+$/,'') }
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
-const genLRFNo  = () => `LRF-GZ-${String(Date.now()).slice(-4)}`
-const genOTRNo  = () => `OTR-EG1-${String(Date.now()).slice(-4)}`
+const genLRFNo  = () => `LRF-GZ-????`
+const genOTRNo  = () => `OTR-EG1-????`
+const threeName = (n) => n?.trim().split(/\s+/).slice(0, 3).join(' ') ?? ''
 const today     = () => new Date().toISOString().slice(0, 10)
 
 // ── status badge ──────────────────────────────────────────────
@@ -91,7 +92,7 @@ function EmployeeSearch({ onSelect, initialName = '' }) {
   useEffect(() => {
     if (!q || q.length < 2) { setResults([]); return }
     setBusy(true)
-    getEmployees({ search: q, per_page: 8 })
+    searchEmployees(q)
       .then(r => setResults(Array.isArray(r) ? r : (r.data ?? [])))
       .catch(() => setResults([]))
       .finally(() => setBusy(false))
@@ -570,14 +571,17 @@ function LRFForm({ onSubmit, saving }) {
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
+    const region = emp.project_code ?? (emp.rotem_code?.toLowerCase().startsWith('ganz') ? 'GZ' : 'EG1')
+    const previewTracking = `LRF-${region}-????`
     setForm(f => ({
       ...f,
       employee_id:      emp.id ?? null,
-      employee_name:    emp.name ?? '',
+      employee_name:    threeName(emp.name),
       job_title:        emp.position ?? '',
       department:       selectedDept,
       department_label: deptLabel(emp),
       direct_manager_name: '',
+      tracking_no:      previewTracking,
     }))
     setBalances(null)
     if (emp.id) {
@@ -988,7 +992,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
     setForm(f => ({
       ...f,
       employee_id: emp.id ?? null,
-      employee_name: emp.name ?? '',
+      employee_name: threeName(emp.name),
       job_title: emp.position ?? '',
       department: selectedDept,
       department_label: deptLabel(emp),
@@ -1023,9 +1027,14 @@ function OfficialLRFForm({ onSubmit, saving }) {
       <tr>{labelCell(en, ar)}<td className="h-10 border border-neutral-900 px-3 py-1" /></tr>
       <tr>
         <td className="border border-neutral-900 px-3 py-1 text-xs italic text-neutral-500">
-          {editableKey
-            ? <input value={form[editableKey] ?? ''} onChange={e => set(editableKey, e.target.value)} className="w-full bg-transparent outline-none" placeholder="Name" />
-            : name}
+          {editableKey === 'alternate_employee_name'
+            ? <EmployeeSearch
+                onSelect={emp => set(editableKey, threeName(emp.name))}
+                initialName={form[editableKey]}
+              />
+            : editableKey
+              ? <input value={form[editableKey] ?? ''} onChange={e => set(editableKey, e.target.value)} className="w-full bg-transparent outline-none" placeholder="Name" />
+              : name}
         </td>
       </tr>
     </>

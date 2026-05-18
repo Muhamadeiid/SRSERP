@@ -16,6 +16,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
 {
+    // ── GET /api/employees/autocomplete — open to all roles (leave request search)
+    public function autocomplete(Request $request): JsonResponse
+    {
+        $q = Employee::query()->select('id', 'name', 'arabic_name', 'position', 'department', 'work_location', 'ibs_code');
+        if ($request->filled('search'))
+            $q->search($request->search);
+        return response()->json($q->orderBy('name')->limit(10)->get());
+    }
+
     // ── GET /api/employees ─────────────────────────────────
     public function index(Request $request): JsonResponse
     {

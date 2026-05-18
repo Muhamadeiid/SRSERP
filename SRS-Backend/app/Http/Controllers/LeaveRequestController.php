@@ -447,7 +447,20 @@ class LeaveRequestController extends Controller
 
     private function generateTrackingNo(string $type, ?Employee $employee = null): string
     {
-        $region = $employee?->projectCode() ?? 'EG1';
-        return ($type === 'lrf' ? 'LRF' : 'OTR') . '-' . $region . '-';
+        $prefix = ($type === 'lrf' ? 'LRF' : 'OTR')
+                . '-' . ($employee?->projectCode() ?? 'EG1')
+                . '-';
+
+        $last = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
+            ->orderByDesc('id')
+            ->value('tracking_no');
+
+        $next = 1;
+        if ($last) {
+            $tail = substr($last, strlen($prefix));
+            if (is_numeric($tail)) $next = ((int) $tail) + 1;
+        }
+
+        return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 }

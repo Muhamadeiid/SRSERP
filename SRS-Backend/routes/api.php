@@ -73,6 +73,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/igis/{igi}',   [IgiController::class, 'update']);
     });
 
+    // ── Employee search — all authenticated users (for leave request autocomplete)
+    Route::get('/employees/autocomplete', [EmployeeController::class, 'autocomplete']);
+
     // ── HR Only — Admin, Depot Manager, HR department ─────────────────────────
     Route::middleware('hr.only')->group(function () {
 

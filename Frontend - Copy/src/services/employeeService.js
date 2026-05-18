@@ -49,6 +49,11 @@ export function getEmployees(params = {}) {
   return request(`/employees${qs ? '?' + qs : ''}`)
 }
 
+/** Autocomplete search — accessible to all roles */
+export function searchEmployees(search) {
+  return request(`/employees/autocomplete?search=${encodeURIComponent(search)}`)
+}
+
 export function getEmployeeStats() {
   return request('/employees/stats')
 }
