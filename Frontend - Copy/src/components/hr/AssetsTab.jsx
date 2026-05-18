@@ -11,20 +11,20 @@ import { generateAssetReturnReport } from '../../utils/generateAssetReturn'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const DEPARTMENTS = [
-  'EHS', 'Corrective Maintenance', 'Preventive Maintenance',
-  'Inventory', 'IT', 'HR', 'Other',
+  'CM', 'PM', 'Warranty', 'CM (Intervention)', 'Human Resources', 'EHS', 'IT', 'Other',
 ]
 const CATEGORIES = ['PPE', 'Tool', 'Device', 'Uniform', 'Vehicle', 'Document', 'Key', 'Other']
 const CONDITIONS  = ['Good', 'Damaged', 'Lost']
 
 const DEPT_COLORS = {
-  'EHS':                      'bg-green-100 text-green-700 border-green-200',
-  'Corrective Maintenance':   'bg-orange-100 text-orange-700 border-orange-200',
-  'Preventive Maintenance':   'bg-blue-100 text-blue-700 border-blue-200',
-  'Inventory':                'bg-purple-100 text-purple-700 border-purple-200',
-  'IT':                       'bg-cyan-100 text-cyan-700 border-cyan-200',
-  'HR':                       'bg-pink-100 text-pink-700 border-pink-200',
-  'Other':                    'bg-neutral-100 text-neutral-600 border-neutral-200',
+  'CM':               'bg-orange-100 text-orange-700 border-orange-200',
+  'PM':               'bg-blue-100   text-blue-700   border-blue-200',
+  'Warranty':         'bg-green-100  text-green-700  border-green-200',
+  'CM (Intervention)':'bg-secondary-50 text-secondary border-secondary-200',
+  'Human Resources':  'bg-pink-100   text-pink-700   border-pink-200',
+  'EHS':              'bg-teal-100   text-teal-700   border-teal-200',
+  'IT':               'bg-cyan-100   text-cyan-700   border-cyan-200',
+  'Other':            'bg-neutral-100 text-neutral-600 border-neutral-200',
 }
 const COND_COLORS = {
   Good:    'text-green-600',

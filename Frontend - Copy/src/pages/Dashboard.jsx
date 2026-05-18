@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import {
   Users, Calendar, Clock, ShoppingCart, AlertTriangle,
   CheckCircle2, ArrowRight, RefreshCw, Bell, FileText,
-  TrendingUp, FileSpreadsheet, Loader2,
+  Loader2, Package2, Wrench, UserCheck,
 } from 'lucide-react'
 
 import { getEmployees, getEmployeeStats } from '../services/employeeService'
@@ -26,48 +26,47 @@ const fmtTime = (d) => {
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-// ── reusable interactive cards ──────────────────────────────────
-function StatTile({ label, value, sub, subColor = 'text-neutral-400', icon: Icon, color, to, onClick }) {
-  const handle = onClick || (() => {})
+// ── Compact stat tile for use inside dept sections ──────────────
+function SectionStat({ label, value, sub, subColor = 'text-neutral-400', icon: Icon, iconBg, onClick }) {
   return (
     <button
-      onClick={handle}
-      className="bg-white rounded-2xl border border-neutral-100 p-5 text-left flex items-start gap-4 hover:shadow-lg hover:border-primary/30 transition-all group w-full">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-        {Icon && <Icon className="w-5 h-5" />}
+      onClick={onClick}
+      className="bg-neutral-50 rounded-xl p-4 text-left flex items-start gap-3 hover:bg-neutral-100 transition-all w-full">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
+        {Icon && <Icon className="w-4 h-4" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] text-neutral-400 uppercase tracking-widest mb-1">{label}</p>
-        <p className="text-3xl font-extrabold text-secondary-700 leading-none">{value}</p>
-        {sub && <p className={`text-[11px] font-medium mt-2 ${subColor}`}>{sub}</p>}
+        <p className="text-[10px] text-neutral-400 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className="text-2xl font-extrabold text-secondary-700 leading-none">{value}</p>
+        {sub && <p className={`text-[10px] font-medium mt-1.5 ${subColor}`}>{sub}</p>}
       </div>
-      {to && <ArrowRight className="w-4 h-4 text-neutral-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />}
     </button>
   )
 }
 
-function ModuleTile({ icon: Icon, title, subtitle, badge, badgeColor, color, onClick, disabled }) {
+// ── Department section card ─────────────────────────────────────
+function DeptSection({ title, subtitle, icon: Icon, accentColor, headerBg, iconBg, onView, viewLabel = 'View Module', children }) {
   return (
-    <button
-      onClick={disabled ? undefined : onClick}
-      className={`relative bg-white rounded-2xl border p-5 text-left flex flex-col gap-3 transition-all w-full ${
-        disabled
-          ? 'border-neutral-100 cursor-not-allowed opacity-60'
-          : 'border-neutral-100 cursor-pointer hover:shadow-lg hover:border-primary/30'
-      }`}>
-      {badge && (
-        <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] font-bold rounded-full ${badgeColor}`}>
-          {badge}
-        </span>
-      )}
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-        {Icon && <Icon className="w-5 h-5" />}
+    <div className={`bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden border-l-4 ${accentColor}`}>
+      <div className={`px-5 py-4 flex items-center justify-between ${headerBg} border-b border-neutral-100`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-secondary-700">{title}</h2>
+            {subtitle && <p className="text-[10px] text-neutral-400 mt-0.5">{subtitle}</p>}
+          </div>
+        </div>
+        {onView && (
+          <button onClick={onView}
+            className="flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+            {viewLabel} <ArrowRight className="w-3 h-3" />
+          </button>
+        )}
       </div>
-      <div>
-        <h3 className="text-sm font-bold text-secondary-700">{title}</h3>
-        <p className="text-xs text-neutral-400 mt-1 leading-relaxed">{subtitle}</p>
-      </div>
-    </button>
+      <div className="p-4 sm:p-5">{children}</div>
+    </div>
   )
 }
 
@@ -113,7 +112,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchAll()
-    const t = setInterval(fetchAll, 60000)   // refresh every minute
+    const t = setInterval(fetchAll, 60000)
     return () => clearInterval(t)
   }, [fetchAll])
 
@@ -122,29 +121,27 @@ export default function DashboardPage() {
 
   const onLeaveToday = useMemo(() =>
     reqs.filter(r =>
-      r.type === 'lrf' &&
-      r.status === 'approved' &&
+      r.type === 'lrf' && r.status === 'approved' &&
       (r.start_date?.slice(0,10) ?? '') <= today &&
       today <= (r.end_date?.slice(0,10) ?? r.start_date?.slice(0,10) ?? '')
-    ).length,
-  [reqs, today])
+    ).length, [reqs, today])
 
-  const pendingLeaves    = useMemo(() => reqs.filter(r => ['pending','manager_approved'].includes(r.status)).length, [reqs])
-  const pendingLrfCount  = useMemo(() => reqs.filter(r => r.type === 'lrf' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
-  const pendingOtCount   = useMemo(() => reqs.filter(r => r.type === 'otr' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
+  const pendingLeaves     = useMemo(() => reqs.filter(r => ['pending','manager_approved'].includes(r.status)).length, [reqs])
+  const pendingLrfCount   = useMemo(() => reqs.filter(r => r.type === 'lrf' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
+  const pendingOtCount    = useMemo(() => reqs.filter(r => r.type === 'otr' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
   const approvedThisMonth = useMemo(() => {
     const start = new Date(); start.setDate(1)
     return reqs.filter(r => r.status === 'approved' && new Date(r.created_at) >= start).length
   }, [reqs])
 
-  const pendingPrfs   = useMemo(() => prfs.filter(p => p.status?.startsWith('pending')).length, [prfs])
-  const approvedPrfs  = useMemo(() => prfs.filter(p => p.status === 'approved').length, [prfs])
-  const rejectedPrfs  = useMemo(() => prfs.filter(p => p.status === 'rejected').length, [prfs])
+  const pendingPrfs  = useMemo(() => prfs.filter(p => p.status?.startsWith('pending')).length, [prfs])
+  const approvedPrfs = useMemo(() => prfs.filter(p => p.status === 'approved').length, [prfs])
+  const rejectedPrfs = useMemo(() => prfs.filter(p => p.status === 'rejected').length, [prfs])
 
-  const totalStaff = empStats?.total_employees ?? employees.length
+  const totalStaff  = empStats?.total_employees ?? employees.length
   const onSiteStaff = totalStaff - onLeaveToday
 
-  // ── Recent activity (synthesized from data) ───────────────────
+  // ── Recent activity ─────────────────────────────────────────
   const recent = useMemo(() => {
     const items = []
     if (isHRFull) {
@@ -180,20 +177,22 @@ export default function DashboardPage() {
       .slice(0, 8)
   }, [reqs, prfs, isHRFull, canSeeProc])
 
-  // ── Alerts (computed) ─────────────────────────────────────────
+  // ── Alerts ──────────────────────────────────────────────────
   const alerts = useMemo(() => {
     const out = []
     if (isHRFull && pendingLeaves > 0)  out.push({ severity:'warning',  message:`${pendingLeaves} leave/overtime request(s) awaiting approval`, href:'/human-resources/leave' })
     if (canSeeProc && pendingPrfs > 0)  out.push({ severity:'info',     message:`${pendingPrfs} PRF(s) awaiting next stage`,                    href:'/procurement' })
-    if (canSeeProc && rejectedPrfs > 0) out.push({ severity:'critical', message:`${rejectedPrfs} PRF(s) rejected — review needed`,               href:'/procurement?status=rejected' })
-    const unreadNotifs = notifs.filter(n => !n.read).length
-    if (unreadNotifs > 0) out.push({ severity:'info', message:`${unreadNotifs} unread notification(s)`, href: isHRFull ? '/human-resources/leave' : '/procurement' })
+    if (canSeeProc && rejectedPrfs > 0) out.push({ severity:'critical', message:`${rejectedPrfs} PRF(s) rejected — review needed`,               href:'/procurement' })
+    const unread = notifs.filter(n => !n.read).length
+    if (unread > 0) out.push({ severity:'info', message:`${unread} unread notification(s)`, href: isHRFull ? '/human-resources/leave' : '/procurement' })
     return out
   }, [pendingLeaves, pendingPrfs, rejectedPrfs, notifs, isHRFull, canSeeProc])
 
-  // ── Render ─────────────────────────────────────────────────
+  const L = (v) => loading ? '…' : v
+
+  // ── Render ──────────────────────────────────────────────────
   return (
-    <div className="p-4 sm:p-6 lg:p-7 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-7 space-y-5">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -218,211 +217,294 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── KPI tiles ── */}
-      {(isHRFull || canSeeProc) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {isHRFull && (
-            <StatTile
+      {/* ══ HR Section ══════════════════════════════════════════════ */}
+      {isHRFull && (
+        <DeptSection
+          title="Human Resources"
+          subtitle="Workforce, attendance, leaves & overtime requests"
+          icon={Users}
+          accentColor="border-l-blue-500"
+          headerBg="bg-blue-50/40"
+          iconBg="bg-blue-100 text-blue-600"
+          onView={() => navigate('/human-resources')}
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <SectionStat
               label="Total Workforce"
-              value={loading && totalStaff === 0 ? '…' : totalStaff}
-              sub={onSiteStaff >= 0 ? `${onSiteStaff} on site · ${onLeaveToday} on leave` : ''}
-              subColor="text-neutral-500"
+              value={L(totalStaff)}
+              sub="Active employees"
               icon={Users}
-              color="bg-blue-50 text-blue-600"
-              to
+              iconBg="bg-blue-100 text-blue-600"
               onClick={() => navigate('/human-resources')}
             />
-          )}
-          {isHRFull && (
-            <StatTile
-              label="Pending Approvals"
-              value={loading ? '…' : pendingLeaves}
-              sub={`${pendingLrfCount} leaves · ${pendingOtCount} overtime`}
-              subColor="text-amber-600"
-              icon={Clock}
-              color="bg-amber-50 text-amber-600"
-              to
-              onClick={() => navigate('/human-resources/leave')}
-            />
-          )}
-          {canSeeProc && (
-            <StatTile
-              label="Active PRFs"
-              value={loading ? '…' : pendingPrfs}
-              sub={`${approvedPrfs} approved · ${rejectedPrfs} rejected`}
-              subColor="text-neutral-500"
-              icon={ShoppingCart}
-              color="bg-purple-50 text-purple-600"
-              to
-              onClick={() => navigate('/procurement')}
-            />
-          )}
-          {isHRFull && (
-            <StatTile
-              label="On Leave Today"
-              value={loading ? '…' : onLeaveToday}
-              sub={`${approvedThisMonth} approved this month`}
-              subColor="text-green-600"
-              icon={Calendar}
-              color="bg-green-50 text-green-600"
-              to
+            <SectionStat
+              label="On Site Today"
+              value={L(onSiteStaff >= 0 ? onSiteStaff : '—')}
+              sub={`${L(onLeaveToday)} on leave`}
+              subColor="text-sky-600"
+              icon={UserCheck}
+              iconBg="bg-sky-100 text-sky-600"
               onClick={() => navigate('/human-resources/calendar')}
             />
-          )}
+            <SectionStat
+              label="Pending Leaves"
+              value={L(pendingLrfCount)}
+              sub={pendingLrfCount > 0 ? 'Awaiting approval' : `${approvedThisMonth} approved this month`}
+              subColor={pendingLrfCount > 0 ? 'text-amber-600' : 'text-neutral-400'}
+              icon={Calendar}
+              iconBg="bg-amber-100 text-amber-600"
+              onClick={() => navigate('/human-resources/leave')}
+            />
+            <SectionStat
+              label="Pending Overtime"
+              value={L(pendingOtCount)}
+              sub={pendingOtCount > 0 ? 'Awaiting approval' : 'None pending'}
+              subColor={pendingOtCount > 0 ? 'text-orange-600' : 'text-neutral-400'}
+              icon={Clock}
+              iconBg="bg-orange-100 text-orange-600"
+              onClick={() => navigate('/human-resources/leave')}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { label: 'Employee List',  href: '/human-resources' },
+              { label: 'Leave Requests', href: '/human-resources/leave' },
+              { label: 'Calendar',       href: '/human-resources/calendar' },
+            ].map(l => (
+              <button key={l.href} onClick={() => navigate(l.href)}
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-semibold rounded-lg transition-colors">
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </DeptSection>
+      )}
+
+      {/* ══ Procurement Section ═════════════════════════════════════ */}
+      {canSeeProc && (
+        <DeptSection
+          title="Procurement (PRF)"
+          subtitle="Purchase requests & approval pipeline"
+          icon={ShoppingCart}
+          accentColor="border-l-purple-500"
+          headerBg="bg-purple-50/40"
+          iconBg="bg-purple-100 text-purple-600"
+          onView={() => navigate('/procurement')}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <SectionStat
+              label="Pending PRFs"
+              value={L(pendingPrfs)}
+              sub="Awaiting approval"
+              subColor={pendingPrfs > 0 ? 'text-amber-600' : 'text-neutral-400'}
+              icon={Clock}
+              iconBg="bg-amber-100 text-amber-600"
+              onClick={() => navigate('/procurement')}
+            />
+            <SectionStat
+              label="Approved PRFs"
+              value={L(approvedPrfs)}
+              sub="Cleared for purchase"
+              subColor="text-green-600"
+              icon={CheckCircle2}
+              iconBg="bg-green-100 text-green-600"
+              onClick={() => navigate('/procurement')}
+            />
+            <SectionStat
+              label="Rejected PRFs"
+              value={L(rejectedPrfs)}
+              sub={rejectedPrfs > 0 ? 'Review required' : 'None rejected'}
+              subColor={rejectedPrfs > 0 ? 'text-red-600' : 'text-neutral-400'}
+              icon={AlertTriangle}
+              iconBg="bg-red-100 text-red-500"
+              onClick={() => navigate('/procurement')}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {isProcFull ? [
+              { label: 'All PRFs',        href: '/procurement' },
+              { label: 'New PRF',         href: '/procurement/new' },
+              { label: 'Purchase Orders', href: '/procurement/pos' },
+            ].map(l => (
+              <button key={l.href} onClick={() => navigate(l.href)}
+                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-semibold rounded-lg transition-colors">
+                {l.label}
+              </button>
+            )) : (
+              <button onClick={() => navigate('/procurement/new')}
+                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-semibold rounded-lg transition-colors">
+                New Purchase Request
+              </button>
+            )}
+          </div>
+        </DeptSection>
+      )}
+
+      {/* ══ Inventory + Maintenance (Admin / Depot Manager) ═════════ */}
+      {isDashFull && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          {/* Inventory */}
+          <DeptSection
+            title="Inventory Control"
+            subtitle="Stock, rotable parts, bad items, weekly imports"
+            icon={Package2}
+            accentColor="border-l-emerald-500"
+            headerBg="bg-emerald-50/40"
+            iconBg="bg-emerald-100 text-emerald-600"
+            onView={() => navigate('/inventory')}
+            viewLabel="Open Inventory"
+          >
+            <div className="flex items-center gap-4 bg-emerald-50/60 rounded-xl p-4">
+              <Package2 className="w-10 h-10 text-emerald-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-emerald-700">Inventory Module Active</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5 leading-relaxed">
+                  Stock tracking, rotable parts register, bad item log and weekly Excel imports.
+                </p>
+              </div>
+              <button onClick={() => navigate('/inventory')}
+                className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition-colors shrink-0">
+                Open <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </DeptSection>
+
+          {/* Maintenance */}
+          <DeptSection
+            title="Maintenance"
+            subtitle="Corrective & preventive maintenance workflows"
+            icon={Wrench}
+            accentColor="border-l-neutral-300"
+            headerBg="bg-neutral-50"
+            iconBg="bg-neutral-100 text-neutral-400"
+          >
+            <div className="flex items-center gap-4 bg-neutral-50 rounded-xl p-4">
+              <Wrench className="w-10 h-10 text-neutral-300 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-neutral-500">Module Coming Soon</p>
+                <p className="text-[10px] text-neutral-400 mt-0.5 leading-relaxed">
+                  Corrective + preventive workflows, job cards, and equipment tracking.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-full shrink-0">
+                Coming Soon
+              </span>
+            </div>
+          </DeptSection>
         </div>
       )}
 
-      {/* ── Modules grid ── */}
-      <div>
-        <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Modules</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {isHRFull && (
-            <ModuleTile
-              icon={Users}
-              title="Human Resources"
-              subtitle="Workforce, attendance, leaves, certifications, assets"
-              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-              color="bg-blue-50 text-blue-600"
-              onClick={() => navigate('/human-resources')}
-            />
-          )}
-          {isProcFull ? (
-            <ModuleTile
-              icon={ShoppingCart}
-              title="Procurement (PRF)"
-              subtitle="Purchase requests, approval pipeline, master list"
-              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-              color="bg-purple-50 text-purple-600"
-              onClick={() => navigate('/procurement')}
-            />
-          ) : (
-            <ModuleTile
-              icon={ShoppingCart}
-              title="New Purchase Request"
-              subtitle="Submit and track your purchase request forms"
-              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-              color="bg-purple-50 text-purple-600"
-              onClick={() => navigate('/procurement/new')}
-            />
-          )}
-          {isDashFull && (
-            <ModuleTile
-              icon={FileSpreadsheet}
-              title="Inventory Control"
-              subtitle="Stock, rotable parts, bad items, weekly imports"
-              badge="Live" badgeColor="bg-green-50 text-green-600 border border-green-200"
-              color="bg-emerald-50 text-emerald-600"
-              onClick={() => navigate('/inventory')}
-            />
-          )}
-          {isHRFull && (
-            <ModuleTile
-              icon={Calendar}
-              title="Calendar"
-              subtitle="Approved leaves overview by date"
-              color="bg-orange-50 text-orange-600"
-              onClick={() => navigate('/human-resources/calendar')}
-            />
-          )}
-          <ModuleTile
-            icon={FileText}
-            title="Leave & OT Requests"
-            subtitle="Submit leave, overtime, manage approvals"
-            color="bg-pink-50 text-pink-600"
-            onClick={() => navigate('/human-resources/leave')}
-          />
-          {isDashFull && (
-            <ModuleTile
-              icon={TrendingUp}
-              title="Maintenance"
-              subtitle="Corrective + preventive workflows"
-              badge="Coming Soon" badgeColor="bg-amber-50 text-amber-700 border border-amber-200"
-              color="bg-neutral-50 text-neutral-400"
-              disabled
-            />
-          )}
-        </div>
-      </div>
-
-      {/* ── Recent activity + Alerts ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Recent activity */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-secondary-700">Recent Activity</h3>
-            <button onClick={() => navigate(isHRFull ? '/human-resources/leave' : '/procurement')}
-              className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
+      {/* ══ Leave & OT quick access (non-HR users) ══════════════════ */}
+      {!isHRFull && (
+        <DeptSection
+          title="Leave & Overtime Requests"
+          subtitle="Submit and track your leave and overtime requests"
+          icon={FileText}
+          accentColor="border-l-pink-500"
+          headerBg="bg-pink-50/40"
+          iconBg="bg-pink-100 text-pink-600"
+          onView={() => navigate('/human-resources/leave')}
+          viewLabel="My Requests"
+        >
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => navigate('/human-resources/leave')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-700 text-xs font-semibold rounded-xl transition-colors">
+              <FileText className="w-3.5 h-3.5" /> My Requests
+            </button>
+            <button onClick={() => navigate('/human-resources/leave')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-700 text-xs font-semibold rounded-xl transition-colors">
+              <Calendar className="w-3.5 h-3.5" /> New Leave Request
+            </button>
+            <button onClick={() => navigate('/human-resources/leave')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-700 text-xs font-semibold rounded-xl transition-colors">
+              <Clock className="w-3.5 h-3.5" /> New Overtime Request
             </button>
           </div>
-          {loading && recent.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            </div>
-          ) : recent.length === 0 ? (
-            <div className="py-12 text-center text-neutral-300">
-              <Bell className="w-7 h-7 mx-auto mb-2" />
-              <p className="text-xs">No recent activity</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-neutral-50">
-              {recent.map((it, i) => {
-                const cfg =
-                  it.type === 'leave'    ? { color: 'bg-blue-50    text-blue-500',    Icon: Calendar }      :
-                  it.type === 'overtime' ? { color: 'bg-orange-50  text-orange-500',  Icon: Clock }         :
-                                           { color: 'bg-purple-50  text-purple-500',  Icon: ShoppingCart }
-                return (
-                  <button key={i} onClick={() => it.href && navigate(it.href)}
-                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors text-left">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${cfg.color}`}>
-                      <cfg.Icon className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-secondary-700 truncate capitalize">{it.title}</p>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">{it.sub}</p>
-                    </div>
-                    <span className="text-[10px] text-neutral-300 shrink-0">{fmtTime(it.date)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        </DeptSection>
+      )}
 
-        {/* Alerts */}
-        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-secondary-700 flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Alerts
-            </h3>
-            <span className="text-[10px] font-bold text-neutral-400">{alerts.length}</span>
+      {/* ══ Recent Activity + Alerts ═════════════════════════════════ */}
+      {(isHRFull || canSeeProc) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* Recent activity */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-secondary-700">Recent Activity</h3>
+              <button onClick={() => navigate(isHRFull ? '/human-resources/leave' : '/procurement')}
+                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
+                View all <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            {loading && recent.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : recent.length === 0 ? (
+              <div className="py-12 text-center text-neutral-300">
+                <Bell className="w-7 h-7 mx-auto mb-2" />
+                <p className="text-xs">No recent activity</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-50">
+                {recent.map((it, i) => {
+                  const cfg =
+                    it.type === 'leave'    ? { color: 'bg-blue-50   text-blue-500',   Icon: Calendar }     :
+                    it.type === 'overtime' ? { color: 'bg-orange-50 text-orange-500', Icon: Clock }        :
+                                             { color: 'bg-purple-50 text-purple-500', Icon: ShoppingCart }
+                  return (
+                    <button key={i} onClick={() => it.href && navigate(it.href)}
+                      className="w-full flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors text-left">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${cfg.color}`}>
+                        <cfg.Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-secondary-700 truncate capitalize">{it.title}</p>
+                        <p className="text-[11px] text-neutral-400 mt-0.5">{it.sub}</p>
+                      </div>
+                      <span className="text-[10px] text-neutral-300 shrink-0">{fmtTime(it.date)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          {alerts.length === 0 ? (
-            <div className="py-12 text-center">
-              <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
-              <p className="text-xs font-bold text-secondary-700">All caught up!</p>
-              <p className="text-[10px] text-neutral-400 mt-1">No alerts right now</p>
+
+          {/* Alerts */}
+          <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-secondary-700 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Alerts
+              </h3>
+              <span className="text-[10px] font-bold text-neutral-400">{alerts.length}</span>
             </div>
-          ) : (
-            <div className="divide-y divide-neutral-50">
-              {alerts.map((a, i) => {
-                const palette =
-                  a.severity === 'critical' ? 'bg-red-50    text-red-700    border-l-red-500'    :
-                  a.severity === 'warning'  ? 'bg-amber-50  text-amber-700  border-l-amber-500'  :
-                                              'bg-blue-50   text-blue-700   border-l-blue-500'
-                return (
-                  <button key={i} onClick={() => a.href && navigate(a.href)}
-                    className={`w-full flex items-start gap-2 px-5 py-3 border-l-4 ${palette} hover:opacity-90 transition-all text-left`}>
-                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <p className="text-xs font-semibold leading-relaxed">{a.message}</p>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+            {alerts.length === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                <p className="text-xs font-bold text-secondary-700">All caught up!</p>
+                <p className="text-[10px] text-neutral-400 mt-1">No alerts right now</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-50">
+                {alerts.map((a, i) => {
+                  const palette =
+                    a.severity === 'critical' ? 'bg-red-50   text-red-700   border-l-red-500'   :
+                    a.severity === 'warning'  ? 'bg-amber-50 text-amber-700 border-l-amber-500' :
+                                                'bg-blue-50  text-blue-700  border-l-blue-500'
+                  return (
+                    <button key={i} onClick={() => a.href && navigate(a.href)}
+                      className={`w-full flex items-start gap-2 px-5 py-3 border-l-4 ${palette} hover:opacity-90 transition-all text-left`}>
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <p className="text-xs font-semibold leading-relaxed">{a.message}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Footer ── */}
       <div className="flex flex-wrap justify-between items-center pt-2 text-xs text-neutral-400 border-t border-neutral-100 gap-2">

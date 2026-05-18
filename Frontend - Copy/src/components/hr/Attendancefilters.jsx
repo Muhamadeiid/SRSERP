@@ -100,9 +100,11 @@ export default function AttendanceFilters({ filters, onFilterChange }) {
             className="w-full h-9 px-3 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-secondary-700 outline-none"
           >
             <option value="">All Departments</option>
-            <option value="workshop">Workshop</option>
-            <option value="heavy_maintenance">Heavy Maintenance</option>
-            <option value="intervention">Intervention</option>
+            <option value="cm">CM</option>
+            <option value="pm">PM</option>
+            <option value="warranty">Warranty</option>
+            <option value="cm_intervention">CM (Intervention)</option>
+            <option value="human_resources">Human Resources</option>
           </select>
         </div>
 

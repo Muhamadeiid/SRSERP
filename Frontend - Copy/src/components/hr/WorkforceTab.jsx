@@ -40,17 +40,11 @@ import SignaturePad from "./SignaturePad";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
-  workshop: { label: "Workshop", icon: Wrench, color: "text-primary" },
-  heavy_maintenance: {
-    label: "Heavy Maintenance",
-    icon: HardHat,
-    color: "text-tertiary",
-  },
-  intervention: {
-    label: "Intervention",
-    icon: Activity,
-    color: "text-secondary",
-  },
+  cm:              { label: "CM",               icon: Wrench,     color: "text-primary" },
+  pm:              { label: "PM",               icon: Shield,     color: "text-blue-600" },
+  warranty:        { label: "Warranty",         icon: FileCheck,  color: "text-green-600" },
+  cm_intervention: { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
+  human_resources: { label: "Human Resources",  icon: Users,      color: "text-pink-600" },
 };
 const STATUS = {
   on_site: {
@@ -79,9 +73,10 @@ const STATUS = {
   },
 };
 const LOC_COLOR = {
-  Tura: "bg-blue-50 text-blue-700 border-blue-200",
-  Kozzika: "bg-amber-50 text-amber-700 border-amber-200",
-  CFC: "bg-purple-50 text-purple-700 border-purple-200",
+  Kozzika: "bg-amber-50  text-amber-700  border-amber-200",
+  Tura:    "bg-blue-50   text-blue-700   border-blue-200",
+  Ganz:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Mainline:"bg-purple-50 text-purple-700 border-purple-200",
 };
 const AVATAR = [
   "bg-primary",
@@ -1111,11 +1106,11 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                     <label className={LBL}>Department</label>
                     <select value={form.department} onChange={e => set('department', e.target.value)} className={INP}>
                       <option value="">— Select —</option>
-                      <option value="intervention">Intervention</option>
-                      <option value="heavy_maintenance">Heavy Maintenance</option>
-                      <option value="workshop">Workshop</option>
-                      <option value="engineer">Engineer</option>
-                      <option value="admin">Admin</option>
+                      <option value="cm">CM</option>
+                      <option value="pm">PM</option>
+                      <option value="warranty">Warranty</option>
+                      <option value="cm_intervention">CM (Intervention)</option>
+                      <option value="human_resources">Human Resources</option>
                     </select>
                   </div>
                   <div>
@@ -1140,7 +1135,13 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className={LBL}>Work Location</label>
-                    <input value={form.work_location} onChange={e => set('work_location', e.target.value)} className={INP} placeholder="e.g. Tura" />
+                    <select value={form.work_location} onChange={e => set('work_location', e.target.value)} className={INP}>
+                      <option value="">— Select —</option>
+                      <option value="Kozzika">Kozzika</option>
+                      <option value="Tura">Tura</option>
+                      <option value="Ganz">Ganz</option>
+                      <option value="Mainline">Mainline</option>
+                    </select>
                   </div>
                   <div>
                     <label className={LBL}>City</label>

@@ -18,8 +18,11 @@ const HR_OFFICER = 'Hazem Khaled'
 const DEPOT_MGR  = 'Mohamed Awaad'
 
 const DEPT_LABEL = {
-  intervention: 'Intervention', heavy_maintenance: 'Heavy Maintenance',
-  workshop: 'Workshop', engineer: 'Engineering', admin: 'Admin',
+  cm:              'CM',
+  pm:              'PM',
+  warranty:        'Warranty',
+  cm_intervention: 'CM (Intervention)',
+  human_resources: 'Human Resources',
 }
 
 const unwrapData = (res) => res?.data ?? res
