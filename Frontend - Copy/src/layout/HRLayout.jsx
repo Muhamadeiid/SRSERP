@@ -41,7 +41,6 @@ const ALL_NAV = [
   { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  hrOnly: true },
   { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,       roles: ['admin','depot_manager','manager'] },
   { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   hrOnly: true },
-  { label: 'New PRF',            path: '/procurement/new',                icon: FilePlus2 },
 ]
 
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'

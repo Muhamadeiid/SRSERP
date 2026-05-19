@@ -15,14 +15,14 @@ class LeaveBalance extends Model
     ];
 
     protected $casts = [
-        'annual'           => 'integer',
-        'annual_remaining' => 'integer',
-        'casual'           => 'integer',
-        'casual_remaining' => 'integer',
-        'sick'             => 'integer',
-        'sick_remaining'   => 'integer',
-        'early'            => 'integer',
-        'early_remaining'  => 'integer',
+        'annual'           => 'decimal:2',
+        'annual_remaining' => 'decimal:2',
+        'casual'           => 'decimal:2',
+        'casual_remaining' => 'decimal:2',
+        'sick'             => 'decimal:2',
+        'sick_remaining'   => 'decimal:2',
+        'early'            => 'decimal:2',
+        'early_remaining'  => 'decimal:2',
     ];
 
     public function employee()
@@ -38,73 +38,66 @@ class LeaveBalance extends Model
     }
 
     // ── Deduct days from a leave type ────────────────────────────────
-    // Annual leave can overflow into Casual when exhausted (but NOT vice-versa).
-    // Returns false if insufficient combined balance.
-    public function deduct(string $type, int $days): bool
+    // Annual pool = 21 days. Casual is a sub-limit (max 7) drawn from that pool.
+    // Taking annual  → deducts from annual pool only.
+    // Taking casual  → deducts from annual pool AND casual sub-limit.
+    // Returns false if insufficient balance or sub-limit exceeded.
+    public function deduct(string $type, float $days): bool
     {
         if (!in_array($type, ['annual', 'casual', 'sick', 'early'])) return true;
 
         if ($type === 'annual') {
-            $annualLeft  = $this->getEffectiveRemaining('annual');
-            $casualLeft  = $this->getEffectiveRemaining('casual');
-
-            // Enough annual days alone
-            if ($annualLeft >= $days) {
-                $this->update(['annual_remaining' => max(0, $annualLeft - $days)]);
-                return true;
-            }
-
-            // Overflow: use remaining annual + some casual
-            $overflow = $days - $annualLeft;
-            if ($casualLeft >= $overflow) {
-                $this->update([
-                    'annual_remaining' => 0,
-                    'casual_remaining' => max(0, $casualLeft - $overflow),
-                ]);
-                return true;
-            }
-
-            return false; // Not enough even with overflow
+            $annualLeft = $this->getEffectiveRemaining('annual');
+            if ($annualLeft < $days) return false;
+            $this->update(['annual_remaining' => $annualLeft - $days]);
+            return true;
         }
 
-        // Casual / Sick / Early — no overflow, straight deduction
-        $col     = $type . '_remaining';
+        if ($type === 'casual') {
+            $annualLeft = $this->getEffectiveRemaining('annual');
+            $casualLeft = $this->getEffectiveRemaining('casual');
+            // Must have room in both the annual pool and the casual sub-limit
+            if ($annualLeft < $days || $casualLeft < $days) return false;
+            $this->update([
+                'annual_remaining' => $annualLeft - $days,
+                'casual_remaining' => $casualLeft - $days,
+            ]);
+            return true;
+        }
+
+        // Sick / Early — independent balance
         $current = $this->getEffectiveRemaining($type);
-
         if ($current < $days) return false;
-
-        $this->update([$col => max(0, $current - $days)]);
+        $this->update([$type . '_remaining' => max(0, $current - $days)]);
         return true;
     }
 
     // ── Restore days back to a leave type ───────────────────────────
-    // When restoring annual leave we must also restore any casual overflow used.
-    public function restore(string $type, int $days): void
+    public function restore(string $type, float $days): void
     {
         if (!in_array($type, ['annual', 'casual', 'sick', 'early'])) return;
 
         if ($type === 'annual') {
-            $annualTotal  = $this->annual  ?? 14;
-            $casualTotal  = $this->casual  ?? 7;
-            $annualLeft   = $this->getEffectiveRemaining('annual');
-            $casualLeft   = $this->getEffectiveRemaining('casual');
-
-            $annualGap  = $annualTotal - $annualLeft;   // days missing from annual
-            $restoreAnn = min($days, $annualGap);        // fill annual first
-            $restoreCas = max(0, $days - $restoreAnn);   // remainder goes back to casual
-
-            $updates = ['annual_remaining' => min($annualTotal, $annualLeft + $restoreAnn)];
-            if ($restoreCas > 0) {
-                $updates['casual_remaining'] = min($casualTotal, $casualLeft + $restoreCas);
-            }
-            $this->update($updates);
+            $annualTotal = $this->annual ?? 21;
+            $annualLeft  = $this->getEffectiveRemaining('annual');
+            $this->update(['annual_remaining' => min($annualTotal, $annualLeft + $days)]);
             return;
         }
 
-        $col     = $type . '_remaining';
+        if ($type === 'casual') {
+            $annualTotal = $this->annual ?? 21;
+            $casualTotal = $this->casual ?? 7;
+            $annualLeft  = $this->getEffectiveRemaining('annual');
+            $casualLeft  = $this->getEffectiveRemaining('casual');
+            $this->update([
+                'annual_remaining' => min($annualTotal, $annualLeft + $days),
+                'casual_remaining' => min($casualTotal, $casualLeft + $days),
+            ]);
+            return;
+        }
+
         $total   = $this->{$type} ?? 0;
         $current = $this->getEffectiveRemaining($type);
-
-        $this->update([$col => min($total, $current + $days)]);
+        $this->update([$type . '_remaining' => min($total, $current + $days)]);
     }
 }

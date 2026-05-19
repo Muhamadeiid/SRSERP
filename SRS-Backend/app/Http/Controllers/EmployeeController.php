@@ -63,8 +63,14 @@ class EmployeeController extends Controller
     // ── GET /api/employees/org-chart ───────────────────────
     public function orgChart(): JsonResponse
     {
-        $employees = Employee::select('id','name','position','department','direct_manager_id','status','work_location')
-            ->orderBy('name')
+        $employees = Employee::select(
+                'employees.id','employees.name','employees.position',
+                'employees.department','employees.direct_manager_id',
+                'employees.status','employees.work_location',
+                'users.role as user_role'
+            )
+            ->leftJoin('users', 'users.id', '=', 'employees.user_id')
+            ->orderBy('employees.name')
             ->get();
 
         return response()->json($employees);
@@ -107,30 +113,65 @@ class EmployeeController extends Controller
     // ── GET /api/employees/{id} ─────────────────────────────
     public function show(Employee $employee): JsonResponse
     {
-        // Eager-load direct manager
-        $employee->load('directManager:id,name,position');
-        // Append computed accessors
         $employee->append(['department_label', 'docs_completed', 'docs_percent']);
+
+        // Walk up the chain to find the first ancestor with a manager-level user account.
+        // This means supervisors (no user account) are skipped and the signing engineer appears
+        // on leave forms, while the org chart tree still reflects the full hierarchy.
+        $signingManager = null;
+        $managerId      = $employee->direct_manager_id;
+        $visited        = [];
+        $managerRoles   = ['manager', 'admin', 'depot_manager'];
+
+        while ($managerId && !in_array($managerId, $visited)) {
+            $visited[]  = $managerId;
+            $ancestor   = Employee::select('id','name','position','user_id','direct_manager_id')
+                            ->with('user:id,role')
+                            ->find($managerId);
+            if (!$ancestor) break;
+
+            $role = $ancestor->user?->role;
+            if (in_array($role, $managerRoles)) {
+                $signingManager            = $ancestor;
+                $signingManager->user_role = $role;
+                unset($signingManager->user);
+                break;
+            }
+            $managerId = $ancestor->direct_manager_id;
+        }
+
+        $employee->setRelation('directManager', $signingManager);
+
         return response()->json($employee);
     }
 
     // ── POST /api/employees ─────────────────────────────────
     public function store(Request $request): JsonResponse
     {
-        $v = Validator::make($request->all(), $this->rules());
+        $data = $this->normalizeFields($request->all());
+        $v = Validator::make($data, $this->rules());
         if ($v->fails()) return response()->json(['errors' => $v->errors()], 422);
 
-        return response()->json(Employee::create($request->all()), 201);
+        return response()->json(Employee::create($data), 201);
     }
 
     // ── PUT /api/employees/{id} ─────────────────────────────
     public function update(Request $request, Employee $employee): JsonResponse
     {
-        $v = Validator::make($request->all(), $this->rules($employee->id));
+        $data = $this->normalizeFields($request->all());
+        $v = Validator::make($data, $this->rules($employee->id));
         if ($v->fails()) return response()->json(['errors' => $v->errors()], 422);
 
-        $employee->update($request->all());
+        $employee->update($data);
         return response()->json($employee);
+    }
+
+    private function normalizeFields(array $data): array
+    {
+        if (isset($data['department']) && $data['department'] !== null) {
+            $data['department'] = strtolower($data['department']);
+        }
+        return $data;
     }
 
     // ── DELETE /api/employees/{id} ──────────────────────────
@@ -415,7 +456,7 @@ class EmployeeController extends Controller
             'ibs_code'     => $uniqueRule,
             'punch_code'   => 'nullable|string|max:20',
             'position'     => 'required|string|max:255',
-            'department'   => 'nullable|in:workshop,heavy_maintenance,intervention,admin,engineer',
+            'department'   => 'nullable|string|max:50',
             'work_location'=> 'nullable|string|max:100',
             'hiring_date'  => 'nullable|date',
             'birth_date'   => 'nullable|date',

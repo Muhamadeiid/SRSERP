@@ -781,7 +781,7 @@ export default function AttendanceTab() {
   const isOnLeaveOnOverview = (employeeId) =>
     overviewLeaves.some(l => l.employee_id === employeeId)
 
-  const ovPresent = overviewRecs.filter(r => r.status === 'present').length
+  const ovPresent = overviewRecs.filter(r => ['present','incomplete','wfh','intervention'].includes(r.status)).length
   const ovLate    = overviewRecs.filter(r => ['late','shortage'].includes(r.status)).length
   const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
   const ovOnLeave = new Set(overviewLeaves.map(l => l.employee_id)).size
@@ -999,7 +999,7 @@ export default function AttendanceTab() {
                               </div>
                               <div>
                                 <p className="font-semibold text-secondary-700 whitespace-nowrap">{emp?.name ?? '—'}</p>
-                                {emp?.arabic_name && <p className="text-[10px] text-neutral-400">{emp.arabic_name}</p>}
+                                {emp?.arabic_name && <p className="text-[10px] text-secondary-600" dir="rtl">{emp.arabic_name}</p>}
                               </div>
                             </div>
                           </td>

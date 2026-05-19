@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\LeaveBalance;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Services\LeaveDeductionService;
@@ -28,9 +29,9 @@ class LeaveBalanceController extends Controller
             'casual_remaining_effective' => $casualEff,
             'sick_remaining_effective'   => $sickEff,
             'early_remaining_effective'  => $earlyEff,
-            // Combined annual pool (annual + casual together, since annual can overflow)
-            'annual_pool_remaining'      => $annualEff + $casualEff,
-            'annual_pool_total'          => ($balance->annual ?? 14) + ($balance->casual ?? 7),
+            // Annual pool = the annual total (casual is a sub-limit drawn from this pool)
+            'annual_pool_remaining'      => $annualEff,
+            'annual_pool_total'          => $balance->annual ?? 21,
         ]);
     }
 
@@ -39,9 +40,17 @@ class LeaveBalanceController extends Controller
     {
         $this->deductions->processDue($employee->id);
 
+        $settings = SystemSetting::whereIn('key', ['default_annual_days','default_casual_days','default_sick_days'])
+            ->pluck('value', 'key');
+
         $balance = LeaveBalance::firstOrCreate(
             ['employee_id' => $employee->id],
-            ['annual' => 14, 'casual' => 7, 'sick' => 90, 'early' => 0]
+            [
+                'annual' => (int) ($settings['default_annual_days'] ?? 21),
+                'casual' => (int) ($settings['default_casual_days'] ?? 7),
+                'sick'   => (int) ($settings['default_sick_days']   ?? 90),
+                'early'  => 0,
+            ]
         );
 
         return response()->json(['success' => true, 'data' => $this->enriched($balance)]);
@@ -56,10 +65,10 @@ class LeaveBalanceController extends Controller
         }
 
         $v = $request->validate([
-            'annual' => 'nullable|integer|min:0|max:365',
-            'casual' => 'nullable|integer|min:0|max:365',
-            'sick'   => 'nullable|integer|min:0|max:365',
-            'early'  => 'nullable|integer|min:0|max:365',
+            'annual' => 'nullable|numeric|min:0|max:365',
+            'casual' => 'nullable|numeric|min:0|max:365',
+            'sick'   => 'nullable|numeric|min:0|max:365',
+            'early'  => 'nullable|numeric|min:0|max:365',
         ]);
 
         $balance = LeaveBalance::updateOrCreate(

@@ -19,10 +19,11 @@ const DEPOT_MGR  = 'Mohamed Awaad'
 
 const DEPT_LABEL = {
   cm:              'CM',
+  hm:              'HM',
   pm:              'PM',
   warranty:        'Warranty',
   cm_intervention: 'CM (Intervention)',
-  human_resources: 'Human Resources',
+  admin:           'Admin',
 }
 
 const unwrapData = (res) => res?.data ?? res
@@ -571,6 +572,7 @@ function LRFForm({ onSubmit, saving }) {
     : null
   const annualRemaining  = balances ? (balances.annual_remaining_effective ?? balances.annual ?? null) : null
   const casualRemaining  = balances ? (balances.casual_remaining_effective ?? balances.casual ?? null) : null
+  const casualUsed       = (balances && casualRemaining !== null) ? ((balances.casual ?? 7) - casualRemaining) : 0
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -604,8 +606,9 @@ function LRFForm({ onSubmit, saving }) {
             department: fullDept,
             department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
           }))
-          if (full?.direct_manager?.name) {
-            setForm(f => ({ ...f, direct_manager_name: full.direct_manager.name }))
+          const mgr = full?.direct_manager
+          if (mgr?.name && mgr?.user_role !== 'depot_manager') {
+            setForm(f => ({ ...f, direct_manager_name: mgr.name }))
           }
         })
         .catch(() => {})
@@ -793,7 +796,7 @@ function LRFForm({ onSubmit, saving }) {
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Annual</span>
                         <span className="text-base font-black text-blue-600">{annualRemaining}</span>
-                        <span className="text-[10px] text-neutral-400">/ {balances?.annual ?? 14} d</span>
+                        <span className="text-[10px] text-neutral-400">/ {balances?.annual ?? 21} d</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Casual</span>
@@ -809,10 +812,13 @@ function LRFForm({ onSubmit, saving }) {
                     {/* Available for selected type */}
                     {form.leave_type && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xl font-black text-primary">{availableBalance}</span>
-                        <span className="text-xs text-neutral-400">
-                          days available{form.leave_type === 'annual' ? ' (annual + casual pool)' : ''}
+                        <span className="text-xl font-black text-primary">
+                          {availableBalance}
+                          {casualRemaining !== null && (
+                            <span className="text-base font-bold text-purple-500 ml-1">({casualRemaining} Casual)</span>
+                          )}
                         </span>
+                        <span className="text-xs text-neutral-400">days available</span>
                         {days > 0 && (
                           <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${days > availableBalance ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                             Requesting {days}d → {availableBalance - days} left
@@ -831,7 +837,7 @@ function LRFForm({ onSubmit, saving }) {
                 <span className={L_EN}>Annual Leave Request Date:</span>
                 <span className={L_AR}>تاريخ طلب الاجازة</span>
               </td>
-              <td className={TD_VAL + ' text-sm text-secondary-700'}>{fmtDate(form.request_date)}</td>
+              <td className={TD_VAL}><input type="date" value={form.request_date} onChange={e => set('request_date', e.target.value)} className={FINP} /></td>
             </tr>
 
             {/* Row 8 — Start Date */}
@@ -989,6 +995,8 @@ function OfficialLRFForm({ onSubmit, saving }) {
         ? (balances.annual_pool_remaining ?? effectiveRemaining('annual'))
         : effectiveRemaining(form.leave_type))
     : null
+  const casualRem2  = balances ? (balances.casual_remaining_effective ?? balances.casual ?? null) : null
+  const casualUsed2 = (balances && casualRem2 !== null) ? ((balances.casual ?? 7) - casualRem2) : 0
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -1013,7 +1021,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
         job_title: full?.position ?? f.job_title,
         department: fullDept,
         department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
-        direct_manager_name: full?.direct_manager?.name ?? f.direct_manager_name,
+        direct_manager_name: (full?.direct_manager?.user_role !== 'depot_manager' ? full?.direct_manager?.name : null) ?? f.direct_manager_name,
       }))
     }).catch(() => {})
   }
@@ -1085,8 +1093,8 @@ function OfficialLRFForm({ onSubmit, saving }) {
               </div>
             </td></tr>
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
-            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{availableBalance ?? ''}</span>}</td></tr>
-            <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2">{fmtDate(form.request_date)}</td></tr>
+            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{availableBalance ?? ''}{casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({casualRem2} Casual)</span>}</span>}</td></tr>
+            <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><input type="date" value={form.request_date} onChange={e => set('request_date', e.target.value)} className={FINP} /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><input type="date" required value={form.start_date} onChange={e => set('start_date', e.target.value)} disabled={form.leave_type === 'early'} className={FINP} /></td></tr>
             <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><input type="date" required={form.leave_type !== 'early'} value={form.end_date} min={form.start_date} onChange={e => set('end_date', e.target.value)} disabled={form.leave_type === 'early'} className={FINP} /></td></tr>
             <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2"><div className="flex gap-6">{[['Sick', 'مرضي'], ['Personal matter', 'أمر شخصي']].map(([value, ar]) => <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span><span className="text-neutral-500" dir="rtl">{ar}</span></button>)}</div></td></tr>
@@ -1251,13 +1259,12 @@ function OTRForm({ onSubmit, saving }) {
       direct_manager_name: '',
     }))
     if (emp.id) {
-      getEmployees({ per_page: 500 })
+      getEmployee(emp.id)
         .then(res => {
-          const employees = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
-          const full = employees.find((item) => item.id === emp.id)
-          const manager = employees.find((item) => item.id === full?.direct_manager_id)
-          if (manager?.name) {
-            setForm(f => ({ ...f, direct_manager_name: manager.name }))
+          const full = unwrapData(res)
+          const mgr = full?.direct_manager
+          if (mgr?.name && mgr?.user_role !== 'depot_manager') {
+            setForm(f => ({ ...f, direct_manager_name: mgr.name }))
           }
         })
         .catch(() => {})

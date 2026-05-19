@@ -25,6 +25,8 @@ import {
   Shield,
   AlertTriangle,
   FileCheck,
+  Settings,
+  Hammer,
 } from "lucide-react";
 import {
   getEmployees,
@@ -35,16 +37,17 @@ import {
   createEmployee,
   updateEmployee,
 } from "../../services/employeeService";
-import { saveEmployeeSignature } from "../../services/leaveService";
+import { saveEmployeeSignature, getLeaveBalance, updateLeaveBalance } from "../../services/leaveService";
 import SignaturePad from "./SignaturePad";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
   cm:              { label: "CM",               icon: Wrench,     color: "text-primary" },
-  pm:              { label: "PM",               icon: Shield,     color: "text-blue-600" },
+  hm:              { label: "HM",               icon: Hammer,     color: "text-orange-600" },
+  pm:              { label: "PM",               icon: HardHat,    color: "text-blue-600" },
   warranty:        { label: "Warranty",         icon: FileCheck,  color: "text-green-600" },
   cm_intervention: { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
-  human_resources: { label: "Human Resources",  icon: Users,      color: "text-pink-600" },
+  admin:           { label: "Admin",            icon: Settings,   color: "text-purple-600" },
 };
 const STATUS = {
   on_site: {
@@ -126,6 +129,29 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
   const deptCfg = DEPT[emp.department];
   const DeptIcon = deptCfg?.icon;
   const docsOk = DOCS.filter((d) => emp[d.key]).length;
+
+  const [bal, setBal]           = useState(null);
+  const [balEdit, setBalEdit]   = useState(false);
+  const [balForm, setBalForm]   = useState({});
+  const [balSaving, setBalSaving] = useState(false);
+
+  useEffect(() => {
+    setBal(null); setBalEdit(false);
+    if (!emp?.id) return;
+    getLeaveBalance(emp.id)
+      .then(r => { const d = r.data ?? {}; setBal(d); setBalForm({ annual: d.annual ?? 21, casual: d.casual ?? 7, sick: d.sick ?? 90, early: d.early ?? 0 }); })
+      .catch(() => setBal({}));
+  }, [emp?.id]);
+
+  const saveBalance = async () => {
+    setBalSaving(true);
+    try {
+      const r = await updateLeaveBalance(emp.id, balForm);
+      setBal(r.data ?? bal);
+      setBalEdit(false);
+    } catch (_) {}
+    finally { setBalSaving(false); }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -305,6 +331,58 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* ── Section: Leave Balance ── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+                <FileText className="w-3 h-3" /> Leave Balance
+              </h4>
+              {bal && !balEdit && (
+                <button onClick={() => setBalEdit(true)} className="text-[10px] font-semibold text-primary hover:underline">Edit</button>
+              )}
+            </div>
+            {bal === null ? (
+              <div className="flex items-center gap-2 text-xs text-neutral-400"><Loader2 className="w-3 h-3 animate-spin" /> Loading…</div>
+            ) : balEdit ? (
+              <div className="space-y-2">
+                {[['annual','Annual',21],['casual','Casual (sub-limit)',7],['sick','Sick',90],['early','Early Leave',0]].map(([k, label, def]) => (
+                  <div key={k} className="flex items-center justify-between">
+                    <span className="text-xs text-secondary-700 w-36">{label}</span>
+                    <input
+                      type="number" min={0} max={365} step={0.25}
+                      value={balForm[k] ?? def}
+                      onChange={e => setBalForm(f => ({ ...f, [k]: parseFloat(e.target.value) || 0 }))}
+                      className="w-20 text-sm text-center border border-neutral-200 rounded-lg px-2 py-1 outline-none focus:border-primary/50"
+                    />
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveBalance} disabled={balSaving} className="flex-1 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50">
+                    {balSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => setBalEdit(false)} className="flex-1 py-1.5 border border-neutral-200 text-xs font-semibold rounded-lg hover:bg-neutral-50">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Annual', total: bal.annual ?? 21, rem: bal.annual_remaining_effective ?? bal.annual ?? 21, color: 'bg-blue-500' },
+                  { label: 'Casual', total: bal.casual ?? 7,  rem: bal.casual_remaining_effective  ?? bal.casual  ?? 7,  color: 'bg-purple-500' },
+                  { label: 'Sick',   total: bal.sick   ?? 90, rem: bal.sick_remaining_effective   ?? bal.sick   ?? 90, color: 'bg-amber-500' },
+                  { label: 'Early',  total: bal.early  ?? 0,  rem: bal.early_remaining_effective  ?? bal.early  ?? 0,  color: 'bg-green-500' },
+                ].map(({ label, total, rem, color }) => (
+                  <div key={label} className="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">{label}</p>
+                    <p className="text-lg font-black text-secondary-700 leading-none">{rem}<span className="text-xs font-normal text-neutral-400 ml-0.5">/ {total}d</span></p>
+                    <div className="h-1 bg-neutral-200 rounded-full mt-2 overflow-hidden">
+                      <div className={`h-full ${color} rounded-full`} style={{ width: total > 0 ? `${Math.min(100,(rem/total)*100)}%` : '0%' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ── Section: Insurance ── */}
@@ -555,10 +633,11 @@ export default function WorkforceTab() {
         {[
           { key: '',               label: 'All Departments' },
           { key: 'cm',            label: 'CM' },
+          { key: 'hm',            label: 'HM' },
           { key: 'pm',            label: 'PM' },
           { key: 'warranty',      label: 'Warranty' },
           { key: 'cm_intervention',label: 'CM (Intervention)' },
-          { key: 'human_resources',label: 'Human Resources' },
+          { key: 'admin',          label: 'Admin' },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -1134,10 +1213,11 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                     <select value={form.department} onChange={e => set('department', e.target.value)} className={INP}>
                       <option value="">— Select —</option>
                       <option value="cm">CM</option>
+                      <option value="hm">HM</option>
                       <option value="pm">PM</option>
                       <option value="warranty">Warranty</option>
                       <option value="cm_intervention">CM (Intervention)</option>
-                      <option value="human_resources">Human Resources</option>
+                      <option value="admin">Admin</option>
                     </select>
                   </div>
                   <div>

@@ -113,7 +113,7 @@ class LeaveRequestController extends Controller
             'request_date' => 'nullable|date',
             'start_date' => 'required_if:type,lrf|nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'days' => 'nullable|integer|min:0',
+            'days' => 'nullable|numeric|min:0',
             'purpose' => 'nullable|string|max:1000',
             'early_from' => 'nullable|date_format:H:i',
             'early_to' => 'nullable|date_format:H:i',

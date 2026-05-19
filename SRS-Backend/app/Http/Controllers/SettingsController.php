@@ -24,11 +24,13 @@ class SettingsController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** GET /api/settings/managers  — all employees who can act as direct managers */
+    /** GET /api/settings/managers  — employees linked to a manager/admin user account */
     public function managers(): JsonResponse
     {
-        $managers = Employee::select('id', 'name', 'arabic_name', 'position', 'department', 'user_id')
-            ->orderBy('name')
+        $managers = Employee::select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
+            ->join('users', 'users.id', '=', 'employees.user_id')
+            ->whereIn('users.role', ['admin', 'depot_manager', 'manager'])
+            ->orderBy('employees.name')
             ->get();
         return response()->json(['success' => true, 'data' => $managers]);
     }

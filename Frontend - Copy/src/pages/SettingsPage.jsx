@@ -20,11 +20,21 @@ export default function SettingsPage() {
   const [hrSaved,    setHrSaved]    = useState(false)
   const [hrSaving,   setHrSaving]   = useState(false)
 
+  // ── Leave Defaults state ──────────────────────────────────────────
+  const [leaveDef,     setLeaveDef]     = useState({ default_annual_days: 21, default_casual_days: 7, default_sick_days: 90 })
+  const [leaveDefSaved,  setLeaveDefSaved]  = useState(false)
+  const [leaveDefSaving, setLeaveDefSaving] = useState(false)
+
   // ── Load managers + settings on mount ────────────────────────────
   useEffect(() => {
     getManagers().then(r => setManagers(r.data ?? []))
     getSettings().then(r => {
       setHrName(r.data?.hr_officer_name ?? '')
+      setLeaveDef({
+        default_annual_days: parseInt(r.data?.default_annual_days ?? 21),
+        default_casual_days: parseInt(r.data?.default_casual_days ?? 7),
+        default_sick_days:   parseInt(r.data?.default_sick_days   ?? 90),
+      })
     })
   }, [])
 
@@ -70,6 +80,19 @@ export default function SettingsPage() {
     setMgrEmployees(prev => prev.filter(e => e.id !== employeeId))
   }
 
+  const handleSaveLeaveDefaults = async () => {
+    setLeaveDefSaving(true)
+    try {
+      await Promise.all([
+        saveSetting('default_annual_days', String(leaveDef.default_annual_days)),
+        saveSetting('default_casual_days', String(leaveDef.default_casual_days)),
+        saveSetting('default_sick_days',   String(leaveDef.default_sick_days)),
+      ])
+      setLeaveDefSaved(true)
+      setTimeout(() => setLeaveDefSaved(false), 2500)
+    } finally { setLeaveDefSaving(false) }
+  }
+
   const handleSaveHR = async () => {
     setHrSaving(true)
     try {
@@ -98,8 +121,8 @@ export default function SettingsPage() {
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-bold text-secondary-700">Org Structure</h2>
-          <p className="text-xs text-neutral-400 ml-2">Assign employees to their direct manager</p>
+          <h2 className="text-sm font-bold text-secondary-700">Manager Account Assignments</h2>
+          <p className="text-xs text-neutral-400 ml-2">Assign employees to their direct manager account</p>
         </div>
         <div className="p-6 space-y-4">
 
@@ -206,7 +229,45 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Section 2: HR Settings ── */}
+      {/* ── Section 2: Leave Defaults ── */}
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
+          <Settings className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-bold text-secondary-700">Leave Defaults</h2>
+          <p className="text-xs text-neutral-400 ml-2">Applied when a new employee's balance is created for the first time</p>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            {[
+              { key: 'default_annual_days', label: 'Annual Days',        sub: 'Total leave pool per employee' },
+              { key: 'default_casual_days', label: 'Casual Sub-limit',   sub: 'Max casual from annual pool' },
+              { key: 'default_sick_days',   label: 'Sick Days',          sub: 'Independent sick balance' },
+            ].map(({ key, label, sub }) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">{label}</label>
+                <p className="text-[11px] text-neutral-400 mb-2">{sub}</p>
+                <input
+                  type="number" min={0} max={365}
+                  value={leaveDef[key]}
+                  onChange={e => { setLeaveDef(p => ({ ...p, [key]: parseInt(e.target.value) || 0 })); setLeaveDefSaved(false) }}
+                  className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors text-center font-bold"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={handleSaveLeaveDefaults}
+            disabled={leaveDefSaving}
+            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl transition-all ${
+              leaveDefSaved ? 'bg-green-600 text-white' : 'bg-primary text-white hover:bg-primary/90 disabled:opacity-40'
+            }`}
+          >
+            {leaveDefSaved ? <><Check className="w-4 h-4" /> Saved</> : leaveDefSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Defaults'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Section 3: HR Settings ── */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
           <Settings className="w-4 h-4 text-primary" />
