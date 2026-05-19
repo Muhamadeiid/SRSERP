@@ -27,14 +27,17 @@ return [
         'http://127.0.0.1:5174',
         'https://*.vercel.app',
         'https://*.onrender.com',
+        'https://*.ngrok-free.dev',
+        'https://*.ngrok-free.app',
     ],
 
     'allowed_origins_patterns' => [
         '#^https://.*\.vercel\.app$#',
         '#^https://.*\.onrender\.com$#',
+        '#^https://.*\.ngrok-free\.(dev|app)$#',
     ],
 
-    'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'ngrok-skip-browser-warning'],
 
     'exposed_headers' => [],
 
