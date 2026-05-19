@@ -7,7 +7,7 @@
  *   const products = await api.products.list({ site: "SC-01" });
  */
 
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api";
+const BASE = import.meta.env.VITE_API_BASE ?? "https://srs-backend.onrender.com/api";
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────
 async function request(method, path, body = null) {

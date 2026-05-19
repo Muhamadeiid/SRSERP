@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, ChevronDown, ChevronRight, UserCheck, X, Loader2, RefreshCw, Users, ShieldCheck, Plus } from 'lucide-react'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+const BASE = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api'
 
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('srs_token')
