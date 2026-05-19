@@ -4,7 +4,7 @@
   ],
   "build": {
     "env": {
-      "VITE_API_URL": "https://srs-backend.onrender.com/api"
+      "VITE_API_URL": "https://unbitten-quarterly-rewash.ngrok-free.dev/api"
     }
   }
 }

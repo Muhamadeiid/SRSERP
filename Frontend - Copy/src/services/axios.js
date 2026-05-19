@@ -1,10 +1,11 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://srs-backend.onrender.com/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://unbitten-quarterly-rewash.ngrok-free.dev/api',
   headers: {
     'Content-Type': 'application/json',
     Accept:         'application/json',
+    'ngrok-skip-browser-warning': '1',
   },
 })
 
