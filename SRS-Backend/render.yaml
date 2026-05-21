@@ -50,3 +50,9 @@ services:
         value: stderr
       - key: LOG_LEVEL
         value: error
+
+      # ── CORS / Sanctum ───────────────────────────────────────────
+      - key: SANCTUM_STATEFUL_DOMAINS
+        value: srserp.vercel.app
+      - key: FRONTEND_URL
+        value: https://srserp.vercel.app

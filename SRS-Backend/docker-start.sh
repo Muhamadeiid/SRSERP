@@ -24,6 +24,10 @@ fi
 echo "[SRS] Running migrations..."
 php artisan migrate --force
 
+# Seed default users
+echo "[SRS] Seeding default users..."
+php artisan db:seed --class=UsersSeeder --force
+
 # Cache config for performance
 php artisan config:cache
 php artisan route:cache
