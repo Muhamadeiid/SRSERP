@@ -580,9 +580,12 @@ export default function OrgChartTab() {
   const allRoots  = employees.filter(e => !e.direct_manager_id || !ids.has(e.direct_manager_id))
 
   const ROLE_RANK = { depot_manager: 0, admin: 1, manager: 2 }
-  const treeRoots = allRoots
-    .filter(e => e.user_role in ROLE_RANK || employees.some(r => r.direct_manager_id === e.id))
-    .sort((a, b) => (ROLE_RANK[a.user_role] ?? 9) - (ROLE_RANK[b.user_role] ?? 9))
+  const depotManager = employees.find(e => e.user_role === 'depot_manager')
+  const treeRoots = depotManager
+    ? [depotManager]
+    : allRoots
+        .filter(e => e.user_role in ROLE_RANK || employees.some(r => r.direct_manager_id === e.id))
+        .sort((a, b) => (ROLE_RANK[a.user_role] ?? 9) - (ROLE_RANK[b.user_role] ?? 9))
   const unmanaged = allRoots.filter(e =>
     !(e.user_role in ROLE_RANK) && !employees.some(r => r.direct_manager_id === e.id)
   )

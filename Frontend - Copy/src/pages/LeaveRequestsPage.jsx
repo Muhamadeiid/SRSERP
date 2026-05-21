@@ -58,6 +58,7 @@ const earlyDays = (from, to) => { if (!from || !to) return ''; const [fh,fm]=fro
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const genLRFNo  = () => `LRF-GZ-????`
+const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
 const threeName = (n) => n?.trim().split(/\s+/).slice(0, 3).join(' ') ?? ''
 const today     = () => new Date().toISOString().slice(0, 10)
@@ -562,17 +563,18 @@ function LRFForm({ onSubmit, saving }) {
   const effectiveRemaining = (type) => {
     if (!balances) return null
     const key = type + '_remaining_effective'
-    return balances[key] ?? balances[type] ?? null
+    const val = balances[key] ?? balances[type] ?? null
+    return val !== null ? parseFloat(val) : null
   }
   // For annual: show the combined pool (annual + casual since overflow is allowed)
   const availableBalance = balances
     ? (form.leave_type === 'annual'
-        ? (balances.annual_pool_remaining ?? effectiveRemaining('annual'))
+        ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
         : effectiveRemaining(form.leave_type))
     : null
-  const annualRemaining  = balances ? (balances.annual_remaining_effective ?? balances.annual ?? null) : null
-  const casualRemaining  = balances ? (balances.casual_remaining_effective ?? balances.casual ?? null) : null
-  const casualUsed       = (balances && casualRemaining !== null) ? ((balances.casual ?? 7) - casualRemaining) : 0
+  const annualRemaining  = balances ? parseFloat(balances.annual_remaining_effective ?? balances.annual ?? 0) : null
+  const casualRemaining  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
+  const casualUsed       = (balances && casualRemaining !== null) ? (parseFloat(balances.casual ?? 7) - casualRemaining) : 0
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -796,12 +798,12 @@ function LRFForm({ onSubmit, saving }) {
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Annual</span>
                         <span className="text-base font-black text-blue-600">{annualRemaining}</span>
-                        <span className="text-[10px] text-neutral-400">/ {balances?.annual ?? 21} d</span>
+                        <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.annual ?? 21)} d</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Casual</span>
                         <span className="text-base font-black text-purple-600">{casualRemaining}</span>
-                        <span className="text-[10px] text-neutral-400">/ {balances?.casual ?? 7} d</span>
+                        <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.casual ?? 7)} d</span>
                       </div>
                       {form.leave_type === 'annual' && annualRemaining === 0 && casualRemaining > 0 && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
@@ -987,16 +989,17 @@ function OfficialLRFForm({ onSubmit, saving }) {
 
   const effectiveRemaining = (type) => {
     if (!balances) return null
-    return balances[`${type}_remaining_effective`] ?? balances[type] ?? null
+    const val = balances[`${type}_remaining_effective`] ?? balances[type] ?? null
+    return val !== null ? parseFloat(val) : null
   }
 
   const availableBalance = balances
     ? (form.leave_type === 'annual'
-        ? (balances.annual_pool_remaining ?? effectiveRemaining('annual'))
+        ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
         : effectiveRemaining(form.leave_type))
     : null
-  const casualRem2  = balances ? (balances.casual_remaining_effective ?? balances.casual ?? null) : null
-  const casualUsed2 = (balances && casualRem2 !== null) ? ((balances.casual ?? 7) - casualRem2) : 0
+  const casualRem2  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
+  const casualUsed2 = (balances && casualRem2 !== null) ? (parseFloat(balances.casual ?? 7) - casualRem2) : 0
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -1537,7 +1540,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
             ['Job Title',  req.job_title],
             ['Department', req.department_label || req.department],
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
-            isLRF ? ['Period', `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${req.days} days)`] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
+            isLRF ? ['Period', `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
             isLRF ? ['Paid', req.paid ? 'Paid' : 'Unpaid'] : ['Explanation', req.explanation],
             isLRF ? ['Purpose', req.purpose] : (req.overtime_results ? ['Overtime Results', req.overtime_results] : null),
             req.rejection_reason  ? ['Rejection Reason',  req.rejection_reason]  : null,
@@ -1677,7 +1680,7 @@ export default function LeaveRequestsPage() {
           </p>
           <p className="text-xs text-neutral-400">
             {r.employee_name} · {r.type==='lrf'
-              ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${r.days}d`
+              ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${fmtDays(r.days)}d`
               : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${r.hours}h`}
           </p>
         </div>
@@ -1879,7 +1882,7 @@ export default function LeaveRequestsPage() {
                     </div>
                     <p className="text-xs text-neutral-400">
                       {r.type==='lrf'
-                        ? `${r.leave_type} leave · ${r.days} days (${fmtShort(r.start_date)}→${fmtShort(r.end_date)})`
+                        ? `${r.leave_type} leave · ${fmtDays(r.days)} days (${fmtShort(r.start_date)}→${fmtShort(r.end_date)})`
                         : `Overtime · ${r.hours}h · ${fmtShort(r.ot_date)}`}
                     </p>
                   </div>
