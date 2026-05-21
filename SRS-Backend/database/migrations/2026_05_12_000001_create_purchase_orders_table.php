@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('delivery_period')->nullable()->default('Week');
             $table->string('payment_terms')->nullable()->default('100% After Received');
             $table->string('receipt_location')->nullable()->default('Company Warehouse');
-            $table->text('comments')->nullable()->default('Banking Transfer');
+            $table->text('comments')->nullable();
             $table->enum('status', ['draft', 'issued', 'received', 'cancelled'])->default('draft');
             $table->timestamps();
 

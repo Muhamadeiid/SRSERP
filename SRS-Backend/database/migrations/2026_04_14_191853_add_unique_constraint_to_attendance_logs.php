@@ -13,9 +13,11 @@ return new class extends Migration
         DB::statement('
             DELETE FROM attendance_logs
             WHERE id NOT IN (
-                SELECT MIN(id)
-                FROM attendance_logs
-                GROUP BY punch_code, timestamp
+                SELECT min_id FROM (
+                    SELECT MIN(id) as min_id
+                    FROM attendance_logs
+                    GROUP BY punch_code, timestamp
+                ) as t
             )
         ');
 
