@@ -36,12 +36,9 @@ export default function Login() {
       <div className="w-full max-w-sm">
 
         {/* Logo */}
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <span className="bg-[#c41a1a] text-white text-sm font-bold px-2.5 py-1.5 rounded-lg">SRS</span>
-          <div>
-            <p className="text-[#1a1f36] font-bold text-lg leading-none">Rotem SRS</p>
-            <p className="text-[#8892ab] text-xs mt-0.5">Industrial Operations Portal</p>
-          </div>
+        <div className="flex flex-col items-center gap-2 mb-8">
+          <img src="/logo.png" alt="Rotem SRS Egypt" className="h-16 w-auto object-contain" />
+          <p className="text-[#8892ab] text-xs">Industrial Operations Portal</p>
         </div>
 
         {/* Card */}

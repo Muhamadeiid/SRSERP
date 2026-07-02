@@ -52,14 +52,11 @@ export default function InventoryLayout() {
           <button
             onClick={() => collapsed ? setCollapsed(false) : navigate('/')}
             title={collapsed ? 'Expand' : 'Back to Dashboard'}
-            className="w-[38px] h-[38px] bg-primary rounded-lg flex items-center justify-center text-white shrink-0 hover:bg-primary-600 transition-colors"
+            className="shrink-0 hover:opacity-80 transition-opacity"
           >
-            {collapsed
-              ? <ChevronRight className="w-4 h-4" />
-              : <ChevronLeft  className="w-4 h-4" />}
+            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8' : 'h-10'} w-auto object-contain`} />
           </button>
           <div className={`flex flex-col leading-tight overflow-hidden transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-            <span className="font-extrabold text-sm text-secondary-700 whitespace-nowrap">Inventory Module</span>
             <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Stock Management</span>
           </div>
         </div>

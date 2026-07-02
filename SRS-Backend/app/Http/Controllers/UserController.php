@@ -94,6 +94,35 @@ class UserController extends Controller
     }
 
     /**
+     * GET /api/users/depot-manager
+     * Returns the depot manager (public — any authenticated user).
+     * Used by resignation / leave / OT forms to auto-fill the depot manager name.
+     */
+    public function depotManager()
+    {
+        $dm = User::where('role', 'depot_manager')
+            ->where('is_active', true)
+            ->first(['id', 'name', 'email']);
+
+        return response()->json($dm);
+    }
+
+    /**
+     * GET /api/users/hr-officer
+     * Returns the HR representative (any active Human Resources user).
+     * Public — any authenticated user.
+     */
+    public function hrOfficer()
+    {
+        $hr = User::where('department', 'human_resources')
+            ->where('is_active', true)
+            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager', 'staff')")
+            ->first(['id', 'name', 'email', 'role']);
+
+        return response()->json($hr);
+    }
+
+    /**
      * GET /api/users/{user}/assigned-employees
      * Returns all employees assigned to this manager user.
      */

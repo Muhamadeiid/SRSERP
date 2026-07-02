@@ -3,9 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
-  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock
+  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download
 } from 'lucide-react'
 import { generateOTR } from '../utils/generateOTR'
+import { generateLRF } from '../utils/generateLRF'
 import { getEmployees, getEmployee, searchEmployees } from '../services/employeeService'
 import {
   getLeaveRequests, createLeaveRequest,
@@ -1471,12 +1472,20 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
   }
 
   const trackingMissing = !req.tracking_no || /-(\s*)$/.test(req.tracking_no)
-  const handlePrintClick = () => {
+  const confirmMissing = (action) => {
     if (trackingMissing) {
-      const ok = window.confirm('This request has no tracking number set. Print without it?')
-      if (!ok) return
+      const ok = window.confirm(`This request has no tracking number set. ${action} without it?`)
+      if (!ok) return false
     }
-    return isLRF ? printOfficialLRFGrid(req) : generateOTR(req)
+    return true
+  }
+  const handlePrintClick = () => {
+    if (!confirmMissing('Print')) return
+    return isLRF ? printOfficialLRFGrid(req) : printOTR(req)
+  }
+  const handleDownloadWord = () => {
+    if (!confirmMissing('Download')) return
+    return isLRF ? generateLRF(req) : generateOTR(req)
   }
 
   return (
@@ -1567,18 +1576,28 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
         )}
 
         {/* Actions */}
-        <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-between gap-3">
-          <button
-            onClick={handlePrintClick}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-neutral-500 hover:text-secondary border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all">
-            <Printer className="w-4 h-4" /> Print
-          </button>
+        <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrintClick}
+              title="Print"
+              className="flex items-center justify-center w-10 h-10 text-neutral-500 hover:text-secondary border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all">
+              <Printer className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleDownloadWord}
+              title="Download Word"
+              className="flex items-center justify-center w-10 h-10 text-white bg-primary hover:bg-primary-600 rounded-xl transition-all">
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
 
           <div className="flex gap-2 items-center flex-wrap justify-end">
             {canWithdraw && (
               <button onClick={() => onCancel(req.id)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-neutral-500 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-xl transition-all">
-                <Ban className="w-4 h-4" /> Withdraw
+                title="Withdraw"
+                className="flex items-center justify-center w-10 h-10 text-neutral-500 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-xl transition-all">
+                <Ban className="w-4 h-4" />
               </button>
             )}
 
@@ -1586,16 +1605,19 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
             {req.status === 'pending' && isDirectManager && !isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
-                  <CalendarClock className="w-4 h-4" /> Reschedule
+                  title="Reschedule"
+                  className="flex items-center justify-center w-10 h-10 text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
+                  <CalendarClock className="w-4 h-4" />
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
-                  <XCircle className="w-4 h-4" /> Reject
+                  title="Reject"
+                  className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
+                  <XCircle className="w-4 h-4" />
                 </button>
                 <button onClick={() => onManagerApprove(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
-                  <CheckCircle className="w-4 h-4" /> Approve
+                  title="Approve"
+                  className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
+                  <CheckCircle className="w-4 h-4" />
                 </button>
               </>
             )}
@@ -1604,16 +1626,19 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
             {isDepotAdmin && (req.status === 'pending' || req.status === 'manager_approved') && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
-                  <CalendarClock className="w-4 h-4" /> Reschedule
+                  title="Reschedule"
+                  className="flex items-center justify-center w-10 h-10 text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
+                  <CalendarClock className="w-4 h-4" />
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
-                  <XCircle className="w-4 h-4" /> Reject
+                  title="Reject"
+                  className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
+                  <XCircle className="w-4 h-4" />
                 </button>
                 <button onClick={() => onApprove(req.id)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
-                  <CheckCircle className="w-4 h-4" /> Approve
+                  title="Approve"
+                  className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
+                  <CheckCircle className="w-4 h-4" />
                 </button>
               </>
             )}
@@ -1690,9 +1715,9 @@ export default function LeaveRequestsPage() {
         <button onClick={() => setViewReq(r)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
         {r.status === 'approved' && (
           <button
-            onClick={() => r.type === 'lrf' ? printOfficialLRFGrid(r) : generateOTR(r)}
-            className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Print">
-            <Printer className="w-4 h-4" />
+            onClick={() => r.type === 'lrf' ? generateLRF(r) : generateOTR(r)}
+            className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">
+            <Download className="w-4 h-4" />
           </button>
         )}
         {['pending','manager_approved','approved'].includes(r.status) && (isDepotAdmin || r.user_id === user?.id) && (

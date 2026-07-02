@@ -111,17 +111,9 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
           <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100 min-h-[64px] overflow-hidden">
             <button
               onClick={() => setCollapsed(!collapsed)}
-              className="w-[38px] h-[38px] bg-primary rounded-lg flex items-center justify-center text-white shrink-0 hover:bg-primary-600 transition-colors"
+              className="shrink-0 hover:opacity-80 transition-opacity"
             >
-              {collapsed ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                </svg>
-              )}
+              <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8 w-8 object-cover object-left' : 'h-10 w-auto'} object-contain`} />
             </button>
 
             <div
@@ -129,9 +121,6 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
                 collapsed ? "w-0 opacity-0" : "w-full opacity-100"
               }`}
             >
-              <span className="font-extrabold text-sm text-secondary-700 tracking-wide whitespace-nowrap">
-                Rotem SRS
-              </span>
               <span className="text-[10px] text-neutral-400 tracking-widest uppercase whitespace-nowrap mt-0.5">
                 Industrial Operations
               </span>

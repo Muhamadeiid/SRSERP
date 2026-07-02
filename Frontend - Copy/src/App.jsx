@@ -19,6 +19,7 @@ import PoDetail          from './pages/PoDetail'
 import IgiNewPage        from './pages/IgiNewPage'
 import IgiDetail         from './pages/IgiDetail'
 import LeaveMasterList   from './pages/LeaveMasterList'
+import ResignationsPage  from './pages/ResignationsPage'
 
 // HR tab components — each mounted at its own route
 import WorkforceTab      from './components/hr/WorkforceTab'
@@ -109,6 +110,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="calendar"     element={<CalendarPage />} />
+          <Route path="resignations" element={<ResignationsPage />} />
 
           {/* HR Full only */}
           <Route path="attendance" element={

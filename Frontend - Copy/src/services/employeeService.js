@@ -62,6 +62,15 @@ export function getEmployee(id) {
   return request(`/employees/${id}`)
 }
 
+// ── Depot Manager & HR (auto-fill on forms) ─────────────────
+export function getDepotManager() {
+  return request('/users/depot-manager')
+}
+
+export function getHrOfficer() {
+  return request('/users/hr-officer')
+}
+
 // Convert empty strings to null so Laravel date/integer validation doesn't fail
 function cleanPayload(data) {
   const DATE_FIELDS = ['hiring_date', 'birth_date', 'insurance_date', 'contract_start', 'contract_end']

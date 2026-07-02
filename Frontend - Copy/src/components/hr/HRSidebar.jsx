@@ -4,7 +4,7 @@ import { logout } from '../../store/slices/authSlice'
 import {
   Users, Calendar, Clock, ShieldCheck,
   AlertTriangle, LayoutDashboard, ChevronLeft,
-  LogOut, FileText, Settings, Package, GitBranch
+  LogOut, FileText, Settings, Package, GitBranch, UserMinus
 } from 'lucide-react'
 
 // HR Full access: Admin, Depot Manager (role) OR Human Resources dept
@@ -21,6 +21,7 @@ const isDashAccess = (user) =>
 const ALL_NAV = [
   { label: 'Workforce',      path: '/human-resources',                    icon: Users,         end: true  },
   { label: 'Leave Requests', path: '/human-resources/leave',              icon: FileText,      end: false },
+  { label: 'Resignations',   path: '/human-resources/resignations',       icon: UserMinus,     end: false },
   { label: 'Attendance',     path: '/human-resources/attendance',         icon: Clock,         end: false },
   { label: 'Certifications', path: '/human-resources/certifications',     icon: ShieldCheck,   end: false },
   { label: 'Disciplinary',   path: '/human-resources/disciplinary',       icon: AlertTriangle, end: false },
@@ -52,13 +53,7 @@ export default function HRSidebar() {
       {/* Logo */}
       <div className="px-4 py-4 border-b border-neutral-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-            <Users className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-secondary-700 leading-none">Human Resources</p>
-            <p className="text-[10px] text-neutral-400 uppercase tracking-widest mt-0.5">SRS Portal</p>
-          </div>
+          <img src="/logo.png" alt="Rotem SRS Egypt" className="h-9 w-auto object-contain" />
         </div>
       </div>
 

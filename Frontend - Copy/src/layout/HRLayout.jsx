@@ -6,7 +6,7 @@ import {
   Users, Calendar, Clock, ShieldCheck,
   AlertTriangle, ChevronLeft, ChevronRight,
   LogOut, Bell, FileText, Package, Settings,
-  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet,
+  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus,
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
@@ -33,6 +33,7 @@ const HR_FULL_ROLES_NAV = ['admin', 'depot_manager']
 const ALL_NAV = [
   { label: 'Workforce',          path: '/human-resources',                icon: Users,          end: true,  hrOnly: true },
   { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText },
+  { label: 'Resignations',       path: '/human-resources/resignations',   icon: UserMinus },
   { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            hrOnly: true },
   { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      hrOnly: true },
   { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                hrOnly: true },
@@ -133,12 +134,11 @@ export default function HRLayout() {
           <button
             onClick={() => collapsed ? setCollapsed(false) : navigate('/')}
             title={collapsed ? 'Expand' : 'Back to Dashboard'}
-            className="w-[38px] h-[38px] bg-primary rounded-lg flex items-center justify-center text-white shrink-0 hover:bg-primary/90 transition-colors"
+            className="shrink-0 hover:opacity-80 transition-opacity"
           >
-            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8' : 'h-10'} w-auto object-contain`} />
           </button>
           <div className={`flex flex-col leading-tight overflow-hidden transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-            <span className="font-extrabold text-sm text-secondary-700 whitespace-nowrap">HR Module</span>
             <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Human Resources</span>
           </div>
         </div>

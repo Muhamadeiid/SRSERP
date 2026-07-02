@@ -50,6 +50,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Subordinates — any manager can fetch their own ────────────────────────
     Route::get('/users/subordinates', [UserController::class, 'subordinates']);
 
+    // ── Depot Manager & HR — any authenticated user (auto-fill on forms) ──────
+    Route::get('/users/depot-manager', [UserController::class, 'depotManager']);
+    Route::get('/users/hr-officer',    [UserController::class, 'hrOfficer']);
+
     // ── Procurement (PRF) — every authenticated user can submit; approvals
     //     gated inside the controller (procurement → ehs → depot_manager)
     Route::prefix('procurement')->group(function () {
