@@ -14,6 +14,10 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\IgiController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\LookupController;
+use App\Http\Controllers\PositionController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\TeamTransferController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -25,6 +29,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth & profile
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
+
+    // Lookups — active items only (read-only for all authenticated users)
+    Route::get('/lookups', [LookupController::class, 'index']);
+
+    // Positions — read-only for all (autocomplete on forms)
+    Route::get('/positions', [PositionController::class, 'index']);
 
     // E-Signature (own)
     Route::post('/user/signature', [SignatureController::class, 'saveMySignature']);
@@ -149,5 +159,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}/assigned-employees', [UserController::class, 'assignedEmployees']);
         Route::post('/users/{user}/assign-employee',   [UserController::class, 'assignEmployee']);
         Route::post('/users/{user}/link-employee',     [UserController::class, 'linkEmployee']);
+
+        // Lookups — admin management
+        Route::get('/lookups/all',           [LookupController::class, 'all']);
+        Route::post('/lookups',              [LookupController::class, 'store']);
+        Route::put('/lookups/{lookup}',      [LookupController::class, 'update']);
+        Route::delete('/lookups/{lookup}',   [LookupController::class, 'destroy']);
+
+        // Positions — admin management
+        Route::get('/positions/all',              [PositionController::class, 'all']);
+        Route::post('/positions',                 [PositionController::class, 'store']);
+        Route::put('/positions/{position}',       [PositionController::class, 'update']);
+        Route::delete('/positions/{position}',    [PositionController::class, 'destroy']);
+        Route::post('/positions/merge',           [PositionController::class, 'merge']);
+
+        // Permissions matrix
+        Route::get('/permissions/matrix',         [PermissionController::class, 'matrix']);
+        Route::post('/permissions/toggle',        [PermissionController::class, 'toggle']);
+
+        // Team Transfer (bulk reorg)
+        Route::post('/team-transfer',             [TeamTransferController::class, 'transfer']);
     });
 });
