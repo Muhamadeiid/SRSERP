@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
   const role       = user?.role ?? 'staff'
   const dept       = user?.department ?? ''
-  const isHRFull   = ['admin', 'depot_manager'].includes(role) || dept === 'human_resources'
+  const isHRFull   = ['admin', 'depot_manager', 'hr'].includes(role)
   const isProcFull = ['admin', 'depot_manager', 'purchasing'].includes(role)
   const canSeeProc = isProcFull || role === 'ehs'
   const isDashFull = ['admin', 'depot_manager'].includes(role)

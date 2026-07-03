@@ -15,8 +15,9 @@ class Employee extends Model
         'ibs_code', 'punch_code', 'rotem_code', 'project_budget',
         // Names
         'name', 'arabic_name',
-        // Position
-        'position', 'position_arabic', 'department',
+        // Position — legacy free-text (position, position_arabic) still supported
+        // but position_id is the canonical reference into the positions master list.
+        'position', 'position_arabic', 'position_id', 'department',
         // Location
         'work_location', 'city', 'address',
         // Personal
@@ -37,6 +38,9 @@ class Employee extends Model
         'social_insurance_number', 'insurance_status', 'insurance_company', 'form_1', 'insurance_date',
         // Contract
         'contract_start', 'contract_end',
+        // Resignation — set from the ERF form. When last_working_date < today the
+        // employee is auto-filtered out of the Workforce and appears in Ex-Employees.
+        'last_working_date',
         // HR Forms
         'vacation_form', 'sanctions_form', 'marital_status_form', 'no_warning_letters',
         // App status
@@ -62,6 +66,7 @@ class Employee extends Model
         'insurance_date'              => 'date',
         'contract_start'              => 'date',
         'contract_end'                => 'date',
+        'last_working_date'           => 'date',
         // Document flags
         'doc_birth_certificate'       => 'boolean',
         'doc_edu_certificate'         => 'boolean',
@@ -86,6 +91,22 @@ class Employee extends Model
     public function scopeByLocation($q, $loc)       { return $q->where('work_location', $loc); }
     public function scopeByStatus($q, $status)      { return $q->where('status', $status); }
     public function scopeByCategory($q, $cat)       { return $q->where('category', $cat); }
+
+    /** Active workforce — no resignation, or last_working_date is still in the future */
+    public function scopeActive($q)
+    {
+        return $q->where(function ($sub) {
+            $sub->whereNull('last_working_date')
+                ->orWhere('last_working_date', '>=', now()->toDateString());
+        });
+    }
+
+    /** Ex-employees — resignation date has already passed */
+    public function scopeExEmployees($q)
+    {
+        return $q->whereNotNull('last_working_date')
+                 ->where('last_working_date', '<', now()->toDateString());
+    }
 
     public function scopeSearch($q, $term)
     {
@@ -291,6 +312,12 @@ class Employee extends Model
     public function userManager(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'user_manager_id');
+    }
+
+    /** The canonical position record (may be null for records still on the legacy free-text field) */
+    public function positionRef(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Position::class, 'position_id');
     }
 
     // ── Helpers ─────────────────────────────────────────────

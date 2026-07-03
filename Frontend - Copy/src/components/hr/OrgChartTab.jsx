@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, UserCheck, X, Loader2,
-         RefreshCw, Users, ShieldCheck, Plus, Minus, AlertCircle } from 'lucide-react'
+         RefreshCw, Users, ShieldCheck, Plus, AlertCircle,
+         ChevronRight, ChevronDown } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api'
 const api = async (path, opts = {}) => {
@@ -65,147 +66,124 @@ function OrgNode({ emp, all, onchange, onSelectMgr, depth = 0, colorIdx = 0 }) {
   }
 
   return (
-    <div className="flex flex-col items-center">
-
-      {/* ── Card ── */}
+    <div>
+      {/* ── Row ── */}
       <div
         onClick={() => onSelectMgr(emp)}
-        className={`group relative bg-white rounded-2xl border-2 w-44 p-3 text-center transition-all hover:shadow-xl cursor-pointer
-          ${isRoot ? 'border-primary shadow-primary/20 shadow-md' : 'border-neutral-200 shadow-sm hover:border-primary/40'}`}
+        title={emp.name}
+        className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors
+          ${isRoot ? 'bg-primary/8 hover:bg-primary/12' : 'hover:bg-neutral-50'}`}
       >
+        {/* Chevron */}
+        <button
+          onClick={e => { e.stopPropagation(); if (hasReports) setOpen(o => !o) }}
+          className={`w-3.5 shrink-0 flex justify-center text-neutral-400 ${!hasReports ? 'invisible' : ''}`}
+        >
+          {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+
         {/* Avatar */}
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black mx-auto mb-2 ${isRoot ? 'bg-white text-primary border-2 border-primary' : avatarBg}`}>
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black shrink-0
+          ${isRoot ? 'bg-white text-primary border border-primary' : avatarBg}`}>
           {initials(emp.name)}
         </div>
 
-        {/* Name */}
-        <p className={`text-[11px] font-bold leading-tight ${isRoot ? 'text-primary' : 'text-secondary-700'}`}>
-          {emp.name}
-        </p>
-
-        {/* Position */}
-        {emp.position && (
-          <p className="text-[10px] text-neutral-400 mt-0.5 truncate" title={emp.position}>{emp.position}</p>
-        )}
+        {/* Name + Position */}
+        <div className="flex-1 min-w-0 flex items-baseline gap-2">
+          <span className={`text-xs font-semibold truncate ${isRoot ? 'text-primary' : 'text-secondary-700'}`}>
+            {emp.name}
+          </span>
+          {emp.position && (
+            <span className="hidden sm:inline text-[11px] text-neutral-400 truncate">
+              {emp.position}
+            </span>
+          )}
+        </div>
 
         {/* Dept badge */}
         {deptKey && DEPT_COLOR[deptKey] && (
-          <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${deptBadge}`}>
+          <span className={`hidden md:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${deptBadge}`}>
             {deptKey.replace('_', ' ').toUpperCase()}
           </span>
         )}
 
         {/* Reports count */}
         {hasReports && (
-          <div className="mt-1.5">
-            <span className={`text-[9px] font-semibold ${isRoot ? 'text-primary/70' : 'text-neutral-400'}`}>
-              {reports.length} report{reports.length > 1 ? 's' : ''}
-            </span>
-          </div>
-        )}
-
-        {/* "Manage team" hint on hover */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1.5">
-          <span className="text-[9px] text-primary font-semibold bg-primary/8 px-2 py-0.5 rounded-full">
-            Manage team →
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0
+            ${isRoot ? 'bg-primary/15 text-primary' : 'bg-neutral-100 text-neutral-500'}`}>
+            {reports.length}
           </span>
-        </div>
+        )}
 
         {/* Assign manager button — hidden only for depot_manager */}
         {emp.user_role !== 'depot_manager' && !editing && (
           <button
             onClick={e => { e.stopPropagation(); setEditing(true); setTimeout(() => inputRef.current?.focus(), 50) }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 w-5 h-5 rounded-full bg-neutral-100 hover:bg-primary hover:text-white text-neutral-400 flex items-center justify-center"
+            className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-md bg-white hover:bg-primary hover:text-white text-neutral-400 border border-neutral-200 flex items-center justify-center shrink-0"
             title="Change direct manager"
           >
-            <UserCheck className="w-3 h-3" />
-          </button>
-        )}
-
-        {/* Inline manager search */}
-        {editing && (
-          <div className="mt-2 relative" onClick={e => e.stopPropagation()}>
-            <p className="text-[9px] text-neutral-400 mb-1">Set manager for {emp.name.split(' ')[0]}</p>
-            <div className="flex items-center gap-1">
-              <div className="relative flex-1">
-                <Search className="absolute left-1.5 top-1.5 w-3 h-3 text-neutral-400 pointer-events-none" />
-                <input
-                  ref={inputRef}
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search…"
-                  className="w-full pl-5 pr-1 py-1 text-[10px] border border-neutral-200 rounded-lg outline-none focus:border-primary"
-                />
-              </div>
-              <button onClick={() => { setEditing(false); setSearch('') }} className="text-neutral-300 hover:text-neutral-500 shrink-0">
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            {saving && <Loader2 className="w-3 h-3 animate-spin text-primary mx-auto mt-1" />}
-            {search && filtered.length > 0 && (
-              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-40 overflow-y-auto text-left">
-                <button
-                  onClick={() => setManager(null)}
-                  className="w-full px-3 py-1.5 hover:bg-red-50 text-[10px] text-red-400 text-left border-b border-neutral-50"
-                >
-                  Remove manager
-                </button>
-                {filtered.map(e => (
-                  <button key={e.id} onClick={() => setManager(e)}
-                    className="w-full px-3 py-1.5 hover:bg-primary/5 text-[10px] text-secondary-700 text-left flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-black shrink-0">
-                      {initials(e.name)}
-                    </div>
-                    <span className="truncate">{e.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Collapse / expand button */}
-        {hasReports && (
-          <button
-            onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-            className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 transition-colors
-              ${open ? 'bg-primary border-primary text-white' : 'bg-white border-neutral-300 text-neutral-500 hover:border-primary hover:text-primary'}`}
-          >
-            {open ? <Minus className="w-2.5 h-2.5" /> : <Plus className="w-2.5 h-2.5" />}
+            <UserCheck className="w-2.5 h-2.5" />
           </button>
         )}
       </div>
 
-      {/* ── Connector + children ── */}
-      {hasReports && open && (
-        <>
-          <div className="h-5" />
-          <div className="w-px h-5 bg-neutral-300" />
-
-          <div className="flex items-start">
-            {reports.map((r, i) => (
-              <div key={r.id} className="flex flex-col items-center relative px-3">
-                {reports.length > 1 && (
-                  <div className={`absolute top-0 h-px bg-neutral-300
-                    ${i === 0                   ? 'left-1/2 right-0'   :
-                      i === reports.length - 1   ? 'left-0 right-1/2'  :
-                                                   'left-0 right-0'}`}
-                  />
-                )}
-                <div className="w-px h-5 bg-neutral-300" />
-                <OrgNode
-                  emp={r}
-                  all={all}
-                  onchange={onchange}
-                  onSelectMgr={onSelectMgr}
-                  depth={depth + 1}
-                  colorIdx={colorIdx + i + 1}
-                />
-
-              </div>
-            ))}
+      {/* Inline manager search */}
+      {editing && (
+        <div className="ml-8 mt-1 mb-1 relative" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1 bg-white border border-neutral-200 rounded-lg px-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400 pointer-events-none" />
+              <input
+                ref={inputRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={`Set manager for ${emp.name.split(' ')[0]}…`}
+                className="w-full pl-6 pr-1 py-1 text-[10px] outline-none bg-transparent"
+              />
+            </div>
+            <button onClick={() => { setEditing(false); setSearch('') }} className="text-neutral-300 hover:text-neutral-500 shrink-0 p-1">
+              <X className="w-3 h-3" />
+            </button>
           </div>
-        </>
+          {saving && <Loader2 className="w-3 h-3 animate-spin text-primary mx-auto mt-1" />}
+          {search && filtered.length > 0 && (
+            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-40 overflow-y-auto text-left">
+              <button
+                onClick={() => setManager(null)}
+                className="w-full px-3 py-1.5 hover:bg-red-50 text-[10px] text-red-400 text-left border-b border-neutral-50"
+              >
+                Remove manager
+              </button>
+              {filtered.map(e => (
+                <button key={e.id} onClick={() => setManager(e)}
+                  className="w-full px-3 py-1.5 hover:bg-primary/5 text-[10px] text-secondary-700 text-left flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-black shrink-0">
+                    {initials(e.name)}
+                  </div>
+                  <span className="truncate">{e.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Children (indented) */}
+      {hasReports && open && (
+        <div className="relative pl-5">
+          <div className="absolute left-[10px] top-0 bottom-1 w-px bg-neutral-200" />
+          {reports.map((r, i) => (
+            <OrgNode
+              key={r.id}
+              emp={r}
+              all={all}
+              onchange={onchange}
+              onSelectMgr={onSelectMgr}
+              depth={depth + 1}
+              colorIdx={colorIdx + i + 1}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -609,7 +587,7 @@ export default function OrgChartTab() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-extrabold text-secondary-700">Organization Chart</h2>
-          <p className="text-sm text-neutral-400 mt-0.5">Click any card to manage their team</p>
+          <p className="text-sm text-neutral-400 mt-0.5">The manager here is the direct manager who approves each employee's leave requests</p>
         </div>
         <button onClick={load} disabled={loading}
           className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
@@ -677,20 +655,18 @@ export default function OrgChartTab() {
               <p className="text-sm font-medium">No employees found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto pb-4">
-              <div className="flex gap-16 items-start min-w-max justify-center">
-                {treeRoots.map((root, i) => (
-                  <OrgNode
-                    key={root.id}
-                    emp={root}
-                    all={employees}
-                    onchange={silentRefresh}
-                    onSelectMgr={setSelectedTeamMgr}
-                    depth={0}
-                    colorIdx={i}
-                  />
-                ))}
-              </div>
+            <div className="max-w-2xl mx-auto space-y-1">
+              {treeRoots.map((root, i) => (
+                <OrgNode
+                  key={root.id}
+                  emp={root}
+                  all={employees}
+                  onchange={silentRefresh}
+                  onSelectMgr={setSelectedTeamMgr}
+                  depth={0}
+                  colorIdx={i}
+                />
+              ))}
             </div>
           )}
         </div>

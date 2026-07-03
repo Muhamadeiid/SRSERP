@@ -39,6 +39,8 @@ import {
 } from "../../services/employeeService";
 import { saveEmployeeSignature, getLeaveBalance, updateLeaveBalance } from "../../services/leaveService";
 import SignaturePad from "./SignaturePad";
+import { useLookups } from "../../hooks/useLookups";
+import { searchPositions } from "../../services/positionService";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
@@ -423,6 +425,7 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
 
 // ── Main WorkforceTab ────────────────────────────────────────
 export default function WorkforceTab() {
+  const { departments: lookupDepts, locations: lookupLocs } = useLookups()
   const [employees, setEmployees] = useState([]);
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({
@@ -442,6 +445,7 @@ export default function WorkforceTab() {
   const [deptFilter, setDeptFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [view, setView] = useState("active"); // "active" | "ex"
 
   const fileRef = useRef(null);
   const searchTimer = useRef(null);
@@ -486,6 +490,7 @@ export default function WorkforceTab() {
     setError(null);
     try {
       const res = await getEmployees({
+        view,
         location:   locFilter  !== "all" ? locFilter  : undefined,
         department: deptFilter || undefined,
         search:     search     || undefined,
@@ -499,7 +504,7 @@ export default function WorkforceTab() {
     } finally {
       setLoading(false);
     }
-  }, [locFilter, deptFilter, search, page]);
+  }, [view, locFilter, deptFilter, search, page]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -583,11 +588,10 @@ export default function WorkforceTab() {
   const byLocation  = stats?.by_location ?? {};
   const total        = stats?.total ?? 0;
 
-  // Fixed location cards — always show all locations
-  const FIXED_LOCS = ['Kozzika', 'Tura', 'Ganz', 'Mainline']
+  // Location cards — pulled from lookups (dynamic)
   const locCards = [
     { key: 'all', label: 'All Staff', value: total, sub: `${stats?.by_status?.on_site ?? 0} on site` },
-    ...FIXED_LOCS.map(loc => ({ key: loc, label: loc, value: byLocation[loc] ?? 0, sub: null })),
+    ...lookupLocs.map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0, sub: null })),
   ];
 
   const pageNums = () => {
@@ -606,6 +610,26 @@ export default function WorkforceTab() {
 
   return (
     <div className="p-6 space-y-4">
+
+      {/* ── Active vs Ex-Employees tabs ── */}
+      <div className="inline-flex items-center gap-1 p-1 bg-neutral-100 rounded-xl">
+        {[
+          { key: 'active', label: 'Active' },
+          { key: 'ex',     label: 'Ex-Employees' },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setView(t.key); setPage(1); }}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
+              view === t.key
+                ? 'bg-white text-secondary-700 shadow-sm'
+                : 'text-neutral-500 hover:text-secondary-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* ── Location filter cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -631,13 +655,8 @@ export default function WorkforceTab() {
       {/* ── Department filter pills ── */}
       <div className="flex flex-wrap gap-2">
         {[
-          { key: '',               label: 'All Departments' },
-          { key: 'cm',            label: 'CM' },
-          { key: 'hm',            label: 'HM' },
-          { key: 'pm',            label: 'PM' },
-          { key: 'warranty',      label: 'Warranty' },
-          { key: 'cm_intervention',label: 'CM (Intervention)' },
-          { key: 'admin',          label: 'Admin' },
+          { key: '', label: 'All Departments' },
+          ...lookupDepts.map(d => ({ key: d.key, label: d.label_en })),
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -1112,9 +1131,63 @@ function buildInitialForm(emp) {
   };
 }
 
+function PositionPicker({ value, valueArabic, onChange, onTextChange }) {
+  const [q, setQ] = useState(value || '')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const timer = useRef(null)
+
+  useEffect(() => { setQ(value || '') }, [value])
+
+  const handleChange = (v) => {
+    setQ(v)
+    onTextChange?.(v)
+    setOpen(true)
+    if (timer.current) clearTimeout(timer.current)
+    if (!v || v.length < 1) { setResults([]); return }
+    timer.current = setTimeout(async () => {
+      setBusy(true)
+      try { setResults(await searchPositions(v)) } catch { setResults([]) }
+      finally { setBusy(false) }
+    }, 200)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={q}
+        onChange={e => handleChange(e.target.value)}
+        onFocus={() => q.length >= 1 && handleChange(q)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder="Search or type a new position…"
+        className="w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
+      />
+      {busy && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-neutral-300" />}
+      {open && results.length > 0 && (
+        <div className="absolute z-30 w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+          {results.map(p => (
+            <button key={p.id} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(p); setQ(p.name_en); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-primary/5 text-left border-b border-neutral-50 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-secondary-700 truncate">{p.name_en}</p>
+                {p.name_ar && <p className="text-[11px] text-neutral-400 text-right" dir="rtl">{p.name_ar}</p>}
+              </div>
+              <span className="text-[10px] font-mono text-neutral-400 shrink-0">{p.department_key ?? '—'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [], users = [], onSignatureSave }) {
   const [form, setForm] = useState(() => buildInitialForm(emp));
   const [tab, setTab] = useState('basic');
+  const { departments: lookupDepts, categories: lookupCats } = useLookups();
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const chk = (k) => set(k, !form[k]);
@@ -1200,7 +1273,21 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={LBL}>Position <span className="text-red-400">*</span></label>
-                    <input value={form.position} onChange={e => set('position', e.target.value)} required className={INP} placeholder="e.g. Intervention Technician" />
+                    <PositionPicker
+                      value={form.position}
+                      valueArabic={form.position_arabic}
+                      onChange={(pos) => {
+                        if (pos) {
+                          set('position', pos.name_en)
+                          set('position_arabic', pos.name_ar ?? '')
+                          set('position_id', pos.id)
+                          if (pos.department_key && !form.department) set('department', pos.department_key)
+                        } else {
+                          set('position_id', null)
+                        }
+                      }}
+                      onTextChange={(txt) => set('position', txt)}
+                    />
                   </div>
                   <div>
                     <label className={LBL}>Position (Arabic)</label>
@@ -1212,19 +1299,13 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                     <label className={LBL}>Department</label>
                     <select value={form.department} onChange={e => set('department', e.target.value)} className={INP}>
                       <option value="">— Select —</option>
-                      <option value="cm">CM</option>
-                      <option value="hm">HM</option>
-                      <option value="pm">PM</option>
-                      <option value="warranty">Warranty</option>
-                      <option value="cm_intervention">CM (Intervention)</option>
-                      <option value="admin">Admin</option>
+                      {lookupDepts.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className={LBL}>Category</label>
                     <select value={form.category} onChange={e => set('category', e.target.value)} className={INP}>
-                      <option value="Blue Collar">Blue Collar</option>
-                      <option value="White Collar">White Collar</option>
+                      {lookupCats.map(c => <option key={c.key} value={c.key}>{c.label_en}</option>)}
                     </select>
                   </div>
                   <div>

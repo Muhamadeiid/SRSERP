@@ -30,6 +30,11 @@ class EmployeeController extends Controller
     {
         $q = Employee::query();
 
+        // Workforce filter — active (default), ex, or all
+        $view = $request->get('view', 'active');
+        if ($view === 'ex')      $q->exEmployees();
+        elseif ($view !== 'all') $q->active();
+
         if ($request->filled('department') && $request->department !== 'all')
             $q->byDepartment($request->department);
         if ($request->filled('location') && $request->location !== 'all')
@@ -456,6 +461,7 @@ class EmployeeController extends Controller
             'ibs_code'     => $uniqueRule,
             'punch_code'   => 'nullable|string|max:20',
             'position'     => 'required|string|max:255',
+            'position_id'  => 'nullable|exists:positions,id',
             'department'   => 'nullable|string|max:50',
             'work_location'=> 'nullable|string|max:100',
             'hiring_date'  => 'nullable|date',
@@ -463,6 +469,7 @@ class EmployeeController extends Controller
             'insurance_date'=> 'nullable|date',
             'contract_start'=> 'nullable|date',
             'contract_end'  => 'nullable|date',
+            'last_working_date' => 'nullable|date',
             'category'     => 'nullable|in:Blue Collar,White Collar',
             'status'       => 'nullable|in:on_site,annual_leave,cert_expired,suspended,terminated,remote',
             'national_id'  => 'nullable|string|max:20',

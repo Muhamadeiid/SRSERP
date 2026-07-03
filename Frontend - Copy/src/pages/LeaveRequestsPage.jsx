@@ -1447,7 +1447,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
   if (!req) return null
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
-  const isHR         = isDepotAdmin || userDepartment === 'human_resources'
+  const isHR         = isDepotAdmin || userRole === 'hr'
   const canWithdraw  = ['pending','manager_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
 
   // Tracking-number inline editor (HR only)

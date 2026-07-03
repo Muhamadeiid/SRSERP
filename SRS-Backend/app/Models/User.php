@@ -50,23 +50,21 @@ class User extends Authenticatable
     }
 
     /**
-     * HR access: admin, depot_manager, or any user in the human_resources department
+     * HR access: admin, depot_manager, or a user with the hr role
      */
     public function isHR(): bool
     {
-        return in_array($this->role, ['admin', 'depot_manager'])
-            || $this->department === 'human_resources';
+        return in_array($this->role, ['admin', 'depot_manager', 'hr']);
     }
 
     public function isManager(): bool
     {
-        return in_array($this->role, ['admin', 'depot_manager', 'manager'])
-            || $this->department === 'human_resources';
+        return in_array($this->role, ['admin', 'depot_manager', 'manager', 'hr']);
     }
 
     public function hasAccessTo(string $department): bool
     {
-        if (in_array($this->role, ['admin', 'depot_manager']) || $this->department === 'human_resources') return true;
+        if (in_array($this->role, ['admin', 'depot_manager', 'hr'])) return true;
         return $this->department === $department;
     }
 
@@ -84,5 +82,33 @@ class User extends Authenticatable
     public function isDepotManager(): bool
     {
         return $this->role === 'depot_manager' || $this->role === 'admin';
+    }
+
+    /**
+     * Permission check driven by the role_permissions table.
+     * Cached per-request to avoid repeat DB reads inside a single call.
+     */
+    protected ?array $permissionKeys = null;
+
+    public function hasPermission(string $key): bool
+    {
+        if ($this->permissionKeys === null) {
+            $this->permissionKeys = \DB::table('role_permissions')
+                ->where('role', $this->role)
+                ->pluck('permission_key')
+                ->all();
+        }
+        return in_array($key, $this->permissionKeys, true);
+    }
+
+    public function permissionsList(): array
+    {
+        if ($this->permissionKeys === null) {
+            $this->permissionKeys = \DB::table('role_permissions')
+                ->where('role', $this->role)
+                ->pluck('permission_key')
+                ->all();
+        }
+        return $this->permissionKeys;
     }
 }

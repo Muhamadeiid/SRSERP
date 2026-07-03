@@ -31,9 +31,9 @@ import OrgChartTab       from './components/hr/OrgChartTab'
 import SettingsPage      from './pages/SettingsPage'
 
 // ── Access rules ──────────────────────────────────────────────────────────────
-// HR Full: Admin, Depot Manager (by role) OR any Human Resources dept user
-const HR_FULL_ROLES = ['admin', 'depot_manager']
-const HR_FULL_DEPTS = ['human_resources']
+// HR Full: Admin, Depot Manager, or the dedicated HR role
+const HR_FULL_ROLES = ['admin', 'depot_manager', 'hr']
+const HR_FULL_DEPTS = []
 
 // Dashboard / Inventory: Admin & Depot Manager only
 const DASH_ROLES    = ['admin', 'depot_manager']

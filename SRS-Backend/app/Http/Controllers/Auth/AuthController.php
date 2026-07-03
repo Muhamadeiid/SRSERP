@@ -28,6 +28,8 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        $user->permissions = $user->permissionsList();
+
         return response()->json([
             'user'  => $user,
             'token' => $token,
@@ -42,6 +44,8 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user();
+        $user->permissions = $user->permissionsList();
+        return response()->json($user);
     }
 }

@@ -100,7 +100,7 @@ export default function HRLayout() {
 
   // ── filter nav by role ───────────────────────────────────────
   const role      = user?.role ?? 'staff'
-  const isHRFull  = HR_FULL_ROLES_NAV.includes(role) || user?.department === 'human_resources'
+  const isHRFull  = HR_FULL_ROLES_NAV.includes(role) || role === 'hr'
   const navItems  = ALL_NAV.filter(item => {
     if (item.hrOnly) return isHRFull
     if (item.roles)  return item.roles.includes(role)

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Printer, Download, FileText, Search, Loader2 } from 'lucide-react'
 import { generateERF } from '../utils/generateERF'
-import { getEmployee, searchEmployees, getDepotManager, getHrOfficer } from '../services/employeeService'
+import { getEmployee, searchEmployees, getDepotManager, getHrOfficer, updateEmployee } from '../services/employeeService'
 
 // ── constants ─────────────────────────────────────────────────
 const DEPT_LABEL = {
@@ -352,10 +352,30 @@ export default function ResignationsPage() {
 
   const canSubmit = form.full_name && form.current_title && form.resign_start_date && form.last_working_date
 
+  const saveResignation = async () => {
+    if (!form.employee_id || !form.last_working_date) return
+    try {
+      await updateEmployee(form.employee_id, {
+        name:              form.full_name,
+        position:          form.current_title,
+        last_working_date: form.last_working_date,
+      })
+    } catch (err) {
+      console.error('Failed to save resignation on employee record', err)
+    }
+  }
+
+  const handlePrint = async () => {
+    if (!canSubmit) return
+    await saveResignation()
+    printERF(form)
+  }
+
   const handleDownload = async () => {
     if (!canSubmit) return
     setDownloading(true)
     try {
+      await saveResignation()
       await generateERF(form)
     } catch (err) {
       console.error(err)
@@ -386,7 +406,7 @@ export default function ResignationsPage() {
             Reset
           </button>
           <button
-            onClick={() => printERF(form)}
+            onClick={handlePrint}
             disabled={!canSubmit}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-neutral-200 text-secondary-700 hover:bg-neutral-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >

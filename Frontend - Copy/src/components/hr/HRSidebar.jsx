@@ -7,12 +7,9 @@ import {
   LogOut, FileText, Settings, Package, GitBranch, UserMinus
 } from 'lucide-react'
 
-// HR Full access: Admin, Depot Manager (role) OR Human Resources dept
+// HR Full access: Admin, Depot Manager, or the dedicated HR role
 const isHRFull = (user) =>
-  user && (
-    ['admin', 'depot_manager'].includes(user.role) ||
-    user.department === 'human_resources'
-  )
+  user && ['admin', 'depot_manager', 'hr'].includes(user.role)
 
 // Dashboard access: Admin & Depot Manager only
 const isDashAccess = (user) =>
@@ -43,9 +40,10 @@ export default function HRSidebar() {
     admin:          'Admin',
     depot_manager:  'Depot Manager',
     manager:        'Manager',
+    hr:             'HR',
     staff:          'Staff',
   }
-  const deptLabel = user?.department === 'human_resources' ? 'HR' : (user?.department ?? '')
+  const deptLabel = user?.role === 'hr' ? 'HR' : (user?.department ?? '')
 
   return (
     <aside className="fixed top-0 left-0 bottom-0 w-[230px] bg-white border-r border-neutral-100 flex flex-col z-50">

@@ -4,16 +4,16 @@ import { useNavigate } from 'react-router-dom'
 import api from '../../services/axios'
 import SignaturePad from '../../components/hr/SignaturePad'
 import { saveUserSignature } from '../../services/leaveService'
+import { useLookups } from '../../hooks/useLookups'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const ROLES       = ['admin', 'depot_manager', 'manager', 'staff']
-const DEPARTMENTS = ['all', 'inventory', 'human_resources', 'maintenance', 'control']
-const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'all', manager_id: '' }
+// ── Constants (kept as fallback / for permission gating; actual dropdown values come from lookups) ─
+const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'admin', manager_id: '' }
 
 const ROLE_CFG = {
   admin:         { label: 'Admin',         bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-400'    },
   depot_manager: { label: 'Depot Manager', bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200',   dot: 'bg-blue-400'   },
   manager:       { label: 'Manager',       bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  dot: 'bg-amber-400'  },
+  hr:            { label: 'HR',            bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-400' },
   staff:         { label: 'Staff',         bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-400'  },
 }
 
@@ -39,6 +39,8 @@ const Svg = ({ d, cls = 'w-4 h-4' }) => (
 export default function Users() {
   const navigate     = useNavigate()
   const { user: me } = useSelector(s => s.auth)
+  const { departments: lookupDepts, roles: lookupRoles } = useLookups()
+  const deptLabel    = (key) => lookupDepts.find(d => d.key === key)?.label_en ?? key
 
   const [users,        setUsers]        = useState([])
   const [loading,      setLoading]      = useState(true)
@@ -233,7 +235,7 @@ export default function Users() {
 
                       {/* Department */}
                       <td className="px-5 py-3.5">
-                        <span className="text-sm text-[#4a5073] capitalize">{u.department?.replace('_', ' ')}</span>
+                        <span className="text-sm text-[#4a5073]">{deptLabel(u.department)}</span>
                       </td>
 
                       {/* Reports To (manager) */}
@@ -346,12 +348,12 @@ export default function Users() {
               )}
               <Field label="Role">
                 <Select value={form.role} onChange={e => set('role', e.target.value)}>
-                  {ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+                  {lookupRoles.map(r => <option key={r.key} value={r.key}>{r.label_en}</option>)}
                 </Select>
               </Field>
               <Field label="Department">
                 <Select value={form.department} onChange={e => set('department', e.target.value)}>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d.replace('_', ' ')}</option>)}
+                  {lookupDepts.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
                 </Select>
               </Field>
             </div>

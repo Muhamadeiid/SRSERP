@@ -32,8 +32,8 @@ class UserController extends Controller
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users',
             'password'   => 'required|string|min:8',
-            'role'       => 'required|in:admin,depot_manager,manager,staff',
-            'department' => 'required|in:all,inventory,human_resources,maintenance,control',
+            'role'       => 'required|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'department' => 'required|in:cm,hm,pm,warranty,cm_intervention,admin',
             'manager_id' => 'nullable|exists:users,id',
         ]);
 
@@ -49,8 +49,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name'       => 'sometimes|string|max:255',
             'email'      => 'sometimes|email|unique:users,email,' . $user->id,
-            'role'       => 'sometimes|in:admin,depot_manager,manager,staff',
-            'department' => 'sometimes|in:all,inventory,human_resources,maintenance,control',
+            'role'       => 'sometimes|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'department' => 'sometimes|in:cm,hm,pm,warranty,cm_intervention,admin',
             'is_active'  => 'sometimes|boolean',
             'manager_id' => 'nullable|exists:users,id',
         ]);
@@ -84,10 +84,10 @@ class UserController extends Controller
      */
     public function managers()
     {
-        $managers = User::whereIn('role', ['admin', 'depot_manager', 'manager'])
+        $managers = User::whereIn('role', ['admin', 'depot_manager', 'manager', 'hr'])
             ->where('is_active', true)
             ->withCount(['assignedEmployees'])
-            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager')")
+            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager', 'hr')")
             ->get(['id', 'name', 'email', 'role', 'department']);
 
         return response()->json($managers);
@@ -114,9 +114,8 @@ class UserController extends Controller
      */
     public function hrOfficer()
     {
-        $hr = User::where('department', 'human_resources')
+        $hr = User::where('role', 'hr')
             ->where('is_active', true)
-            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager', 'staff')")
             ->first(['id', 'name', 'email', 'role']);
 
         return response()->json($hr);
