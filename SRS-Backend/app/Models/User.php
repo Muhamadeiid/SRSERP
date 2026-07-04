@@ -11,7 +11,7 @@ class User extends Authenticatable
     use HasApiTokens, Notifiable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'department', 'is_active', 'e_signature', 'manager_id',
+        'name', 'email', 'password', 'role', 'department', 'is_active', 'is_team_manager', 'e_signature', 'manager_id',
     ];
 
     protected $hidden = [
@@ -19,7 +19,8 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_active'       => 'boolean',
+        'is_team_manager' => 'boolean',
     ];
 
     // ── Relationships ────────────────────────────────────────

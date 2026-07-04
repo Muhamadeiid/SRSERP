@@ -111,4 +111,53 @@ class ITAssetController extends Controller
         $itAsset->delete();
         return response()->json(['success' => true]);
     }
+
+    /**
+     * POST /api/it-assets/{itAsset}/assign
+     * Hand this inventory item to an employee: creates a linked
+     * employee_assets row so the clearance form and asset return flow
+     * stay in sync with the IT registry.
+     */
+    public function assign(Request $request, ITAsset $itAsset): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_id'       => 'required|exists:employees,id',
+            'issuing_source_id' => 'nullable|exists:issuing_sources,id',
+            'received_date'     => 'nullable|date',
+            'condition'         => 'nullable|in:Good,Damaged,Lost',
+            'notes'             => 'nullable|string|max:1000',
+        ]);
+
+        // Default the source to whichever issuing_source has key='it'.
+        $sourceId = $data['issuing_source_id']
+            ?? \App\Models\IssuingSource::where('key', 'it')->value('id');
+
+        $asset = \App\Models\EmployeeAsset::create([
+            'employee_id'         => $data['employee_id'],
+            'issuing_source_id'   => $sourceId,
+            'it_asset_id'         => $itAsset->id,
+            'issuing_department'  => 'IT',
+            'asset_name'          => trim(($itAsset->item ?? '') . ' — ' . ($itAsset->name ?? ''), ' —'),
+            'asset_code'          => $itAsset->asset_no,
+            'asset_category'      => 'Device',
+            'received_date'       => $data['received_date'] ?? now()->toDateString(),
+            'condition'           => $data['condition'] ?? 'Good',
+            'status'              => 'Active',
+            'notes'               => $data['notes'] ?? null,
+            'created_by'          => auth()->id(),
+        ]);
+
+        // Mirror the current holder on the IT record so the inventory
+        // dashboard reflects who's using the item today.
+        $emp = \App\Models\Employee::find($data['employee_id']);
+        if ($emp) {
+            $itAsset->update(['user_name' => $emp->name]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Assigned',
+            'data'    => $asset->load('employee:id,name,ibs_code,department', 'itAsset', 'issuingSource'),
+        ], 201);
+    }
 }

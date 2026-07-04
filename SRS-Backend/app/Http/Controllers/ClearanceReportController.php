@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClearanceReport;
 use App\Models\Employee;
 use App\Models\EmployeeAsset;
+use App\Models\IssuingSource;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use ZipArchive;
@@ -29,13 +32,38 @@ class ClearanceReportController extends Controller
 
         $active = EmployeeAsset::forEmployee($employeeId)
             ->where('status', 'Active')
-            ->orderBy('issuing_department')
+            ->with('issuingSource:id,key,label_en,manager_name,manager_user_id', 'issuingSource.manager:id,name')
+            ->orderBy('issuing_source_id')
             ->orderBy('received_date')
             ->get();
 
-        $byDept = $active->groupBy('issuing_department');
+        // Group by the new source_id when present, fall back to the legacy enum
+        // so historic records still render on the right page section.
+        $bySourceKey = $active->groupBy(function ($a) {
+            if ($a->issuingSource) return $a->issuingSource->key;
+            return match ($a->issuing_department) {
+                'EHS'                    => 'ehs',
+                'IT'                     => 'it',
+                'HR'                     => 'hr',
+                'Inventory'              => 'inventory',
+                'Corrective Maintenance' => 'cm',
+                'Preventive Maintenance' => 'pm',
+                default                  => 'other',
+            };
+        });
 
-        $clearanceDocx   = $this->buildClearanceForm($employee, $byDept);
+        // Reserve a unique tracking number and record the report event.
+        $trackingNo = ClearanceReport::nextTrackingNo($employee->project_code);
+        ClearanceReport::create([
+            'employee_id'                 => $employee->id,
+            'tracking_no'                 => $trackingNo,
+            'generated_by'                => auth()->id(),
+            'active_assets_at_generation' => $active->count(),
+        ]);
+
+        $sources = IssuingSource::orderBy('sort')->orderBy('id')->get()->keyBy('key');
+
+        $clearanceDocx   = $this->buildClearanceForm($employee, $bySourceKey, $trackingNo, $sources);
         $assetReturnDocx = $this->buildAssetReturnForm($employee, $active);
 
         $zipPath  = sys_get_temp_dir() . '/report_' . $employeeId . '_' . time() . '.zip';
@@ -53,7 +81,7 @@ class ClearanceReportController extends Controller
 
     // ── Clearance Form (2 pages) ─────────────────────────────────────────────
 
-    private function buildClearanceForm(Employee $emp, Collection $byDept): string
+    private function buildClearanceForm(Employee $emp, Collection $bySourceKey, string $trackingNo, Collection $sources): string
     {
         $today   = Carbon::today()->format('d-F-Y');
         $name    = $emp->name;
@@ -62,7 +90,20 @@ class ClearanceReportController extends Controller
         $pos     = $emp->position  ?? '-';
         $AW      = self::AW;
 
-        $get = fn(string $d) => $byDept->get($d, collect());
+        // Live project resolution and last-working-date pulled from the DB.
+        $projectName    = $this->projectDisplayName($emp);
+        $lastWorkingDay = $emp->last_working_date ? Carbon::parse($emp->last_working_date)->format('d-F-Y') : '-';
+        // Depot manager and HR officer are resolved from live user records.
+        $depotManagerName = optional(User::where('role', 'depot_manager')->where('is_active', true)->first())->name ?? '-';
+        $hrOfficerName    = optional(User::where('role', 'hr')->where('is_active', true)->first())->name ?? '-';
+
+        $get = fn(string $key) => $bySourceKey->get($key, collect());
+        $signatoryFor = function (string $key) use ($sources) {
+            $src = $sources->get($key);
+            if (!$src) return '—';
+            if ($src->manager) return $src->manager->name;
+            return $src->manager_name ?: '—';
+        };
 
         $b = '';
 
@@ -71,29 +112,29 @@ class ClearanceReportController extends Controller
         $b .= $this->docHeader('Employee Clearance Form', 20);
         $b .= $this->hline();
         $b .= $this->p($this->run('Employee Clearance Form', true, 22), 'center');
-        $b .= $this->p($this->run('Tracking No: ECF-EG1-027', true, 20));
+        $b .= $this->p($this->run("Tracking No: {$trackingNo}", true, 20));
         $b .= $this->p($this->run('The following information is filled out by the employee', true, 20));
 
         // Employee info table  (22/28/22/28)
         $eiC = $this->splitCols([22, 28, 22, 28], $AW);
         $b .= $this->tbl([
-            [$this->tc('Employee Name:', $eiC[0], true, 18), $this->tc($name,    $eiC[1], false, 18), $this->tc('Project Name', $eiC[2], true, 18), $this->tc('Line1', $eiC[3], false, 18)],
-            [$this->tc('Emp. No.:',      $eiC[0], true, 18), $this->tc($ibs,     $eiC[1], false, 18), $this->tc('Department',   $eiC[2], true, 18), $this->tc($dept,   $eiC[3], false, 18)],
-            [$this->tc('Job Title:',     $eiC[0], true, 18), $this->tc($pos,     $eiC[1], false, 18), $this->tc('Date:',        $eiC[2], true, 18), $this->tc($today,  $eiC[3], false, 18)],
-            [$this->tc('Resignation Date:', $eiC[0], true, 18), $this->tc('-',   $eiC[1], false, 18), $this->tc('Last Work date:', $eiC[2], true, 18), $this->tc('-',  $eiC[3], false, 18)],
+            [$this->tc('Employee Name:', $eiC[0], true, 18), $this->tc($name,    $eiC[1], false, 18), $this->tc('Project Name', $eiC[2], true, 18), $this->tc($projectName,   $eiC[3], false, 18)],
+            [$this->tc('Emp. No.:',      $eiC[0], true, 18), $this->tc($ibs,     $eiC[1], false, 18), $this->tc('Department',   $eiC[2], true, 18), $this->tc($dept,          $eiC[3], false, 18)],
+            [$this->tc('Job Title:',     $eiC[0], true, 18), $this->tc($pos,     $eiC[1], false, 18), $this->tc('Date:',        $eiC[2], true, 18), $this->tc($today,         $eiC[3], false, 18)],
+            [$this->tc('Resignation Date:', $eiC[0], true, 18), $this->tc($lastWorkingDay, $eiC[1], false, 18), $this->tc('Last Work date:', $eiC[2], true, 18), $this->tc($lastWorkingDay, $eiC[3], false, 18)],
         ], $eiC, true);
         $b .= $this->emptyP();
 
-        // Section 1 – EHS
+        // Section 1 — EHS / Material Controlling
         $b .= $this->sectionHeading('Section 1 : Material Controlling', '( The Following Assets Related To Material Controlling Department Tick v to asset condition )');
-        $b .= $this->assetTable6($get('EHS'), [18, 28, 13, 15, 14, 12], $AW, 'Brand new', 6);
-        $b .= $this->sigRow('Material Controller / Receiver  Name:    Ahmed Nasr / Ali Mousa Ali', 'Material Controller / Receiver  Signature: ___________________', $AW);
+        $b .= $this->assetTable6($get('ehs'), [18, 28, 13, 15, 14, 12], $AW, 'Brand new', 6);
+        $b .= $this->sigRow('Material Controller / Receiver  Name:    ' . $signatoryFor('ehs'), 'Material Controller / Receiver  Signature: ___________________', $AW);
         $b .= $this->emptyP();
 
-        // Section 2 – IT
+        // Section 2 — IT
         $b .= $this->sectionHeading('Section 2 : Information Technology IT Section', '(The Following Assets Related To IT Department Tick v to asset condition)');
-        $b .= $this->assetTable6($get('IT'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 7);
-        $b .= $this->sigRow('IT Manager / Receiver  Name:    Ahmed Hussain', 'IT Manager / Receiver  Signature: ___________________', $AW);
+        $b .= $this->assetTable6($get('it'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 7);
+        $b .= $this->sigRow('IT Manager / Receiver  Name:    ' . $signatoryFor('it'), 'IT Manager / Receiver  Signature: ___________________', $AW);
 
         // Footer page 1
         $b .= $this->docFooter('Page 1 of 2', $AW);
@@ -106,32 +147,32 @@ class ClearanceReportController extends Controller
         $b .= $this->docHeader('Employee Clearance Form', 20);
         $b .= $this->emptyP();
 
-        // Section 3 – PM
+        // Section 3 — PM
         $b .= $this->sectionHeading('Section 3 : Preventative Maintenance " PM "', '(The Following Assets Related To Tech Department Tick v to asset condition)');
-        $b .= $this->assetTable6($get('Preventive Maintenance'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 5);
-        $b .= $this->sigRow('Dep-Tech Manager / Receiver  Name:    Ali Mahmoud Hamdy Mohamed Othman', 'Dep-Tech Manager / Receiver  Signature: ___________________', $AW);
+        $b .= $this->assetTable6($get('pm'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 5);
+        $b .= $this->sigRow('Dep-Tech Manager / Receiver  Name:    ' . $signatoryFor('pm'), 'Dep-Tech Manager / Receiver  Signature: ___________________', $AW);
         $b .= $this->emptyP();
 
-        // Section 4 – CM
+        // Section 4 — CM
         $b .= $this->sectionHeading('Section 4 : Corrective Maintenance " CM "', '(The Following Assets Related To Tech Department Tick v to asset condition)');
-        $b .= $this->assetTable6($get('Corrective Maintenance'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 5);
-        $b .= $this->sigRow('Dep-Tech Manager / Receiver  Name:    Mohamed Eid Ismail Abd Elmaksoud', 'Dep-Tech Manager / Receiver  Signature: ___________________', $AW);
-        $b .= $this->sigRow('Depot Manager Name:    Mohamed Awaad Hussein', 'Depot Manager Signature: ___________________', $AW);
+        $b .= $this->assetTable6($get('cm'), [18, 28, 13, 15, 14, 12], $AW, 'As Received', 5);
+        $b .= $this->sigRow('Dep-Tech Manager / Receiver  Name:    ' . $signatoryFor('cm'), 'Dep-Tech Manager / Receiver  Signature: ___________________', $AW);
+        $b .= $this->sigRow('Depot Manager Name:    ' . $depotManagerName, 'Depot Manager Signature: ___________________', $AW);
         $b .= $this->emptyP();
 
         $b .= $this->p($this->run('Please note:', true, 18));
         $b .= $this->p($this->run('The following form will not be signed by the Human Resources Department / its representative until all previous departments have completed the signature by discharging the employee attached to the signature of the Manager of the department', true, 18));
         $b .= $this->emptyP();
 
-        // Section 5 – HR (+ Inventory + Other)
+        // Section 5 — HR (+ Inventory + Other)
         $hrAssets = collect()
-            ->merge($get('HR'))
-            ->merge($get('Inventory'))
-            ->merge($get('Other'))
+            ->merge($get('hr'))
+            ->merge($get('inventory'))
+            ->merge($get('other'))
             ->values();
         $b .= $this->sectionHeading('Section 5: Human Resources', '(The Following Assets Related Human Resources Department Tick v to asset condition)');
         $b .= $this->assetTable3($hrAssets, $AW);
-        $b .= $this->sigRow('HR Manager / Receiver  Name:    Hazem Khaled Aldawi', 'HR Manager / Receiver  Signature: ___________________', $AW);
+        $b .= $this->sigRow('HR Manager / Receiver  Name:    ' . ($signatoryFor('hr') !== '—' ? $signatoryFor('hr') : $hrOfficerName), 'HR Manager / Receiver  Signature: ___________________', $AW);
 
         // Footer page 2
         $b .= $this->docFooter('Page 2 of 2', $AW);
@@ -139,6 +180,19 @@ class ClearanceReportController extends Controller
         $b .= $this->sectPr();
 
         return $this->packDocx($b);
+    }
+
+    /**
+     * Resolve a human-readable project name from the employee's project record.
+     * Falls back to the project code (e.g. EG1) if the projects table doesn't
+     * hold a matching entry — but the code itself is already dynamic since it
+     * comes from Project::codeFor().
+     */
+    private function projectDisplayName(Employee $emp): string
+    {
+        $code = $emp->project_code;
+        $proj = \App\Models\Project::where('code', $code)->first();
+        return $proj?->name ?? $code;
     }
 
     // ── Asset Return Form (1 page) ───────────────────────────────────────────

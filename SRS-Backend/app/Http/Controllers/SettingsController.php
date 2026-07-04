@@ -24,12 +24,21 @@ class SettingsController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** GET /api/settings/managers  — employees linked to a manager/admin user account */
+    /**
+     * GET /api/settings/managers
+     * Employees linked to a user account flagged as a team manager. Uses the
+     * explicit is_team_manager flag so Super Admins and other system-level
+     * roles don't clutter the Manager Account Assignments list.
+     */
     public function managers(): JsonResponse
     {
         $managers = Employee::select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
             ->join('users', 'users.id', '=', 'employees.user_id')
-            ->whereIn('users.role', ['admin', 'depot_manager', 'manager'])
+            ->where(function ($q) {
+                $q->where('users.is_team_manager', true)
+                  ->orWhere('users.role', 'depot_manager');
+            })
+            ->where('users.is_active', true)
             ->orderBy('employees.name')
             ->get();
         return response()->json(['success' => true, 'data' => $managers]);

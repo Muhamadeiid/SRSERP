@@ -37,7 +37,7 @@ export default function HRSidebar() {
   const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
   const ROLE_LABEL = {
-    admin:          'Admin',
+    admin:          'Super Admin',
     depot_manager:  'Depot Manager',
     manager:        'Manager',
     hr:             'HR',

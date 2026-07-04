@@ -55,7 +55,8 @@ class EmployeeAssetController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'employee_id'        => 'required|exists:employees,id',
-            'issuing_department' => 'required|in:EHS,Corrective Maintenance,Preventive Maintenance,Inventory,IT,HR,Other',
+            'issuing_source_id'  => 'required|exists:issuing_sources,id',
+            'it_asset_id'        => 'nullable|exists:it_assets,id',
             'asset_name'         => 'required|string|max:255',
             'asset_code'         => 'nullable|string|max:100',
             'asset_category'     => 'nullable|string|max:100',
@@ -67,8 +68,14 @@ class EmployeeAssetController extends Controller
         if ($validator->fails())
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
+        $data = $validator->validated();
+        // Keep the legacy enum in sync with the source label so legacy readers
+        // (old clearance form, etc.) keep working.
+        $source = \App\Models\IssuingSource::find($data['issuing_source_id']);
+        $data['issuing_department'] = $source ? $source->label_en : 'Other';
+
         $asset = EmployeeAsset::create([
-            ...$validator->validated(),
+            ...$data,
             'status'     => 'Active',
             'created_by' => auth()->id(),
         ]);
@@ -76,7 +83,7 @@ class EmployeeAssetController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Asset assigned successfully',
-            'data'    => $asset->load('employee:id,name,ibs_code,department'),
+            'data'    => $asset->load('employee:id,name,ibs_code,department', 'issuingSource', 'itAsset'),
         ], 201);
     }
 

@@ -7,10 +7,10 @@ import { saveUserSignature } from '../../services/leaveService'
 import { useLookups } from '../../hooks/useLookups'
 
 // ── Constants (kept as fallback / for permission gating; actual dropdown values come from lookups) ─
-const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'admin', manager_id: '' }
+const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'admin', manager_id: '', is_team_manager: false }
 
 const ROLE_CFG = {
-  admin:         { label: 'Admin',         bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-400'    },
+  admin:         { label: 'Super Admin',   bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-400'    },
   depot_manager: { label: 'Depot Manager', bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200',   dot: 'bg-blue-400'   },
   manager:       { label: 'Manager',       bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  dot: 'bg-amber-400'  },
   hr:            { label: 'HR',            bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-400' },
@@ -76,7 +76,7 @@ export default function Users() {
   }
 
   const openCreate = () => { setForm(EMPTY_FORM); setError(null); setModal('create') }
-  const openEdit   = u  => { setSelected(u); setForm({ name: u.name, email: u.email, role: u.role, department: u.department, manager_id: u.manager_id ?? '' }); setError(null); setModal('edit') }
+  const openEdit   = u  => { setSelected(u); setForm({ name: u.name, email: u.email, role: u.role, department: u.department, manager_id: u.manager_id ?? '', is_team_manager: !!u.is_team_manager }); setError(null); setModal('edit') }
   const openReset  = u  => { setSelected(u); setForm({ password: '', password_confirmation: '' }); setError(null); setModal('reset') }
   const closeModal = ()  => { setModal(null); setSelected(null); setError(null) }
   const set        = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -361,6 +361,26 @@ export default function Users() {
             <Field label="Reports to (Manager)">
               <ManagerSelect users={users} value={form.manager_id} onChange={v => set('manager_id', v)} excludeId={modal === 'edit' ? selected?.id : null} />
             </Field>
+
+            {/* Team manager toggle — decides whether this user shows up in Manager Account Assignments */}
+            <div className="rounded-xl border border-[#e5e7eb] bg-[#fafbff] p-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => set('is_team_manager', !form.is_team_manager)}
+                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.is_team_manager ? 'bg-[#185FA5]' : 'bg-[#cbd0da]'}`}
+                aria-label="Toggle team manager"
+              >
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.is_team_manager ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1a1f36]">Team manager</p>
+                <p className="text-[11px] text-[#8892ab] mt-0.5">
+                  {form.is_team_manager
+                    ? 'Will appear in Manager Account Assignments — employees can be assigned to them.'
+                    : 'Regular user — will NOT show up in Manager Account Assignments.'}
+                </p>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-3 pt-2 border-t border-[#f0f1f5]">
               <CancelBtn onClick={closeModal} />

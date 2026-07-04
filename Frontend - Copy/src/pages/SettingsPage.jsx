@@ -7,6 +7,7 @@ import { listPositionsAll, createPosition, updatePosition, deletePosition, merge
 import { getPermissionMatrix, togglePermission, teamTransfer } from '../services/permissionService'
 import { listAssignmentRules, createAssignmentRule, updateAssignmentRule, deleteAssignmentRule, applyAssignmentRules } from '../services/assignmentRuleService'
 import { listProjects, createProject, updateProject, deleteProject } from '../services/projectService'
+import { listIssuingSources, createIssuingSource, updateIssuingSource, deleteIssuingSource } from '../services/issuingSourceService'
 import { useLookups } from '../hooks/useLookups'
 
 export default function SettingsPage() {
@@ -110,7 +111,7 @@ export default function SettingsPage() {
 
   const roleLabel = (role) => {
     if (role === 'depot_manager') return 'Depot Manager'
-    if (role === 'admin')         return 'Admin'
+    if (role === 'admin')         return 'Super Admin'
     if (role === 'manager')       return 'Manager'
     if (role === 'hr')            return 'HR'
     return 'Staff'
@@ -362,6 +363,7 @@ export default function SettingsPage() {
         <LookupsPanel />
         <PositionsPanel />
         <ProjectsPanel />
+        <IssuingSourcesPanel />
       </>}
 
       {/* ── Permissions Tab ── */}
@@ -1589,6 +1591,154 @@ function ProjectsPanel() {
 
         <p className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-50">
           <span className="font-semibold text-neutral-500">How it works:</span> when an employee's <code className="font-mono bg-neutral-100 px-1 rounded">project_budget</code> starts with a project's prefix, that project's code shows on their forms. If none match, the ★ default project's code is used.
+        </p>
+      </div>
+    </SectionShell>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Issuing Sources — where an asset originally came from (EHS, IT, …)
+// ─────────────────────────────────────────────────────────────────────
+function IssuingSourcesPanel() {
+  const [items, setItems]   = useState([])
+  const [loading, setLoad]  = useState(true)
+  const [saving, setSaving] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [draft, setDraft]   = useState({ key: '', label_en: '', label_ar: '', manager_name: '', manager_user_id: null })
+
+  const load = () => listIssuingSources().then(setItems).finally(() => setLoad(false))
+  useEffect(() => { load() }, [])
+
+  const handleUpdate = async (id, patch) => {
+    setSaving(id)
+    try { await updateIssuingSource(id, patch); await load() }
+    finally { setSaving(null) }
+  }
+
+  const handleAdd = async () => {
+    if (!draft.key.trim() || !draft.label_en.trim()) return
+    setSaving('new')
+    try {
+      await createIssuingSource(draft)
+      setDraft({ key: '', label_en: '', label_ar: '', manager_name: '', manager_user_id: null })
+      setShowAdd(false)
+      await load()
+    } finally { setSaving(null) }
+  }
+
+  const handleDelete = async (item) => {
+    if (item.active_assets_count > 0) {
+      alert(`Can't delete — ${item.active_assets_count} active asset(s) come from this source. Deactivate it instead.`)
+      return
+    }
+    if (!confirm(`Delete source "${item.label_en}"?`)) return
+    setSaving(item.id)
+    try { await deleteIssuingSource(item.id); await load() }
+    catch (e) { alert(e.response?.data?.message ?? 'Delete failed') }
+    finally { setSaving(null) }
+  }
+
+  const total = items.reduce((s, x) => s + (x.active_assets_count ?? 0), 0)
+
+  return (
+    <SectionShell
+      icon={Layers}
+      iconTint="green"
+      title="Issuing Sources"
+      subtitle="Departments that issue assets — the Receiver name here signs the Clearance Form when the employee returns them"
+      actions={
+        <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold text-neutral-400">
+          <span className="bg-neutral-100 px-2 py-1 rounded-lg">{items.length} sources</span>
+          <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg">{total} active assets</span>
+        </div>
+      }
+    >
+      <div className="p-6 space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+        ) : items.length === 0 ? (
+          <EmptyState icon={Layers} title="No sources yet" subtitle="Add the departments that hand out assets." />
+        ) : (
+          <div className="space-y-2">
+            {items.map(s => (
+              <div key={s.id} className={`group flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-xl border transition-all ${
+                s.is_active ? 'border-neutral-100 bg-white hover:border-primary/30 hover:shadow-sm' : 'border-neutral-100 bg-neutral-50/60 opacity-70'
+              }`}>
+                <span className="text-[10px] font-mono uppercase text-neutral-400 w-16 truncate">{s.key}</span>
+                <input
+                  defaultValue={s.label_en}
+                  onBlur={e => e.target.value !== s.label_en && handleUpdate(s.id, { label_en: e.target.value })}
+                  className="flex-1 min-w-0 px-2 py-1.5 text-sm font-medium text-secondary-700 bg-transparent border border-transparent hover:border-neutral-200 focus:border-primary rounded-lg outline-none"
+                />
+                <input
+                  defaultValue={s.label_ar ?? ''}
+                  onBlur={e => e.target.value !== (s.label_ar ?? '') && handleUpdate(s.id, { label_ar: e.target.value })}
+                  className="w-36 px-2 py-1.5 text-sm bg-transparent border border-transparent hover:border-neutral-200 focus:border-primary rounded-lg outline-none text-right"
+                  dir="rtl"
+                  placeholder="—"
+                />
+                <input
+                  defaultValue={s.manager_name ?? ''}
+                  onBlur={e => e.target.value !== (s.manager_name ?? '') && handleUpdate(s.id, { manager_name: e.target.value })}
+                  placeholder="Receiver name…"
+                  className="w-44 px-2 py-1.5 text-xs bg-transparent border border-transparent hover:border-neutral-200 focus:border-primary rounded-lg outline-none"
+                />
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${s.active_assets_count > 0 ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
+                  {s.active_assets_count}
+                </span>
+                <button
+                  onClick={() => handleUpdate(s.id, { is_active: !s.is_active })}
+                  className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-all ${
+                    s.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-green-500' : 'bg-neutral-400'}`} />
+                  {s.is_active ? 'ON' : 'OFF'}
+                </button>
+                <button
+                  onClick={() => handleDelete(s)}
+                  disabled={saving === s.id}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 transition-all"
+                >
+                  {saving === s.id ? <Loader2 className="w-4 h-4 animate-spin opacity-100" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!showAdd ? (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-primary border border-dashed border-neutral-200 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all w-full justify-center"
+          >
+            <Plus className="w-4 h-4" /> Add source
+          </button>
+        ) : (
+          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[100px_1fr_140px_1fr_auto] gap-2">
+            <input value={draft.key} onChange={e => setDraft(d => ({ ...d, key: e.target.value.toLowerCase() }))} placeholder="key" autoFocus
+              className="px-3 py-2 text-xs font-mono bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary" />
+            <input value={draft.label_en} onChange={e => setDraft(d => ({ ...d, label_en: e.target.value }))} placeholder="English label"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary" />
+            <input value={draft.label_ar} onChange={e => setDraft(d => ({ ...d, label_ar: e.target.value }))} placeholder="التسمية العربية" dir="rtl"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary text-right" />
+            <input value={draft.manager_name} onChange={e => setDraft(d => ({ ...d, manager_name: e.target.value }))} placeholder="Receiver name…"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary" />
+            <div className="flex gap-1">
+              <button onClick={handleAdd} disabled={saving === 'new' || !draft.key.trim() || !draft.label_en.trim()}
+                className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm">
+                {saving === 'new' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Add'}
+              </button>
+              <button onClick={() => setShowAdd(false)} className="px-2 py-2 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-50">
+          <span className="font-semibold text-neutral-500">Receiver name</span> shows up on the Clearance Form as the signatory when a resigned employee returns assets from this source — no code change needed to add a new department.
         </p>
       </div>
     </SectionShell>

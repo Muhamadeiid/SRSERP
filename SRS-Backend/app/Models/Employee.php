@@ -96,20 +96,36 @@ class Employee extends Model
     public function scopeByStatus($q, $status)      { return $q->where('status', $status); }
     public function scopeByCategory($q, $cat)       { return $q->where('category', $cat); }
 
-    /** Active workforce — no resignation, or last_working_date is still in the future */
+    /**
+     * Active workforce — no resignation, or last_working_date is still in the
+     * future, OR the employee still has active assets outstanding. Holding an
+     * asset keeps them in the Active list even after the date passes so HR
+     * can't lose sight of the return.
+     */
     public function scopeActive($q)
     {
         return $q->where(function ($sub) {
             $sub->whereNull('last_working_date')
-                ->orWhere('last_working_date', '>=', now()->toDateString());
+                ->orWhere('last_working_date', '>=', now()->toDateString())
+                ->orWhereHas('activeAssets');
         });
     }
 
-    /** Ex-employees — resignation date has already passed */
+    /** Assets currently held by this employee (not yet returned). */
+    public function activeAssets()
+    {
+        return $this->hasMany(EmployeeAsset::class)->where('status', 'Active');
+    }
+
+    /**
+     * Ex-employees — resignation date has already passed AND no outstanding
+     * assets remain. Anyone still holding assets stays under the Active tab.
+     */
     public function scopeExEmployees($q)
     {
         return $q->whereNotNull('last_working_date')
-                 ->where('last_working_date', '<', now()->toDateString());
+                 ->where('last_working_date', '<', now()->toDateString())
+                 ->whereDoesntHave('activeAssets');
     }
 
     public function scopeSearch($q, $term)

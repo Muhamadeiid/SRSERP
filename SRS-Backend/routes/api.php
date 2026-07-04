@@ -20,6 +20,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\TeamTransferController;
 use App\Http\Controllers\AssignmentRuleController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\IssuingSourceController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -138,10 +139,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/assets/{asset}/return',                    [EmployeeAssetController::class, 'markReturned']);
 
         // IT Asset Register
-        Route::get('/it-assets',              [ITAssetController::class, 'index']);
-        Route::post('/it-assets',             [ITAssetController::class, 'store']);
-        Route::put('/it-assets/{itAsset}',    [ITAssetController::class, 'update']);
-        Route::delete('/it-assets/{itAsset}', [ITAssetController::class, 'destroy']);
+        Route::get('/it-assets',                     [ITAssetController::class, 'index']);
+        Route::post('/it-assets',                    [ITAssetController::class, 'store']);
+        Route::put('/it-assets/{itAsset}',           [ITAssetController::class, 'update']);
+        Route::delete('/it-assets/{itAsset}',        [ITAssetController::class, 'destroy']);
+        Route::post('/it-assets/{itAsset}/assign',   [ITAssetController::class, 'assign']);
+
+        // Issuing Sources — used by the clearance form to route asset returns
+        Route::get('/issuing-sources',                    [IssuingSourceController::class, 'index']);
+        Route::post('/issuing-sources',                   [IssuingSourceController::class, 'store']);
+        Route::put('/issuing-sources/{issuingSource}',    [IssuingSourceController::class, 'update']);
+        Route::delete('/issuing-sources/{issuingSource}', [IssuingSourceController::class, 'destroy']);
 
         // Settings
         Route::get('/settings',                            [SettingsController::class, 'index']);

@@ -29,12 +29,13 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'       => 'required|string|max:255',
-            'email'      => 'required|email|unique:users',
-            'password'   => 'required|string|min:8',
-            'role'       => 'required|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
-            'department' => 'required|in:cm,hm,pm,warranty,cm_intervention,admin',
-            'manager_id' => 'nullable|exists:users,id',
+            'name'            => 'required|string|max:255',
+            'email'           => 'required|email|unique:users',
+            'password'        => 'required|string|min:8',
+            'role'            => 'required|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'department'      => 'required|in:cm,hm,pm,warranty,cm_intervention,admin',
+            'manager_id'      => 'nullable|exists:users,id',
+            'is_team_manager' => 'sometimes|boolean',
         ]);
 
         // Prevent self-assignment (no id yet on create, so nothing to check)
@@ -47,12 +48,13 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
-            'name'       => 'sometimes|string|max:255',
-            'email'      => 'sometimes|email|unique:users,email,' . $user->id,
-            'role'       => 'sometimes|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
-            'department' => 'sometimes|in:cm,hm,pm,warranty,cm_intervention,admin',
-            'is_active'  => 'sometimes|boolean',
-            'manager_id' => 'nullable|exists:users,id',
+            'name'            => 'sometimes|string|max:255',
+            'email'           => 'sometimes|email|unique:users,email,' . $user->id,
+            'role'            => 'sometimes|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'department'      => 'sometimes|in:cm,hm,pm,warranty,cm_intervention,admin',
+            'is_active'       => 'sometimes|boolean',
+            'is_team_manager' => 'sometimes|boolean',
+            'manager_id'      => 'nullable|exists:users,id',
         ]);
 
         // Prevent a user from assigning themselves as their own manager
@@ -84,11 +86,17 @@ class UserController extends Controller
      */
     public function managers()
     {
-        $managers = User::whereIn('role', ['admin', 'depot_manager', 'manager', 'hr'])
+        // Filter by the explicit is_team_manager flag so system-level roles
+        // (admin, procurement, ehs) don't clutter Manager Account Assignments.
+        // Anyone flagged, plus depot_manager as a safety net, is included.
+        $managers = User::where(function ($q) {
+                $q->where('is_team_manager', true)
+                  ->orWhere('role', 'depot_manager');
+            })
             ->where('is_active', true)
             ->withCount(['assignedEmployees'])
-            ->orderByRaw("FIELD(role, 'admin', 'depot_manager', 'manager', 'hr')")
-            ->get(['id', 'name', 'email', 'role', 'department']);
+            ->orderByRaw("FIELD(role, 'depot_manager', 'manager', 'hr', 'admin')")
+            ->get(['id', 'name', 'email', 'role', 'department', 'is_team_manager']);
 
         return response()->json($managers);
     }

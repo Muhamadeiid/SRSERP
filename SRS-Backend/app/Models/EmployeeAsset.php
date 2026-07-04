@@ -11,7 +11,9 @@ class EmployeeAsset extends Model
 
     protected $fillable = [
         'employee_id',
-        'issuing_department',
+        'issuing_source_id',
+        'it_asset_id',
+        'issuing_department',   // legacy — kept in sync for older readers
         'asset_name',
         'asset_code',
         'asset_category',
@@ -21,6 +23,7 @@ class EmployeeAsset extends Model
         'status',
         'notes',
         'created_by',
+        'received_by_user_id',
     ];
 
     protected $casts = [
@@ -39,6 +42,24 @@ class EmployeeAsset extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** New canonical source. */
+    public function issuingSource()
+    {
+        return $this->belongsTo(IssuingSource::class, 'issuing_source_id');
+    }
+
+    /** Which IT inventory item this asset was pulled from (if any). */
+    public function itAsset()
+    {
+        return $this->belongsTo(ITAsset::class, 'it_asset_id');
+    }
+
+    /** User who signed for the returned asset. */
+    public function receivedBy()
+    {
+        return $this->belongsTo(User::class, 'received_by_user_id');
+    }
+
     // ── Scopes ────────────────────────────────────────────────
     public function scopeActive($q)
     {
@@ -50,8 +71,16 @@ class EmployeeAsset extends Model
         return $q->where('employee_id', $employeeId);
     }
 
+    /** Filter by an issuing source key (new) or legacy department string. */
     public function scopeByDepartment($q, $dept)
     {
-        return $q->where('issuing_department', $dept);
+        // If caller passed a source key like 'ehs', match against the FK.
+        if (is_numeric($dept)) {
+            return $q->where('issuing_source_id', $dept);
+        }
+        return $q->where(function ($sub) use ($dept) {
+            $sub->where('issuing_department', $dept)
+                ->orWhereHas('issuingSource', fn ($s) => $s->where('key', $dept));
+        });
     }
 }
