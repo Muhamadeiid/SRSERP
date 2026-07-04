@@ -91,8 +91,16 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Employee cannot be their own manager'], 422);
         }
 
-        $employee->update(['direct_manager_id' => $managerId ?: null]);
-        $employee->load('directManager:id,name,position');
+        // Picking a manager in the org chart is a manual override; clearing it
+        // hands the employee back to the assignment rules.
+        if ($managerId) {
+            $employee->update(['direct_manager_id' => $managerId, 'manager_manual' => true]);
+        } else {
+            $employee->update(['direct_manager_id' => null, 'manager_manual' => false]);
+            \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh());
+        }
+
+        $employee->refresh()->load('directManager:id,name,position');
 
         return response()->json($employee);
     }
@@ -157,7 +165,19 @@ class EmployeeController extends Controller
         $v = Validator::make($data, $this->rules());
         if ($v->fails()) return response()->json(['errors' => $v->errors()], 422);
 
-        return response()->json(Employee::create($data), 201);
+        // A manager picked directly on the form counts as a manual override.
+        if (!empty($data['direct_manager_id'])) {
+            $data['manager_manual'] = true;
+        }
+
+        $employee = Employee::create($data);
+
+        // Otherwise auto-assign via the assignment rules.
+        if (!$employee->manager_manual) {
+            \App\Services\AssignmentRuleService::applyToEmployee($employee);
+        }
+
+        return response()->json($employee->fresh(), 201);
     }
 
     // ── PUT /api/employees/{id} ─────────────────────────────
@@ -167,8 +187,19 @@ class EmployeeController extends Controller
         $v = Validator::make($data, $this->rules($employee->id));
         if ($v->fails()) return response()->json(['errors' => $v->errors()], 422);
 
+        // An explicit manager pick on the form is a manual override.
+        if (array_key_exists('direct_manager_id', $data)) {
+            $data['manager_manual'] = !empty($data['direct_manager_id']);
+        }
+
         $employee->update($data);
-        return response()->json($employee);
+
+        // Position/department may have changed — re-apply rules unless manual.
+        if (!$employee->manager_manual) {
+            \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh());
+        }
+
+        return response()->json($employee->fresh());
     }
 
     private function normalizeFields(array $data): array

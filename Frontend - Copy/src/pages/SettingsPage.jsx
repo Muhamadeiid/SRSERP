@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Users, Settings, Search, X, Check, UserCheck, Loader2, Plus, Tag, Trash2, ShieldCheck, ArrowRight, GripVertical, Layers } from 'lucide-react'
+import { Users, Settings, Search, X, Check, UserCheck, Loader2, Plus, Tag, Trash2, ShieldCheck, ArrowRight, GripVertical, Layers, GitBranch, Zap } from 'lucide-react'
 import { getSettings, saveSetting, getManagers, getManagerEmps, assignEmployee } from '../services/settingsService'
-import { getEmployees } from '../services/employeeService'
+import { getEmployees, searchEmployees } from '../services/employeeService'
 import { listLookupsAll, createLookup, updateLookup, deleteLookup, invalidateLookups } from '../services/lookupService'
 import { listPositionsAll, createPosition, updatePosition, deletePosition, mergePositions } from '../services/positionService'
 import { getPermissionMatrix, togglePermission, teamTransfer } from '../services/permissionService'
+import { listAssignmentRules, createAssignmentRule, updateAssignmentRule, deleteAssignmentRule, applyAssignmentRules } from '../services/assignmentRuleService'
+import { listProjects, createProject, updateProject, deleteProject } from '../services/projectService'
 import { useLookups } from '../hooks/useLookups'
 
 export default function SettingsPage() {
@@ -117,10 +119,10 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('org')
 
   const TABS = [
-    { key: 'org',    label: 'Org Structure', icon: Users,       desc: 'Managers, assignments & team transfer' },
-    { key: 'hr',     label: 'HR & Leaves',   icon: Settings,    desc: 'Leave defaults, HR officer' },
-    { key: 'master', label: 'Master Data',   icon: Tag,         desc: 'Departments, locations, categories, roles' },
-    { key: 'perms',  label: 'Permissions',   icon: ShieldCheck, desc: 'Role × permission matrix' },
+    { key: 'org',      label: 'Org Structure', icon: Users,       desc: 'Managers, assignments & team transfer' },
+    { key: 'hr',       label: 'HR & Leaves',   icon: Settings,    desc: 'Leave defaults, HR officer' },
+    { key: 'master',   label: 'Master Data',   icon: Tag,         desc: 'Departments, locations, categories, roles' },
+    { key: 'perms',    label: 'Permissions',   icon: ShieldCheck, desc: 'Role × permission matrix' },
   ]
   const activeMeta = TABS.find(t => t.key === activeTab)
 
@@ -270,6 +272,9 @@ export default function SettingsPage() {
       {/* ── Section 7: Team Transfer ── */}
       <TeamTransferPanel />
 
+      {/* ── Section 8: Assignment Rules ── */}
+      <AssignmentRulesPanel />
+
       </>}
 
       {/* ── HR & Leaves Tab ── */}
@@ -356,6 +361,7 @@ export default function SettingsPage() {
       {activeTab === 'master' && <>
         <LookupsPanel />
         <PositionsPanel />
+        <ProjectsPanel />
       </>}
 
       {/* ── Permissions Tab ── */}
@@ -658,6 +664,252 @@ function TeamTransferPanel() {
             </div>
           )}
         </div>
+      </div>
+    </SectionShell>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Manager picker — searchable employee dropdown
+// ─────────────────────────────────────────────────────────────────────
+function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manager…' }) {
+  const [q, setQ]       = useState(valueName || '')
+  const [results, setR] = useState([])
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const timer = useRef(null)
+
+  useEffect(() => { setQ(valueName || '') }, [valueName])
+
+  const onChange = (v) => {
+    setQ(v); setOpen(true)
+    if (timer.current) clearTimeout(timer.current)
+    if (!v || v.length < 2) { setR([]); return }
+    timer.current = setTimeout(async () => {
+      setBusy(true)
+      try { const d = await searchEmployees(v); setR(Array.isArray(d) ? d : (d.data ?? [])) }
+      catch { setR([]) }
+      finally { setBusy(false) }
+    }, 250)
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
+        <input
+          value={q}
+          onChange={e => onChange(e.target.value)}
+          onFocus={() => q.length >= 2 && setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder={placeholder}
+          className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+        />
+        {busy && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-neutral-300" />}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-40 left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+          {results.map(emp => (
+            <button key={emp.id} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onSelect(emp); setQ(emp.name); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-primary/5 text-left border-b border-neutral-50 last:border-0">
+              <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
+                {emp.name?.[0]?.toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-secondary-700 truncate">{emp.name}</p>
+                <p className="text-[10px] text-neutral-400 truncate">{emp.position}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Assignment Rules — auto direct-manager by position / department
+// ─────────────────────────────────────────────────────────────────────
+function AssignmentRulesPanel() {
+  const { departments } = useLookups()
+  const [rules, setRules]   = useState([])
+  const [loading, setLoad]  = useState(true)
+  const [saving, setSaving] = useState(null)
+  const [applying, setApplying] = useState(false)
+  const [applied, setApplied]   = useState(null)
+  const [showAdd, setShowAdd]   = useState(false)
+  const [draft, setDraft] = useState({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '' })
+
+  const load = () => listAssignmentRules().then(setRules).finally(() => setLoad(false))
+  useEffect(() => { load() }, [])
+
+  const deptLabel = (key) => departments.find(d => d.key === key)?.label_en ?? key
+
+  const handleAdd = async () => {
+    if (!draft.match_value.trim() || !draft.direct_manager_id) return
+    setSaving('new')
+    try {
+      await createAssignmentRule({
+        match_field: draft.match_field,
+        match_value: draft.match_value,
+        direct_manager_id: draft.direct_manager_id,
+      })
+      setDraft({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '' })
+      setShowAdd(false)
+      await load()
+    } finally { setSaving(null) }
+  }
+
+  const handleToggle = async (rule) => {
+    setSaving(rule.id)
+    try { await updateAssignmentRule(rule.id, { is_active: !rule.is_active }); await load() }
+    finally { setSaving(null) }
+  }
+
+  const handleDelete = async (rule) => {
+    if (!confirm(`Delete this rule? Employees keep their current manager until rules are re-applied.`)) return
+    setSaving(rule.id)
+    try { await deleteAssignmentRule(rule.id); await load() }
+    finally { setSaving(null) }
+  }
+
+  const handleApply = async () => {
+    setApplying(true); setApplied(null)
+    try {
+      const r = await applyAssignmentRules()
+      setApplied(`Updated ${r.changed} employee${r.changed !== 1 ? 's' : ''}.`)
+    } finally { setApplying(false) }
+  }
+
+  return (
+    <SectionShell
+      icon={Zap}
+      iconTint="amber"
+      title="Auto-Assignment Rules"
+      subtitle="Give everyone in a position or department the same direct manager — manual picks are always kept"
+      actions={
+        <button
+          onClick={handleApply}
+          disabled={applying || rules.length === 0}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm"
+        >
+          {applying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+          Apply now
+        </button>
+      }
+    >
+      {applied && (
+        <div className="px-6 py-2 bg-green-50 border-b border-green-100 flex items-center gap-1.5 text-xs font-semibold text-green-700">
+          <Check className="w-3.5 h-3.5" /> {applied}
+        </div>
+      )}
+
+      <div className="p-6 space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+        ) : rules.length === 0 ? (
+          <EmptyState icon={Zap} title="No rules yet" subtitle="Add one to auto-assign a manager by position or department." />
+        ) : (
+          <div className="space-y-2">
+            {rules.map(rule => (
+              <div key={rule.id} className={`group flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-xl border transition-all ${
+                rule.is_active ? 'border-neutral-100 bg-white hover:border-primary/30 hover:shadow-sm' : 'border-neutral-100 bg-neutral-50/60 opacity-70'
+              }`}>
+                <span className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg bg-amber-50 text-amber-700 shrink-0">
+                  {rule.match_field === 'position' ? 'Position' : 'Dept'}
+                </span>
+                <span className="text-sm font-medium text-secondary-700 min-w-0 truncate">
+                  {rule.match_field === 'department' ? deptLabel(rule.match_value) : rule.match_value}
+                </span>
+                <ArrowRight className="w-4 h-4 text-neutral-300 shrink-0" />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
+                    {rule.manager?.name?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <span className="text-sm font-semibold text-secondary-700 truncate">{rule.manager?.name ?? '—'}</span>
+                </div>
+                <button
+                  onClick={() => handleToggle(rule)}
+                  className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-all shrink-0 ${
+                    rule.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${rule.is_active ? 'bg-green-500' : 'bg-neutral-400'}`} />
+                  {rule.is_active ? 'ACTIVE' : 'OFF'}
+                </button>
+                <button
+                  onClick={() => handleDelete(rule)}
+                  disabled={saving === rule.id}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 transition-all shrink-0"
+                >
+                  {saving === rule.id ? <Loader2 className="w-4 h-4 animate-spin opacity-100" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add rule */}
+        {!showAdd ? (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-primary border border-dashed border-neutral-200 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all w-full justify-center"
+          >
+            <Plus className="w-4 h-4" /> Add rule
+          </button>
+        ) : (
+          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr_auto] gap-2 items-start">
+            {/* field toggle */}
+            <div className="inline-flex rounded-lg border border-neutral-200 overflow-hidden bg-white">
+              {['position', 'department'].map(f => (
+                <button key={f}
+                  onClick={() => setDraft(d => ({ ...d, match_field: f, match_value: '' }))}
+                  className={`px-3 py-2 text-xs font-semibold ${draft.match_field === f ? 'bg-primary text-white' : 'text-neutral-500'}`}
+                >
+                  {f === 'position' ? 'Position' : 'Dept'}
+                </button>
+              ))}
+            </div>
+            {/* value */}
+            {draft.match_field === 'department' ? (
+              <select
+                value={draft.match_value}
+                onChange={e => setDraft(d => ({ ...d, match_value: e.target.value }))}
+                className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+              >
+                <option value="">Select department…</option>
+                {departments.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
+              </select>
+            ) : (
+              <input
+                value={draft.match_value}
+                onChange={e => setDraft(d => ({ ...d, match_value: e.target.value }))}
+                placeholder="Position contains… e.g. Intervention"
+                className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+              />
+            )}
+            {/* manager */}
+            <ManagerPicker
+              valueName={draft.manager_name}
+              onSelect={emp => setDraft(d => ({ ...d, direct_manager_id: emp.id, manager_name: emp.name }))}
+            />
+            {/* actions */}
+            <div className="flex gap-1">
+              <button
+                onClick={handleAdd}
+                disabled={saving === 'new' || !draft.match_value.trim() || !draft.direct_manager_id}
+                className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm"
+              >
+                {saving === 'new' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Add'}
+              </button>
+              <button onClick={() => setShowAdd(false)} className="px-2 py-2 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </SectionShell>
   )
@@ -1143,6 +1395,201 @@ function PositionsPanel() {
             })}
           </div>
         )}
+      </div>
+    </SectionShell>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Projects — configurable list of projects (Ganz, CML1, CML3, …)
+// ─────────────────────────────────────────────────────────────────────
+function ProjectsPanel() {
+  const [items, setItems]     = useState([])
+  const [loading, setLoad]    = useState(true)
+  const [saving, setSaving]   = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [draft, setDraft]     = useState({ code: '', name: '', name_ar: '', match_prefix: '' })
+
+  const load = () => listProjects().then(setItems).finally(() => setLoad(false))
+  useEffect(() => { load() }, [])
+
+  const handleUpdate = async (id, patch) => {
+    setSaving(id)
+    try { await updateProject(id, patch); await load() }
+    finally { setSaving(null) }
+  }
+
+  const handleSetDefault = async (id) => {
+    setSaving(id)
+    try { await updateProject(id, { is_default: true }); await load() }
+    finally { setSaving(null) }
+  }
+
+  const handleAdd = async () => {
+    if (!draft.code.trim() || !draft.name.trim()) return
+    setSaving('new')
+    try {
+      await createProject({ ...draft })
+      setDraft({ code: '', name: '', name_ar: '', match_prefix: '' })
+      setShowAdd(false)
+      await load()
+    } finally { setSaving(null) }
+  }
+
+  const handleDelete = async (item) => {
+    if (item.employees_count > 0) {
+      alert(`Can't delete — ${item.employees_count} employee(s) belong to this project. Deactivate it instead.`)
+      return
+    }
+    if (!confirm(`Delete project "${item.name}"?`)) return
+    setSaving(item.id)
+    try { await deleteProject(item.id); await load() }
+    catch (e) { alert(e.response?.data?.message ?? 'Delete failed') }
+    finally { setSaving(null) }
+  }
+
+  const totalEmployees = items.reduce((s, p) => s + (p.employees_count ?? 0), 0)
+
+  return (
+    <SectionShell
+      icon={GitBranch}
+      iconTint="purple"
+      title="Projects"
+      subtitle="Match employees to a project by the start of their project_budget — the code appears on printed forms"
+      actions={
+        <div className="hidden sm:flex items-center gap-2 text-[10px] font-semibold text-neutral-400">
+          <span className="bg-neutral-100 px-2 py-1 rounded-lg">{items.length} projects</span>
+          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg">{totalEmployees} employees</span>
+        </div>
+      }
+    >
+      <div className="p-6 space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+        ) : items.length === 0 ? (
+          <EmptyState icon={GitBranch} title="No projects yet" subtitle="Add one to start routing employees by their project_budget." />
+        ) : (
+          <div className="space-y-2">
+            {items.map(p => (
+              <div key={p.id} className={`group flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-xl border transition-all ${
+                p.is_active ? 'border-neutral-100 bg-white hover:border-primary/30 hover:shadow-sm' : 'border-neutral-100 bg-neutral-50/60 opacity-70'
+              }`}>
+                <input
+                  defaultValue={p.code}
+                  onBlur={e => e.target.value !== p.code && handleUpdate(p.id, { code: e.target.value.toUpperCase() })}
+                  className="w-16 px-2 py-1.5 text-xs font-mono font-bold uppercase text-purple-700 bg-purple-50 border border-transparent hover:border-purple-200 focus:border-primary rounded-lg outline-none text-center"
+                />
+                <div className="flex-1 min-w-0 grid grid-cols-2 gap-1">
+                  <input
+                    defaultValue={p.name}
+                    onBlur={e => e.target.value !== p.name && handleUpdate(p.id, { name: e.target.value })}
+                    className="w-full px-2 py-1.5 text-sm font-medium text-secondary-700 bg-transparent border border-transparent hover:border-neutral-200 focus:border-primary rounded-lg outline-none"
+                  />
+                  <input
+                    defaultValue={p.name_ar ?? ''}
+                    onBlur={e => e.target.value !== (p.name_ar ?? '') && handleUpdate(p.id, { name_ar: e.target.value })}
+                    className="w-full px-2 py-1.5 text-sm bg-transparent border border-transparent hover:border-neutral-200 focus:border-primary rounded-lg outline-none text-right"
+                    dir="rtl"
+                    placeholder="—"
+                  />
+                </div>
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-neutral-400">budget starts with</span>
+                  <input
+                    defaultValue={p.match_prefix ?? ''}
+                    onBlur={e => e.target.value !== (p.match_prefix ?? '') && handleUpdate(p.id, { match_prefix: e.target.value || null })}
+                    placeholder="e.g. CML3"
+                    className="w-24 px-2 py-1.5 text-xs font-mono bg-white border border-neutral-200 hover:border-primary/40 focus:border-primary rounded-lg outline-none"
+                  />
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.employees_count > 0 ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
+                  {p.employees_count} emp
+                </span>
+                <button
+                  onClick={() => handleSetDefault(p.id)}
+                  disabled={p.is_default || saving === p.id}
+                  className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${
+                    p.is_default ? 'bg-amber-50 text-amber-700 cursor-default' : 'bg-neutral-50 text-neutral-400 hover:bg-amber-50 hover:text-amber-700'
+                  }`}
+                  title={p.is_default ? 'Fallback for unmatched budgets' : 'Set as default (fallback)'}
+                >
+                  {p.is_default ? '★ DEFAULT' : '☆ DEFAULT'}
+                </button>
+                <button
+                  onClick={() => handleUpdate(p.id, { is_active: !p.is_active })}
+                  className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-all ${
+                    p.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${p.is_active ? 'bg-green-500' : 'bg-neutral-400'}`} />
+                  {p.is_active ? 'ON' : 'OFF'}
+                </button>
+                <button
+                  onClick={() => handleDelete(p)}
+                  disabled={saving === p.id}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-neutral-300 hover:text-red-500 transition-all"
+                >
+                  {saving === p.id ? <Loader2 className="w-4 h-4 animate-spin opacity-100" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add */}
+        {!showAdd ? (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-primary border border-dashed border-neutral-200 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all w-full justify-center"
+          >
+            <Plus className="w-4 h-4" /> Add project
+          </button>
+        ) : (
+          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[100px_1fr_1fr_140px_auto] gap-2">
+            <input
+              value={draft.code}
+              onChange={e => setDraft(d => ({ ...d, code: e.target.value.toUpperCase() }))}
+              placeholder="CODE"
+              autoFocus
+              className="px-3 py-2 text-xs font-mono font-bold uppercase text-center bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+            />
+            <input
+              value={draft.name}
+              onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+              placeholder="Project name (e.g. Cairo Metro Line 3)"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+            />
+            <input
+              value={draft.name_ar}
+              onChange={e => setDraft(d => ({ ...d, name_ar: e.target.value }))}
+              placeholder="الاسم بالعربي"
+              dir="rtl"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary text-right"
+            />
+            <input
+              value={draft.match_prefix}
+              onChange={e => setDraft(d => ({ ...d, match_prefix: e.target.value }))}
+              placeholder="budget prefix"
+              className="px-3 py-2 text-xs font-mono bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={handleAdd}
+                disabled={saving === 'new' || !draft.code.trim() || !draft.name.trim()}
+                className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm"
+              >
+                {saving === 'new' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Add'}
+              </button>
+              <button onClick={() => setShowAdd(false)} className="px-2 py-2 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-50">
+          <span className="font-semibold text-neutral-500">How it works:</span> when an employee's <code className="font-mono bg-neutral-100 px-1 rounded">project_budget</code> starts with a project's prefix, that project's code shows on their forms. If none match, the ★ default project's code is used.
+        </p>
       </div>
     </SectionShell>
   )

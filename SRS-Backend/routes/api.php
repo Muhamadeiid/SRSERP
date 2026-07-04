@@ -18,6 +18,8 @@ use App\Http\Controllers\LookupController;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\TeamTransferController;
+use App\Http\Controllers\AssignmentRuleController;
+use App\Http\Controllers\ProjectController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -35,6 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Positions — read-only for all (autocomplete on forms)
     Route::get('/positions', [PositionController::class, 'index']);
+
+    // Projects — read-only for all (project code display)
+    Route::get('/projects', [ProjectController::class, 'index']);
 
     // E-Signature (own)
     Route::post('/user/signature', [SignatureController::class, 'saveMySignature']);
@@ -179,5 +184,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Team Transfer (bulk reorg)
         Route::post('/team-transfer',             [TeamTransferController::class, 'transfer']);
+
+        // Projects — admin management (create/edit/delete)
+        Route::post('/projects',              [ProjectController::class, 'store']);
+        Route::put('/projects/{project}',     [ProjectController::class, 'update']);
+        Route::delete('/projects/{project}',  [ProjectController::class, 'destroy']);
+
+        // Assignment Rules (auto direct-manager by position/department)
+        Route::get('/assignment-rules',              [AssignmentRuleController::class, 'index']);
+        Route::post('/assignment-rules',             [AssignmentRuleController::class, 'store']);
+        Route::put('/assignment-rules/{assignmentRule}',    [AssignmentRuleController::class, 'update']);
+        Route::delete('/assignment-rules/{assignmentRule}', [AssignmentRuleController::class, 'destroy']);
+        Route::post('/assignment-rules/apply',       [AssignmentRuleController::class, 'apply']);
     });
 });

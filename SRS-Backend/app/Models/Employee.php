@@ -49,6 +49,9 @@ class Employee extends Model
         'e_signature',
         // Direct Manager (self-referential → employees.id)
         'direct_manager_id',
+        // True when the direct manager was picked by hand — assignment rules
+        // never override a manual pick.
+        'manager_manual',
         // System User Account (link to users.id)
         'user_id',
         // Manager User Account (link to users.id — set from User Management / OrgChart)
@@ -67,6 +70,7 @@ class Employee extends Model
         'contract_start'              => 'date',
         'contract_end'                => 'date',
         'last_working_date'           => 'date',
+        'manager_manual'              => 'boolean',
         // Document flags
         'doc_birth_certificate'       => 'boolean',
         'doc_edu_certificate'         => 'boolean',
@@ -196,54 +200,49 @@ class Employee extends Model
         return (int) round(($this->docs_completed / 8) * 100);
     }
 
-    // ── Project helpers (Ganz vs CML1) ──────────────────────
+    // ── Project helpers ─────────────────────────────────────
+    // Project codes are resolved from the `projects` table (managed in Settings)
+    // by matching employees.project_budget against each project's match_prefix.
+    // A project can also be flagged is_default to catch unmatched budgets.
 
     /**
-     * Returns the short project code derived from project_budget:
-     *   "Ganz…"  → 'GZ'
-     *   "CML1…"  → 'EG1'
-     *   anything else → 'EG1'  (safe default)
-     *
-     * Exposed as `project_code` in JSON responses via $appends.
+     * Returns the short project code (e.g. 'EG1', 'GZ', 'CML3') for this
+     * employee's project_budget. Exposed as `project_code` in JSON via $appends.
      */
     public function getProjectCodeAttribute(): string
     {
-        return $this->isGanz() ? 'GZ' : 'EG1';
+        return \App\Models\Project::codeFor($this->project_budget);
     }
 
-    /** Convenience method alias for use in PHP code. */
     public function projectCode(): string
     {
         return $this->getProjectCodeAttribute();
     }
 
-    /** True when this employee belongs to the Ganz project. */
-    public function isGanz(): bool
-    {
-        return str_starts_with(strtolower(trim($this->project_budget ?? '')), 'ganz');
-    }
+    /** Backwards-compatible boolean helpers. */
+    public function isGanz(): bool { return $this->projectCode() === 'GZ'; }
+    public function isCML1(): bool { return $this->projectCode() === 'EG1'; }
 
-    /** True when this employee belongs to the CML1 project (or no project set). */
-    public function isCML1(): bool
+    /** Scope: employees whose resolved project code equals the given value. */
+    public function scopeProject($q, string $code)
     {
-        return !$this->isGanz();
-    }
+        $prefixes = \App\Models\Project::where('code', $code)
+            ->where('is_active', true)
+            ->pluck('match_prefix')
+            ->filter()
+            ->all();
 
-    /** Scope: only Ganz employees */
-    public function scopeGanz($q)
-    {
-        return $q->where('project_budget', 'like', 'Ganz%');
-    }
+        if (empty($prefixes)) return $q;
 
-    /** Scope: only CML1 employees (project_budget starts with CML1 or is null/other) */
-    public function scopeCML1($q)
-    {
-        return $q->where(function ($sub) {
-            $sub->where('project_budget', 'like', 'CML1%')
-                ->orWhereNull('project_budget')
-                ->orWhere('project_budget', 'not like', 'Ganz%');
+        return $q->where(function ($sub) use ($prefixes) {
+            foreach ($prefixes as $p) {
+                $sub->orWhere('project_budget', 'like', $p.'%');
+            }
         });
     }
+
+    public function scopeGanz($q) { return $q->project('GZ'); }
+    public function scopeCML1($q) { return $q->project('EG1'); }
 
     // ── Schedule helpers ────────────────────────────────────
 

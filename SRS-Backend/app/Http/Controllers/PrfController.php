@@ -18,10 +18,12 @@ use Illuminate\Support\Facades\Validator;
 class PrfController extends Controller
 {
     // ── Stage configuration (sequential pipeline) ───────────────
+    // 'role' stays for notifications (who to email). 'permission' is the actual
+    // authority check, so approval rights are managed from the Permission Matrix.
     private const PIPELINE = [
-        'pending_procurement' => ['role' => 'procurement',   'next' => 'pending_ehs',    'label' => 'Procurement'],
-        'pending_ehs'         => ['role' => 'ehs',           'next' => 'pending_depot',  'label' => 'EHS / Safety'],
-        'pending_depot'       => ['role' => 'depot_manager', 'next' => 'approved',       'label' => 'Depot Manager'],
+        'pending_procurement' => ['role' => 'procurement',   'permission' => 'prf.approve_procurement', 'next' => 'pending_ehs',    'label' => 'Procurement'],
+        'pending_ehs'         => ['role' => 'ehs',           'permission' => 'prf.approve_ehs',         'next' => 'pending_depot',  'label' => 'EHS / Safety'],
+        'pending_depot'       => ['role' => 'depot_manager', 'permission' => 'prf.approve_depot',       'next' => 'approved',       'label' => 'Depot Manager'],
     ];
 
     // ─────────────────────────────────────────────────────────────
@@ -177,7 +179,7 @@ class PrfController extends Controller
             ], 422);
         }
 
-        if (!$this->userCanActAsRole($user, $stage['role'])) {
+        if (!$this->userCanActInStage($user, $stage)) {
             return response()->json([
                 'success' => false,
                 'message' => "Only {$stage['label']} can approve at this stage",
@@ -234,7 +236,7 @@ class PrfController extends Controller
             ], 422);
         }
 
-        if (!$this->userCanActAsRole($user, $stage['role'])) {
+        if (!$this->userCanActInStage($user, $stage)) {
             return response()->json([
                 'success' => false,
                 'message' => "Only {$stage['label']} can reject at this stage",
@@ -311,10 +313,15 @@ class PrfController extends Controller
     // ─────────────────────────────────────────────────────────────
     //  Internal helpers
     // ─────────────────────────────────────────────────────────────
-    private function userCanActAsRole(User $user, string $stageRole): bool
+    private function userCanActInStage(User $user, array $stage): bool
     {
         if ($user->isAdmin()) return true;
-        return $user->role === $stageRole;
+        // Permission Matrix drives approval authority; fall back to the legacy
+        // role match so nothing breaks before permissions are granted.
+        if (!empty($stage['permission']) && $user->hasPermission($stage['permission'])) {
+            return true;
+        }
+        return $user->role === $stage['role'];
     }
 
     private function notifyStageApprovers(Prf $prf, string $stageStatus): void
