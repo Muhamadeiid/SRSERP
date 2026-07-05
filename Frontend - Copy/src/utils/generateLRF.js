@@ -264,11 +264,16 @@ export async function generateLRF(d) {
   })
 
   // ── Signature row: 2 rows per signature (empty | name) ─────────
-  // Label uses rowspan=2 to span both rows
+  // Label uses rowspan=2 to span both rows.
+  // When the direct manager IS the depot manager (same user signed both), leave
+  // the direct-manager slot blank so the depot only signs the depot row.
+  const managerIsDepot = d.manager_approver?.id && d.approver?.id
+                          ? d.manager_approver.id === d.approver.id
+                          : false;
   const sigNames = {
     employee:  d.employee_name || '',
     alternate: d.alternate_employee_name || '',
-    direct:    d.manager_approver?.name || d.direct_manager_name || '',
+    direct:    managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || ''),
     hr:        HR_OFFICER_FALLBACK,
     depot:     d.approver?.name || DEPOT_MGR_FALLBACK,
   }

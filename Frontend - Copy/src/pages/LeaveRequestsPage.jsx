@@ -345,11 +345,21 @@ function printLRF(d) {
   </tr>
   <tr><td class="sig-bot">${d.employee_name || ''}</td></tr>
 
+  ${(() => {
+    // When the direct manager is the same person as the depot manager they only
+    // sign the depot slot below — the direct-manager row stays blank.
+    const managerIsDepot = d.manager_approver?.id && d.approver?.id
+                            ? d.manager_approver.id === d.approver.id
+                            : false;
+    const directName = managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || '');
+    const directSig  = managerIsDepot ? '' : (d.manager_signature ? `<img src="${d.manager_signature}" style="max-height:48px;max-width:160px;object-fit:contain;" />` : '');
+    return `
   <tr>
     <td class="sig-lbl" rowspan="2"><span class="l-en">Direct Manager Name / signature</span><span class="l-ar">المدير المباشر / التوقيع</span></td>
-    <td class="sig-top">${d.manager_signature ? `<img src="${d.manager_signature}" style="max-height:48px;max-width:160px;object-fit:contain;" />` : ''}</td>
+    <td class="sig-top">${directSig}</td>
   </tr>
-  <tr><td class="sig-bot">${d.manager_approver?.name || d.direct_manager_name || ''}</td></tr>
+  <tr><td class="sig-bot">${directName}</td></tr>`;
+  })()}
 
   <tr>
     <td class="sig-lbl" rowspan="2"><span class="l-en">Human Resource</span><span class="l-ar">موظف الموارد البشريه</span></td>
@@ -1135,10 +1145,16 @@ function printOfficialLRFGrid(d) {
 
   const box = (checked) => `<span class="box">${checked ? 'X' : ''}</span>`
   const label = (en, ar) => `<td class="lbl"><b>${en}</b><span dir="rtl">${ar}</span></td>`
+  // Blank out the direct-manager row when the same person signed both slots
+  // (i.e. their direct manager IS the depot manager).
+  const managerIsDepot = d.manager_approver?.id && d.approver?.id
+                          ? d.manager_approver.id === d.approver.id
+                          : false;
+  const directNameOnForm = managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || '');
   const sigRows = [
     ['Employee Name / signature:', 'إسم الموظف / توقيعه', d.employee_name],
     ['Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', d.alternate_employee_name],
-    ['Direct manager Name / signature', 'المدير المباشر / التوقيع', d.manager_approver?.name || d.direct_manager_name],
+    ['Direct manager Name / signature', 'المدير المباشر / التوقيع', directNameOnForm],
     ['Human Resource', 'موظف الموارد البشريه', HR_OFFICER],
     ['Depot Manager Signature', 'توقيع مدير الموقع', d.approver?.name || DEPOT_MGR],
   ].map(([en, ar, name]) => `

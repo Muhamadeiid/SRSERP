@@ -3,7 +3,7 @@ import { Users, Settings, Search, X, Check, UserCheck, Loader2, Plus, Tag, Trash
 import { getSettings, saveSetting, getManagers, getManagerEmps, assignEmployee } from '../services/settingsService'
 import { getEmployees, searchEmployees } from '../services/employeeService'
 import { listLookupsAll, createLookup, updateLookup, deleteLookup, invalidateLookups } from '../services/lookupService'
-import { listPositionsAll, createPosition, updatePosition, deletePosition, mergePositions } from '../services/positionService'
+import { listPositionsAll, createPosition, updatePosition, deletePosition, mergePositions, searchPositions } from '../services/positionService'
 import { getPermissionMatrix, togglePermission, teamTransfer } from '../services/permissionService'
 import { listAssignmentRules, createAssignmentRule, updateAssignmentRule, deleteAssignmentRule, applyAssignmentRules } from '../services/assignmentRuleService'
 import { listProjects, createProject, updateProject, deleteProject } from '../services/projectService'
@@ -674,7 +674,7 @@ function TeamTransferPanel() {
 // ─────────────────────────────────────────────────────────────────────
 // Manager picker — searchable employee dropdown
 // ─────────────────────────────────────────────────────────────────────
-function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manager…' }) {
+function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manager…', direction = 'down' }) {
   const [q, setQ]       = useState(valueName || '')
   const [results, setR] = useState([])
   const [open, setOpen] = useState(false)
@@ -695,6 +695,13 @@ function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manag
     }, 250)
   }
 
+  // Rules panel sits at the very bottom of the settings tab, so opening the
+  // dropdown downward pushes suggestions off-screen. `direction="up"` flips
+  // the popover to sit above the input instead.
+  const popoverPos = direction === 'up'
+    ? 'bottom-full mb-1'
+    : 'top-full mt-1'
+
   return (
     <div className="relative">
       <div className="relative">
@@ -710,7 +717,7 @@ function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manag
         {busy && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-neutral-300" />}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-40 left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+        <div className={`absolute z-40 left-0 right-0 ${popoverPos} bg-white border border-neutral-200 rounded-xl shadow-xl max-h-48 overflow-y-auto`}>
           {results.map(emp => (
             <button key={emp.id} type="button"
               onMouseDown={e => e.preventDefault()}
@@ -723,6 +730,65 @@ function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manag
                 <p className="text-xs font-semibold text-secondary-700 truncate">{emp.name}</p>
                 <p className="text-[10px] text-neutral-400 truncate">{emp.position}</p>
               </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Position autocomplete for the Auto-Assignment Rules form. Reads from the
+// Positions master list so admins pick a real, canonical title instead of
+// typing a substring that may or may not match anything.
+function PositionSearchInput({ value, onChange, direction = 'down' }) {
+  const [q, setQ]       = useState(value || '')
+  const [results, setR] = useState([])
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const timer = useRef(null)
+
+  useEffect(() => { setQ(value || '') }, [value])
+
+  const runSearch = (v) => {
+    setQ(v); onChange(v); setOpen(true)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(async () => {
+      setBusy(true)
+      try { const d = await searchPositions(v || ''); setR(Array.isArray(d) ? d : (d.data ?? [])) }
+      catch { setR([]) }
+      finally { setBusy(false) }
+    }, 200)
+  }
+
+  const popoverPos = direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" />
+        <input
+          value={q}
+          onChange={e => runSearch(e.target.value)}
+          onFocus={() => runSearch(q)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder="Search position… e.g. Intervention"
+          className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+        />
+        {busy && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-neutral-300" />}
+      </div>
+      {open && results.length > 0 && (
+        <div className={`absolute z-40 left-0 right-0 ${popoverPos} bg-white border border-neutral-200 rounded-xl shadow-xl max-h-48 overflow-y-auto`}>
+          {results.map(p => (
+            <button key={p.id} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(p.name_en); setQ(p.name_en); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-primary/5 text-left border-b border-neutral-50 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-secondary-700 truncate">{p.name_en}</p>
+                {p.name_ar && <p className="text-[10px] text-neutral-400 text-right truncate" dir="rtl">{p.name_ar}</p>}
+              </div>
+              <span className="text-[10px] font-mono text-neutral-400 shrink-0">{p.department_key ?? '—'}</span>
             </button>
           ))}
         </div>
@@ -885,17 +951,17 @@ function AssignmentRulesPanel() {
                 {departments.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
               </select>
             ) : (
-              <input
+              <PositionSearchInput
                 value={draft.match_value}
-                onChange={e => setDraft(d => ({ ...d, match_value: e.target.value }))}
-                placeholder="Position contains… e.g. Intervention"
-                className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+                onChange={v => setDraft(d => ({ ...d, match_value: v }))}
+                direction="up"
               />
             )}
             {/* manager */}
             <ManagerPicker
               valueName={draft.manager_name}
               onSelect={emp => setDraft(d => ({ ...d, direct_manager_id: emp.id, manager_name: emp.name }))}
+              direction="up"
             />
             {/* actions */}
             <div className="flex gap-1">

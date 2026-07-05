@@ -193,6 +193,33 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not pending'], 422);
         }
 
+        $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+
+        // When the depot manager (or admin) is the direct manager, collapse the
+        // two-step approval into one — they sign both slots at once and the
+        // request goes straight to 'approved'.
+        if (in_array($user->role, ['admin', 'depot_manager'])) {
+            $hrUser = User::where('role', 'admin')->whereNotNull('e_signature')->first();
+            $leaveRequest->update([
+                'status'              => 'approved',
+                'manager_approved_by' => $user->id,
+                'manager_approved_at' => now(),
+                'manager_signature'   => $user->e_signature ?? null,
+                'approved_by'         => $user->id,
+                'approved_at'         => now(),
+                'depot_signature'     => $user->e_signature ?? null,
+                'hr_signature'        => $hrUser?->e_signature,
+            ]);
+
+            if ($leaveRequest->user_id) {
+                Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_approved', "{$typeLabel} Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) has been fully approved by {$user->name}. It is ready to print.", ['leave_request_id' => $leaveRequest->id]);
+            }
+            Notification::notifyRole('admin', $leaveRequest->type . '_approved', "{$typeLabel} Fully Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was fully approved by {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
+
+            return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'managerApprover'])]);
+        }
+
+        // Regular direct manager (non-depot) — first step only, awaits depot.
         $leaveRequest->update([
             'status' => 'manager_approved',
             'manager_approved_by' => $user->id,
@@ -200,7 +227,6 @@ class LeaveRequestController extends Controller
             'manager_signature' => $user->e_signature ?? null,
         ]);
 
-        $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         Notification::notifyRole('depot_manager', $leaveRequest->type . '_manager_approved', "{$typeLabel} - Manager Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by {$user->name}. Awaiting your final approval.", ['leave_request_id' => $leaveRequest->id]);
         Notification::notifyRole('admin', $leaveRequest->type . '_manager_approved', "{$typeLabel} - Manager Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) approved by direct manager {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
         if ($leaveRequest->user_id) {
