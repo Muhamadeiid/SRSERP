@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   Loader2, Search, Download, RefreshCw, FileSpreadsheet, ShoppingCart,
 } from 'lucide-react'
-import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES, cleanPrfNumber } from '../services/prfService'
 
@@ -57,6 +56,7 @@ export default function PrfMasterList() {
   }, [prfs, status, search])
 
   const exportExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default
     const wb = new ExcelJS.Workbook()
     wb.creator = 'SRS Procurement'
     const ws = wb.addWorksheet('PRF Master List', { views: [{ state: 'frozen', ySplit: 1 }] })

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   Loader2, Search, Download, RefreshCw, FileSpreadsheet, Calendar, Clock,
 } from 'lucide-react'
-import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { getLeaveRequests } from '../services/leaveService'
 
@@ -104,6 +103,7 @@ export default function LeaveMasterList() {
 
   // ── Excel export ─────────────────────────────────────────────────────────
   const exportExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default
     const wb = new ExcelJS.Workbook()
     wb.creator = 'SRS HR'
     const ws = wb.addWorksheet('Master List', { views: [{ state: 'frozen', ySplit: 1 }] })

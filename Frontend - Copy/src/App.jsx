@@ -1,34 +1,35 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
-import Login             from './pages/Login'
-import DashboardPage     from './pages/Dashboard'
-import ProductsPage      from './pages/Products'
-import Users             from './pages/Users/Index'
-import LeaveRequestsPage from './pages/LeaveRequestsPage'
-import CalendarPage      from './pages/CalendarPage'
-import HRLayout          from './layout/HRLayout'
-import InventoryLayout   from './layout/InventoryLayout'
-import MainLayout        from './layout/MainLayout'
-import ProcurementLayout from './layout/ProcurementLayout'
-import PrfDashboard      from './pages/PrfDashboard'
-import PrfNewPage        from './pages/PrfNewPage'
-import PrfDetail         from './pages/PrfDetail'
-import PrfMasterList     from './pages/PrfMasterList'
-import PoNewPage         from './pages/PoNewPage'
-import PoDetail          from './pages/PoDetail'
-import IgiNewPage        from './pages/IgiNewPage'
-import IgiDetail         from './pages/IgiDetail'
-import LeaveMasterList   from './pages/LeaveMasterList'
-import ResignationsPage  from './pages/ResignationsPage'
+const Login             = lazy(() => import('./pages/Login'))
+const DashboardPage     = lazy(() => import('./pages/Dashboard'))
+const ProductsPage      = lazy(() => import('./pages/Products'))
+const Users             = lazy(() => import('./pages/Users/Index'))
+const LeaveRequestsPage = lazy(() => import('./pages/LeaveRequestsPage'))
+const CalendarPage      = lazy(() => import('./pages/CalendarPage'))
+const HRLayout          = lazy(() => import('./layout/HRLayout'))
+const InventoryLayout   = lazy(() => import('./layout/InventoryLayout'))
+const MainLayout        = lazy(() => import('./layout/MainLayout'))
+const ProcurementLayout = lazy(() => import('./layout/ProcurementLayout'))
+const PrfDashboard      = lazy(() => import('./pages/PrfDashboard'))
+const PrfNewPage        = lazy(() => import('./pages/PrfNewPage'))
+const PrfDetail         = lazy(() => import('./pages/PrfDetail'))
+const PrfMasterList     = lazy(() => import('./pages/PrfMasterList'))
+const PoNewPage         = lazy(() => import('./pages/PoNewPage'))
+const PoDetail          = lazy(() => import('./pages/PoDetail'))
+const IgiNewPage        = lazy(() => import('./pages/IgiNewPage'))
+const IgiDetail         = lazy(() => import('./pages/IgiDetail'))
+const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
+const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
 
 // HR tab components — each mounted at its own route
-import WorkforceTab      from './components/hr/WorkforceTab'
-import AttendanceTab     from './components/hr/AttendanceTab'
-import CertificationsTab from './components/hr/CertificationsTab'
-import DisciplinaryTab   from './components/hr/DisciplinaryTab'
-import AssetsTab         from './components/hr/AssetsTab'
-import OrgChartTab       from './components/hr/OrgChartTab'
-import SettingsPage      from './pages/SettingsPage'
+const WorkforceTab      = lazy(() => import('./components/hr/WorkforceTab'))
+const AttendanceTab     = lazy(() => import('./components/hr/AttendanceTab'))
+const CertificationsTab = lazy(() => import('./components/hr/CertificationsTab'))
+const DisciplinaryTab   = lazy(() => import('./components/hr/DisciplinaryTab'))
+const AssetsTab         = lazy(() => import('./components/hr/AssetsTab'))
+const OrgChartTab       = lazy(() => import('./components/hr/OrgChartTab'))
+const SettingsPage      = lazy(() => import('./pages/SettingsPage'))
 
 // ── Access rules ──────────────────────────────────────────────────────────────
 // HR Full: Admin, Depot Manager, or the dedicated HR role
@@ -53,9 +54,14 @@ const ComingSoon = ({ title }) => (
   </div>
 )
 
+const PageFallback = () => (
+  <div className="min-h-screen bg-neutral-50" />
+)
+
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<PageFallback />}>
       <Routes>
         {/* Public */}
         <Route path="/login" element={<Login />} />
@@ -190,6 +196,7 @@ export default function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

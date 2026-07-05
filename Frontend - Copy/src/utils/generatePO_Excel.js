@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 
 const HEADER_GREY = 'FFD9D9D9'
@@ -22,7 +21,7 @@ const normalFont = (size = 10) => ({ name: 'Calibri', bold: false, size })
 const fmt = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
 
-function applyBorder(ws, startRow, startCol, endRow, endCol, borderStyle = ALL_THIN) {
+function applyBorder(ws, startRow, startCol, endRow, endCol) {
   for (let r = startRow; r <= endRow; r++) {
     for (let c = startCol; c <= endCol; c++) {
       const cell = ws.getCell(r, c)
@@ -40,6 +39,7 @@ function applyBorder(ws, startRow, startCol, endRow, endCol, borderStyle = ALL_T
 const COLS = [4, 22, 8, 9, 7, 6, 10, 10, 12]  // widths in chars
 
 export async function generatePO_Excel(po) {
+  const ExcelJS = (await import('exceljs')).default
   const wb  = new ExcelJS.Workbook()
   wb.creator = 'Rotem SRS'
 
