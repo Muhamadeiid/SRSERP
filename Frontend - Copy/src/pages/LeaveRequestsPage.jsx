@@ -8,7 +8,7 @@ import {
 import { getEmployees, getEmployee, searchEmployees, getDepotManager } from '../services/employeeService'
 import {
   getLeaveRequests, createLeaveRequest,
-  managerApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
+  managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
   getLeaveBalance, updateLeaveTrackingNo,
 } from '../services/leaveService'
 
@@ -123,6 +123,7 @@ function StatusBadge({ status }) {
   const cfg = {
     pending:          { label: 'Pending',          cls: 'bg-amber-50 text-amber-600 border-amber-200',     Icon: AlertCircle  },
     manager_approved: { label: 'Manager Approved', cls: 'bg-blue-50 text-blue-600 border-blue-200',        Icon: CheckCircle  },
+    hr_approved:      { label: 'HR Approved',      cls: 'bg-purple-50 text-purple-600 border-purple-200',  Icon: CheckCircle  },
     approved:         { label: 'Approved',         cls: 'bg-green-50 text-green-600 border-green-200',     Icon: CheckCircle  },
     rejected:         { label: 'Rejected',         cls: 'bg-red-50 text-red-600 border-red-200',           Icon: XCircle      },
     cancelled:        { label: 'Cancelled',        cls: 'bg-neutral-100 text-neutral-500 border-neutral-200', Icon: Ban       },
@@ -462,6 +463,7 @@ function printOTR(d) {
   const hrSig   = d.hr_signature       ? '<img src="' + d.hr_signature       + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
   const depSig  = d.depot_signature    ? '<img src="' + d.depot_signature    + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
   const manDate = d.manager_approved_at ? fmt(d.manager_approved_at) : ''
+  const hrDate  = d.hr_approved_at      ? fmt(d.hr_approved_at)      : ''
   const appDate = d.approved_at         ? fmt(d.approved_at)         : ''
   const expl    = (d.explanation || '').replace(/\n/g, '<br/>')
 
@@ -559,7 +561,7 @@ function printOTR(d) {
     + '<tr>'
     + '<td colspan="2" style="' + s_lb + 'vertical-align:middle;"><span style="' + s_en + '">HR Signature</span><span style="' + s_ar + '">&#x62A;&#x648;&#x642;&#x64A;&#x639; &#x627;&#x644;&#x645;&#x648;&#x627;&#x631;&#x62F; &#x627;&#x644;&#x628;&#x634;&#x631;&#x64A;&#x629;</span>' + hrSig + '</td>'
     + '<td style="' + s_lb + '"><span style="' + s_en + '">Date</span><span style="' + s_ar + '">&#x627;&#x644;&#x62A;&#x627;&#x631;&#x64A;&#x62E;</span></td>'
-    + '<td style="' + s_vl + '">' + appDate + '</td>'
+    + '<td style="' + s_vl + '">' + hrDate + '</td>'
     + '</tr>'
 
     // Sig: Depot Manager
@@ -1558,7 +1560,8 @@ function SigStamp({ label, name, date, sig }) {
 function ApprovalProgress({ req }) {
   const steps = [
     { label: 'Submitted',       done: true,                                              date: req.created_at },
-    { label: 'Manager Approval', done: ['manager_approved','approved'].includes(req.status), date: req.manager_approved_at, name: req.manager_approver?.name },
+    { label: 'Manager Approval', done: ['manager_approved','hr_approved','approved'].includes(req.status), date: req.manager_approved_at, name: req.manager_approver?.name },
+    { label: 'HR Approval',      done: ['hr_approved','approved'].includes(req.status),       date: req.hr_approved_at,      name: req.hr_approver?.name },
     { label: 'Depot Approval',   done: req.status === 'approved',                            date: req.approved_at,         name: req.approver?.name },
   ]
   return (
@@ -1581,12 +1584,13 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
   if (!req) return null
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
-  const isHR         = isDepotAdmin || userRole === 'hr'
-  const canWithdraw  = ['pending','manager_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
+  const canHrApprove = userRole === 'admin' || userRole === 'hr'
+  const isHR         = isDepotAdmin || canHrApprove
+  const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
 
   // Tracking-number inline editor (HR only)
   const [trackingDraft, setTrackingDraft]   = useState(req.tracking_no || '')
@@ -1702,12 +1706,12 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
         </div>
 
         {/* Signatures strip (show when approved) */}
-        {req.status === 'approved' && (
+        {['hr_approved','approved'].includes(req.status) && (
           <div className="px-6 pb-4 border-t border-neutral-100">
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-3 pt-3">Signatures</p>
             <div className="flex gap-4 flex-wrap">
               <SigStamp label="Direct Manager" name={req.manager_approver?.name} date={req.manager_approved_at} sig={req.manager_signature} />
-              <SigStamp label="HR Officer"     name={null}                        date={req.approved_at}         sig={req.hr_signature}      />
+              <SigStamp label="HR Officer"     name={req.hr_approver?.name}       date={req.hr_approved_at}      sig={req.hr_signature}      />
               <SigStamp label="Depot Manager"  name={req.approver?.name}          date={req.approved_at}         sig={req.depot_signature}   />
             </div>
           </div>
@@ -1761,7 +1765,47 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
             )}
 
             {/* Depot/admin: pending or manager_approved → single Approve */}
-            {isDepotAdmin && (req.status === 'pending' || req.status === 'manager_approved') && (
+            {req.status === 'pending' && isDepotAdmin && (
+              <>
+                <button onClick={() => onReschedule(req.id)}
+                  title="Reschedule"
+                  className="flex items-center justify-center w-10 h-10 text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
+                  <CalendarClock className="w-4 h-4" />
+                </button>
+                <button onClick={() => onReject(req.id)}
+                  title="Reject"
+                  className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
+                  <XCircle className="w-4 h-4" />
+                </button>
+                <button onClick={() => onManagerApprove(req.id)}
+                  title="Manager Approve"
+                  className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
+                  <CheckCircle className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {req.status === 'manager_approved' && canHrApprove && (
+              <>
+                <button onClick={() => onReschedule(req.id)}
+                  title="Reschedule"
+                  className="flex items-center justify-center w-10 h-10 text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all">
+                  <CalendarClock className="w-4 h-4" />
+                </button>
+                <button onClick={() => onReject(req.id)}
+                  title="Reject"
+                  className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
+                  <XCircle className="w-4 h-4" />
+                </button>
+                <button onClick={() => onHrApprove(req.id)}
+                  title="HR Approve"
+                  className="flex items-center justify-center w-10 h-10 text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
+                  <CheckCircle className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {isDepotAdmin && req.status === 'hr_approved' && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule"
@@ -1774,7 +1818,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
                   <XCircle className="w-4 h-4" />
                 </button>
                 <button onClick={() => onApprove(req.id)}
-                  title="Approve"
+                  title="Final Approve"
                   className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
                 </button>
@@ -1792,6 +1836,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
 export default function LeaveRequestsPage() {
   const { user }      = useSelector(s => s.auth)
   const isDepotAdmin  = user?.role === 'admin' || user?.role === 'depot_manager'
+  const isHrApprover  = user?.role === 'admin' || user?.role === 'hr'
   const isManager     = isDepotAdmin  // keep for compat
   const location      = useLocation()
   const navigate      = useNavigate()
@@ -1816,11 +1861,11 @@ export default function LeaveRequestsPage() {
   const [historyPage,   setHistoryPage]   = useState(1)
   const HISTORY_PER_PAGE = 25
 
-  // Pending actions: depot/admin see pending+manager_approved; managers see pending
+  // Pending actions: each role sees the stage it can move forward.
   const pending = requests.filter(r =>
-    isDepotAdmin
-      ? ['pending', 'manager_approved'].includes(r.status)
-      : r.status === 'pending'
+    (r.status === 'pending' && (isDepotAdmin || user?.role === 'manager')) ||
+    (r.status === 'manager_approved' && isHrApprover) ||
+    (r.status === 'hr_approved' && isDepotAdmin)
   )
 
   // Check if current user is the direct manager of a given request's employee
@@ -1858,7 +1903,7 @@ export default function LeaveRequestsPage() {
             <Download className="w-4 h-4" />
           </button>
         )}
-        {['pending','manager_approved','approved'].includes(r.status) && (isDepotAdmin || r.user_id === user?.id) && (
+        {['pending','manager_approved','hr_approved','approved'].includes(r.status) && (isDepotAdmin || r.user_id === user?.id) && (
           <button onClick={() => setCancelModal({ id: r.id })}
             className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-300 hover:text-neutral-500 transition-colors" title="Cancel / Withdraw">
             <Ban className="w-4 h-4" />
@@ -1924,6 +1969,14 @@ export default function LeaveRequestsPage() {
   const handleManagerApprove = async (id) => {
     try {
       await managerApproveLeave(id)
+      setViewReq(null)
+      fetchRequests()
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleHrApprove = async (id) => {
+    try {
+      await hrApproveLeave(id)
       setViewReq(null)
       fetchRequests()
     } catch (e) { alert(e.message) }
@@ -1998,7 +2051,7 @@ export default function LeaveRequestsPage() {
           <div>
             <p className="text-sm font-bold text-secondary-700">Request Submitted!</p>
             <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">
-              Your request has been sent successfully and is pending approval from the Depot Manager.
+              Your request has been sent successfully and is pending approval from the direct manager.
             </p>
           </div>
           <button onClick={() => setSubmitted(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-300 shrink-0">
@@ -2028,7 +2081,7 @@ export default function LeaveRequestsPage() {
       }
 
       {/* Pending approvals — manager / depot_manager only */}
-      {(isDepotAdmin || user?.role === 'manager') && pending.length > 0 && (
+      {(isDepotAdmin || isHrApprover || user?.role === 'manager') && pending.length > 0 && (
         <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-amber-100 bg-amber-50 flex items-center gap-2">
             <Bell className="w-4 h-4 text-amber-500" />
@@ -2062,8 +2115,8 @@ export default function LeaveRequestsPage() {
                     className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-all">Reject</button>
                   {/* Depot/admin: pending → Approve directly (full approve) */}
                   {r.status === 'pending' && isDepotAdmin && (
-                    <button onClick={() => handleApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
+                    <button onClick={() => handleManagerApprove(r.id)}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Manager Approve</button>
                   )}
                   {/* Regular manager: pending → Approve (manager step) */}
                   {r.status === 'pending' && !isDepotAdmin && (
@@ -2071,9 +2124,13 @@ export default function LeaveRequestsPage() {
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
                   )}
                   {/* Depot/admin: manager_approved → Final Approve */}
-                  {r.status === 'manager_approved' && isDepotAdmin && (
+                  {r.status === 'manager_approved' && isHrApprover && (
+                    <button onClick={() => handleHrApprove(r.id)}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-all">HR Approve</button>
+                  )}
+                  {r.status === 'hr_approved' && isDepotAdmin && (
                     <button onClick={() => handleApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Final Approve</button>
                   )}
                 </div>
               </div>
@@ -2085,7 +2142,7 @@ export default function LeaveRequestsPage() {
       {/* ═══ Active Requests — always visible (small count) ═══ */}
       {(() => {
         const active = requests.filter(r =>
-          ['pending', 'manager_approved'].includes(r.status) ||
+          ['pending', 'manager_approved', 'hr_approved'].includes(r.status) ||
           (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
         )
         if (active.length === 0) return null
@@ -2261,6 +2318,7 @@ export default function LeaveRequestsPage() {
           req={viewReq}
           onClose={() => setViewReq(null)}
           onManagerApprove={handleManagerApprove}
+          onHrApprove={handleHrApprove}
           onApprove={handleApprove}
           onReject={(id) => { setRejectModal({ id }); setViewReq(null) }}
           onReschedule={(id) => { setRescheduleModal({ id }); setViewReq(null) }}

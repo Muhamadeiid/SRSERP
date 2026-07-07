@@ -29,7 +29,7 @@ class LeaveDeductionService
             foreach ($requests as $leaveRequest) {
                 $balance = LeaveBalance::firstOrCreate(
                     ['employee_id' => $leaveRequest->employee_id],
-                    ['annual' => 14, 'casual' => 7, 'sick' => 90, 'early' => 0]
+                    ['annual' => 21, 'casual' => 7, 'sick' => 90, 'early' => 0]
                 );
 
                 if ($balance->deduct($leaveRequest->leave_type, (float) $leaveRequest->days)) {

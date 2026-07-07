@@ -56,11 +56,11 @@ class LeaveBalanceController extends Controller
         return response()->json(['success' => true, 'data' => $this->enriched($balance)]);
     }
 
-    // PUT /employees/{employee}/leave-balance  (admin/depot_manager only)
+    // PUT /employees/{employee}/leave-balance  (HR/admin/depot_manager only)
     public function update(Request $request, Employee $employee): JsonResponse
     {
         $user = auth()->user();
-        if (!in_array($user->role, ['admin', 'depot_manager'])) {
+        if (!in_array($user->role, ['admin', 'depot_manager', 'hr'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -71,10 +71,23 @@ class LeaveBalanceController extends Controller
             'early'  => 'nullable|numeric|min:0|max:365',
         ]);
 
-        $balance = LeaveBalance::updateOrCreate(
-            ['employee_id' => $employee->id],
-            array_filter($v, fn($val) => $val !== null)
-        );
+        $balance = LeaveBalance::firstOrNew(['employee_id' => $employee->id]);
+        foreach (['annual', 'casual', 'sick', 'early'] as $type) {
+            if (!array_key_exists($type, $v) || $v[$type] === null) {
+                continue;
+            }
+
+            $oldTotal = (float) ($balance->{$type} ?? $v[$type]);
+            $oldRemaining = $balance->{$type . '_remaining'};
+            $newTotal = (float) $v[$type];
+
+            $balance->{$type} = $newTotal;
+            if ($oldRemaining !== null) {
+                $used = max(0, $oldTotal - (float) $oldRemaining);
+                $balance->{$type . '_remaining'} = max(0, $newTotal - $used);
+            }
+        }
+        $balance->save();
 
         return response()->json(['success' => true, 'data' => $this->enriched($balance)]);
     }

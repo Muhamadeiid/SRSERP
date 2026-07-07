@@ -299,7 +299,7 @@ export async function generateLRF(d) {
     employee:  d.employee_name || '',
     alternate: d.alternate_employee_name || '',
     direct:    managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || ''),
-    hr:        HR_OFFICER_FALLBACK,
+    hr:        d.hr_approver?.name || d.hr_name || HR_OFFICER_FALLBACK,
     depot:     depotManagerNameFor(d),
   }
 

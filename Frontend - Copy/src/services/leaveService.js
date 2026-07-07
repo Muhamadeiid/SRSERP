@@ -29,6 +29,7 @@ export const getLeaveRequests  = (params = {}) => {
 export const getCalendarLeaves = () => request('/leave-requests/calendar')
 export const createLeaveRequest = (data)     => request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
 export const managerApproveLeave = (id)          => request(`/leave-requests/${id}/manager-approve`, { method: 'POST' })
+export const hrApproveLeave      = (id)          => request(`/leave-requests/${id}/hr-approve`,      { method: 'POST' })
 export const approveLeave        = (id)          => request(`/leave-requests/${id}/approve`,         { method: 'POST' })
 export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })

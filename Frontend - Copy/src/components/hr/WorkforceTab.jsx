@@ -354,6 +354,22 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
               <div className="flex items-center gap-2 text-xs text-neutral-400"><Loader2 className="w-3 h-3 animate-spin" /> Loading…</div>
             ) : balEdit ? (
               <div className="space-y-2">
+                <div className="flex gap-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setBalForm(f => ({ ...f, annual: 15, casual: Math.min(Number(f.casual ?? 7), 7) }))}
+                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                  >
+                    First year 15d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBalForm(f => ({ ...f, annual: 21, casual: 7 }))}
+                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-neutral-50 text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                  >
+                    Standard 21/7
+                  </button>
+                </div>
                 {[['annual','Annual',21],['casual','Casual (sub-limit)',7],['sick','Sick',90],['early','Early Leave',0]].map(([k, label, def]) => (
                   <div key={k} className="flex items-center justify-between">
                     <span className="text-xs text-secondary-700 w-36">{label}</span>

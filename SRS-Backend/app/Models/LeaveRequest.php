@@ -24,6 +24,8 @@ class LeaveRequest extends Model
         'rescheduled_at', 'rescheduled_by', 'reschedule_reason',
         // Manager approval
         'manager_approved_by', 'manager_approved_at',
+        // HR approval
+        'hr_approved_by', 'hr_approved_at',
         // Signatures
         'manager_signature', 'hr_signature', 'depot_signature',
     ];
@@ -35,6 +37,8 @@ class LeaveRequest extends Model
         'end_date'            => 'date',
         'ot_date'             => 'date',
         'approved_at'         => 'datetime',
+        'hr_approved_at'      => 'datetime',
+        'manager_approved_at' => 'datetime',
         'balance_deducted_at' => 'datetime',
         'cancelled_at'        => 'datetime',
         'available_balance'   => 'decimal:2',
@@ -45,6 +49,7 @@ class LeaveRequest extends Model
     public function user()           { return $this->belongsTo(User::class); }
     public function employee()       { return $this->belongsTo(Employee::class); }
     public function approver()       { return $this->belongsTo(User::class, 'approved_by'); }
+    public function hrApprover()     { return $this->belongsTo(User::class, 'hr_approved_by'); }
     public function canceller()      { return $this->belongsTo(User::class, 'cancelled_by'); }
     public function managerApprover(){ return $this->belongsTo(User::class, 'manager_approved_by'); }
     public function rescheduler()    { return $this->belongsTo(User::class, 'rescheduled_by'); }

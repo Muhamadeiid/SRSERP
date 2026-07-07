@@ -102,11 +102,11 @@ async function enrichOTRData(raw) {
   return {
     ...data,
     direct_manager_name: data.direct_manager_name || directManager?.name || '',
-    manager_signature: ['manager_approved', 'approved'].includes(data.status)
+    manager_signature: ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
       ? (data.manager_signature || directManager?.e_signature || null)
       : null,
     hr_name: hrEmployee?.name || data.hr_name,
-    hr_signature: data.status === 'approved'
+    hr_signature: ['hr_approved', 'approved'].includes(data.status)
       ? (data.hr_signature || hrEmployee?.e_signature || null)
       : null,
     depot_manager_name: depotEmployee?.name || data.depot_manager_name,
@@ -120,6 +120,7 @@ function statusLabel(status) {
   const labels = {
     pending: 'Pending',
     manager_approved: 'Manager Approved',
+    hr_approved: 'HR Approved',
     approved: 'Approved',
     rejected: 'Rejected',
     cancelled: 'Cancelled',
@@ -557,7 +558,7 @@ export async function generateOTR(d) {
   }
 
   const row9  = sigRow('Direct Manager Signature', 'توقيع مدير المباشر', data.manager_signature ?? null, data.manager_approved_at ? fmtDate(data.manager_approved_at) : '')
-  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', data.hr_signature ?? null, data.approved_at ? fmtDate(data.approved_at) : '')
+  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', data.hr_signature ?? null, data.hr_approved_at ? fmtDate(data.hr_approved_at) : '')
   const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', data.depot_signature ?? null, data.approved_at ? fmtDate(data.approved_at) : '')
 
   const mainTable = new Table({
