@@ -128,6 +128,18 @@ class ITAssetController extends Controller
             'notes'             => 'nullable|string|max:1000',
         ]);
 
+        $activeHolder = \App\Models\EmployeeAsset::where('it_asset_id', $itAsset->id)
+            ->where('status', 'Active')
+            ->with('employee:id,name')
+            ->first();
+
+        if ($activeHolder) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This IT asset is already assigned to ' . ($activeHolder->employee?->name ?? 'another employee'),
+            ], 422);
+        }
+
         // Default the source to whichever issuing_source has key='it'.
         $sourceId = $data['issuing_source_id']
             ?? \App\Models\IssuingSource::where('key', 'it')->value('id');

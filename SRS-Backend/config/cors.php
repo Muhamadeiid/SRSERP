@@ -19,25 +19,14 @@ return [
 
     'allowed_methods' => ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://10.0.10.59:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5174',
-        'https://*.vercel.app',
-        'https://*.onrender.com',
-        'https://*.ngrok-free.dev',
-        'https://*.ngrok-free.app',
-    ],
+    'allowed_origins' => array_filter(array_map('trim', explode(',', env(
+        'FRONTEND_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5175,http://127.0.0.1:5175'
+    )))),
 
-    'allowed_origins_patterns' => [
-        '#^https://.*\.vercel\.app$#',
-        '#^https://.*\.onrender\.com$#',
-        '#^https://.*\.ngrok-free\.(dev|app)$#',
-    ],
+    'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'ngrok-skip-browser-warning'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
 
     'exposed_headers' => [],
 

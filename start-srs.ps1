@@ -1,48 +1,71 @@
-Write-Host "=== SRS ERP Startup ===" -ForegroundColor Cyan
-Write-Host "    Backend: http://localhost:8000" -ForegroundColor Gray
-Write-Host "    Frontend: http://localhost:5173" -ForegroundColor Gray
-Write-Host ""
+param(
+    [string]$HostIp = "0.0.0.0",
+    [int]$ApiPort = 8000,
+    [int]$FrontendPort = 5175
+)
 
-# 1. Start MySQL
-Write-Host "[1/3] Starting MySQL..." -ForegroundColor Yellow
-$mysqlRunning = (Get-NetTCPConnection -LocalPort 3306 -ErrorAction SilentlyContinue)
-if (-not $mysqlRunning) {
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c C:\xampp\mysql_start.bat" -WindowStyle Hidden
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$BackendDir = Join-Path $Root "SRS-Backend"
+$FrontendDir = Join-Path $Root "Frontend - Copy"
+$PhpExe = "C:\xampp\php\php.exe"
+$MysqlStart = "C:\xampp\mysql_start.bat"
+$MysqlAdmin = "C:\xampp\mysql\bin\mysqladmin.exe"
+$NpmCmd = "C:\Program Files\nodejs\npm.cmd"
+
+function Get-LanIp {
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.IPAddress -notlike "127.*" -and
+            $_.IPAddress -notlike "169.254.*" -and
+            $_.PrefixOrigin -ne "WellKnown"
+        } |
+        Select-Object -First 1 -ExpandProperty IPAddress
+    if ($ip) { return $ip }
+    return "SERVER-IP"
+}
+
+Write-Host "=== SRS ERP LAN Startup ===" -ForegroundColor Cyan
+
+Write-Host "[1/4] Starting MySQL..." -ForegroundColor Yellow
+if (-not (Get-NetTCPConnection -LocalPort 3306 -ErrorAction SilentlyContinue)) {
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$MysqlStart`"" -WindowStyle Hidden
     Start-Sleep -Seconds 4
 }
-$mysqlStatus = & "C:\xampp\mysql\bin\mysqladmin.exe" -u root status 2>&1
-if ($mysqlStatus -match "Uptime") {
-    Write-Host "      MySQL running." -ForegroundColor Green
-} else {
-    Write-Host "      MySQL may not be running -- continuing anyway." -ForegroundColor Yellow
+if (Test-Path $MysqlAdmin) {
+    $mysqlStatus = & $MysqlAdmin -u root status 2>&1
+    if ($mysqlStatus -match "Uptime") {
+        Write-Host "      MySQL running." -ForegroundColor Green
+    } else {
+        Write-Host "      MySQL did not confirm status. Check XAMPP if login fails." -ForegroundColor Yellow
+    }
 }
 
-# 2. Start Laravel backend
-Write-Host "[2/3] Starting Laravel backend on port 8000..." -ForegroundColor Yellow
-$laravelRunning = (Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue)
-if (-not $laravelRunning) {
-    Start-Process -FilePath "C:\xampp\php\php.exe" `
-        -ArgumentList "artisan", "serve", "--host=0.0.0.0", "--port=8000" `
-        -WorkingDirectory "C:\Users\elash\srserp\SRS-Backend" `
+Write-Host "[2/4] Clearing Laravel config cache..." -ForegroundColor Yellow
+& $PhpExe (Join-Path $BackendDir "artisan") optimize:clear | Out-Null
+
+Write-Host "[3/4] Starting Laravel API on port $ApiPort..." -ForegroundColor Yellow
+if (-not (Get-NetTCPConnection -LocalPort $ApiPort -ErrorAction SilentlyContinue)) {
+    Start-Process -FilePath $PhpExe `
+        -ArgumentList "artisan", "serve", "--host=$HostIp", "--port=$ApiPort" `
+        -WorkingDirectory $BackendDir `
         -WindowStyle Hidden
     Start-Sleep -Seconds 3
 }
-Write-Host "      Laravel running on port 8000." -ForegroundColor Green
 
-# 3. Start Frontend dev server
-Write-Host "[3/3] Starting Frontend dev server on port 5173..." -ForegroundColor Yellow
-$frontendRunning = (Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue)
-if (-not $frontendRunning) {
-    Start-Process -FilePath "cmd.exe" `
-        -ArgumentList "/c npm run dev" `
-        -WorkingDirectory "C:\Users\elash\srserp\Frontend - Copy" `
-        -WindowStyle Normal
+Write-Host "[4/4] Starting Frontend on port $FrontendPort..." -ForegroundColor Yellow
+if (-not (Get-NetTCPConnection -LocalPort $FrontendPort -ErrorAction SilentlyContinue)) {
+    Start-Process -FilePath $NpmCmd `
+        -ArgumentList "run", "dev", "--", "--host", $HostIp, "--port", $FrontendPort `
+        -WorkingDirectory $FrontendDir `
+        -WindowStyle Hidden
     Start-Sleep -Seconds 3
 }
-Write-Host "      Frontend starting on port 5173." -ForegroundColor Green
 
+$lanIp = Get-LanIp
 Write-Host ""
-Write-Host "=== All done! ===" -ForegroundColor Cyan
-Write-Host "Site : http://localhost:5173" -ForegroundColor White
-Write-Host "API  : http://localhost:8000/api" -ForegroundColor White
+Write-Host "=== Ready ===" -ForegroundColor Cyan
+Write-Host "On this server : http://localhost:$FrontendPort/login" -ForegroundColor White
+Write-Host "From LAN PCs   : http://$lanIp`:$FrontendPort/login" -ForegroundColor White
+Write-Host "API            : http://$lanIp`:$ApiPort/api" -ForegroundColor White
 Write-Host ""
+Write-Host "If other PCs cannot open it, allow ports $ApiPort and $FrontendPort in Windows Firewall." -ForegroundColor Yellow

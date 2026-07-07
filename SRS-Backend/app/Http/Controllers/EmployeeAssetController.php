@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\EmployeeAsset;
+use App\Models\ITAsset;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,6 +70,21 @@ class EmployeeAssetController extends Controller
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
         $data = $validator->validated();
+
+        if (!empty($data['it_asset_id'])) {
+            $activeHolder = EmployeeAsset::where('it_asset_id', $data['it_asset_id'])
+                ->where('status', 'Active')
+                ->with('employee:id,name')
+                ->first();
+
+            if ($activeHolder) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This IT asset is already assigned to ' . ($activeHolder->employee?->name ?? 'another employee'),
+                ], 422);
+            }
+        }
+
         // Keep the legacy enum in sync with the source label so legacy readers
         // (old clearance form, etc.) keep working.
         $source = \App\Models\IssuingSource::find($data['issuing_source_id']);
@@ -79,6 +95,12 @@ class EmployeeAssetController extends Controller
             'status'     => 'Active',
             'created_by' => auth()->id(),
         ]);
+
+        if (!empty($data['it_asset_id'])) {
+            ITAsset::whereKey($data['it_asset_id'])->update([
+                'user_name' => Employee::whereKey($data['employee_id'])->value('name'),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -112,6 +134,9 @@ class EmployeeAssetController extends Controller
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
         $asset->update($validator->validated());
+        if ($asset->status === 'Returned') {
+            $this->releaseLinkedItAsset($asset);
+        }
 
         return response()->json([
             'success' => true,
@@ -136,6 +161,8 @@ class EmployeeAssetController extends Controller
             'return_date' => $request->input('return_date', today()->toDateString()),
             'condition'   => $request->input('condition', $asset->condition),
         ]);
+
+        $this->releaseLinkedItAsset($asset);
 
         return response()->json([
             'success' => true,
@@ -192,5 +219,21 @@ class EmployeeAssetController extends Controller
                                 ->groupBy('issuing_department')
                                 ->get(),
         ]);
+    }
+
+    private function releaseLinkedItAsset(EmployeeAsset $asset): void
+    {
+        if (!$asset->it_asset_id) {
+            return;
+        }
+
+        $hasAnotherActiveHolder = EmployeeAsset::where('it_asset_id', $asset->it_asset_id)
+            ->where('id', '!=', $asset->id)
+            ->where('status', 'Active')
+            ->exists();
+
+        if (!$hasAnotherActiveHolder) {
+            ITAsset::whereKey($asset->it_asset_id)->update(['user_name' => null]);
+        }
     }
 }

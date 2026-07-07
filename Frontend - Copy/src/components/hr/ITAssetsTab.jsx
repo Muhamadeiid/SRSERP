@@ -297,7 +297,11 @@ export default function ITAssetsTab({ hideHeader = false }) {
                     {/* Account reg */}
                     <td className="px-2 py-2 font-mono text-neutral-500 truncate" title={rec.account_registration}>{rec.account_registration || '—'}</td>
                     {/* User */}
-                    <td className="px-2 py-2 text-neutral-700 truncate" title={rec.user_name}>{rec.user_name || '—'}</td>
+                    <td className="px-2 py-2 text-neutral-700 truncate" title={rec.user_name || 'Available'}>
+                      {rec.user_name
+                        ? rec.user_name
+                        : <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold">Available</span>}
+                    </td>
                     {/* Managing staff */}
                     <td className="px-2 py-2 text-neutral-700 truncate" title={rec.managing_staff}>{rec.managing_staff || '—'}</td>
                     {/* Frequency */}

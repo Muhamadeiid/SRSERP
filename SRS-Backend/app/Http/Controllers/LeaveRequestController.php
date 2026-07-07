@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\LeaveDeductionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class LeaveRequestController extends Controller
@@ -115,6 +116,7 @@ class LeaveRequestController extends Controller
             'job_title' => 'nullable|string|max:255',
             'department' => 'nullable|string|max:100',
             'department_label' => 'nullable|string|max:100',
+            'direct_manager_name' => 'nullable|string|max:255',
             'employee_id' => 'nullable|exists:employees,id',
             'leave_type' => 'required_if:type,lrf|nullable|in:annual,casual,sick,early',
             'paid' => 'nullable|boolean',
@@ -163,6 +165,28 @@ class LeaveRequestController extends Controller
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::find($data['employee_id']) : null;
+        if (
+            $data['type'] === 'lrf'
+            && $employee
+            && ($data['paid'] ?? true)
+            && in_array($data['leave_type'] ?? null, ['annual', 'casual', 'sick', 'early'], true)
+            && (float) ($data['days'] ?? 0) > 0
+            && !$this->hasAvailableLeaveBalance($employee->id, $data['leave_type'], (float) $data['days'])
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The employee does not have enough available leave balance for this request.',
+            ], 422);
+        }
+        if (empty($data['direct_manager_name']) && $employee?->direct_manager_id) {
+            $manager = Employee::with('user:id,role')->find($employee->direct_manager_id);
+            if ($manager?->user?->role !== 'depot_manager') {
+                $data['direct_manager_name'] = $manager?->name;
+            }
+        }
+        if (!Schema::hasColumn('leave_requests', 'direct_manager_name')) {
+            unset($data['direct_manager_name']);
+        }
         $data['tracking_no'] = $this->generateTrackingNo($data['type'], $employee);
         $data['request_date'] = $data['request_date'] ?? now()->toDateString();
 
@@ -510,5 +534,41 @@ class LeaveRequestController extends Controller
             ->max() + 1;
 
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days): bool
+    {
+        $balance = LeaveBalance::firstOrCreate(
+            ['employee_id' => $employeeId],
+            ['annual' => 21, 'casual' => 7, 'sick' => 90, 'early' => 0]
+        );
+
+        $reserved = LeaveRequest::query()
+            ->where('type', 'lrf')
+            ->where('employee_id', $employeeId)
+            ->whereNull('balance_deducted_at')
+            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved'])
+            ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
+            ->where('days', '>', 0)
+            ->where(function ($q) {
+                $q->where('paid', true)->orWhereNull('paid');
+            })
+            ->selectRaw('leave_type, SUM(days) as days')
+            ->groupBy('leave_type')
+            ->pluck('days', 'leave_type');
+
+        $annualLeft = $balance->getEffectiveRemaining('annual')
+            - (float) ($reserved['annual'] ?? 0)
+            - (float) ($reserved['casual'] ?? 0)
+            - (float) ($reserved['early'] ?? 0);
+        $casualLeft = $balance->getEffectiveRemaining('casual') - (float) ($reserved['casual'] ?? 0);
+        $sickLeft   = $balance->getEffectiveRemaining('sick') - (float) ($reserved['sick'] ?? 0);
+
+        return match ($type) {
+            'annual', 'early' => $annualLeft >= $days,
+            'casual' => $annualLeft >= $days && $casualLeft >= $days,
+            'sick' => $sickLeft >= $days,
+            default => true,
+        };
     }
 }

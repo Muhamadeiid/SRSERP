@@ -3,7 +3,7 @@ import { Search, UserCheck, X, Loader2,
          RefreshCw, Users, ShieldCheck, Plus, AlertCircle,
          ChevronRight, ChevronDown } from 'lucide-react'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api'
+const BASE = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('srs_token')
   const res = await fetch(`${BASE}${path}`, {
@@ -15,6 +15,30 @@ const api = async (path, opts = {}) => {
 }
 
 const initials = name => name?.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase() ?? '?'
+
+const hasValidManager = (emp, all) => Boolean(emp.direct_manager_id && all.some(e => e.id === emp.direct_manager_id))
+const isDepotManager = emp => emp?.user_role === 'depot_manager'
+const wouldCreateCycle = (employeeId, managerId, all) => {
+  let currentId = managerId
+  const visited = new Set()
+  while (currentId && !visited.has(currentId)) {
+    if (currentId === employeeId) return true
+    visited.add(currentId)
+    currentId = all.find(e => e.id === currentId)?.direct_manager_id
+  }
+  return false
+}
+const reportsFor = (emp, all) => {
+  const direct = all.filter(e => e.direct_manager_id === emp.id)
+  if (!isDepotManager(emp)) return direct
+
+  const virtualDepotReports = all.filter(e =>
+    e.id !== emp.id &&
+    !hasValidManager(e, all) &&
+    !direct.some(r => r.id === e.id)
+  )
+  return [...direct, ...virtualDepotReports]
+}
 
 const DEPT_COLOR = {
   cm:              'bg-primary/10 text-primary',
@@ -42,7 +66,7 @@ function OrgNode({ emp, all, onchange, onSelectMgr, depth = 0, colorIdx = 0 }) {
   const [saving,  setSaving]  = useState(false)
   const inputRef = useRef()
 
-  const reports    = all.filter(e => e.direct_manager_id === emp.id)
+  const reports    = reportsFor(emp, all)
   const hasReports = reports.length > 0
   const isRoot     = depth === 0
   const deptKey    = emp.department?.toLowerCase()
@@ -51,6 +75,7 @@ function OrgNode({ emp, all, onchange, onSelectMgr, depth = 0, colorIdx = 0 }) {
 
   const filtered = all.filter(e =>
     e.id !== emp.id &&
+    !wouldCreateCycle(emp.id, e.id, all) &&
     (!search.trim() || e.name.toLowerCase().includes(search.toLowerCase()))
   ).slice(0, 8)
 
@@ -202,13 +227,14 @@ function TeamPanel({ manager, all, onchange, onClose }) {
 
   if (!manager) return null
 
-  const reports = all.filter(e => e.direct_manager_id === manager.id)
+  const reports = reportsFor(manager, all)
   const avatarBg = AVATAR_COLORS[manager.id % AVATAR_COLORS.length]
 
   const searchResults = search.trim()
     ? all.filter(e =>
         e.id !== manager.id &&
         e.direct_manager_id !== manager.id &&
+        !wouldCreateCycle(e.id, manager.id, all) &&
         e.name.toLowerCase().includes(search.toLowerCase())
       ).slice(0, 10)
     : []
@@ -350,7 +376,7 @@ function TeamPanel({ manager, all, onchange, onClose }) {
           ) : (
             <div className="divide-y divide-neutral-50">
               {reports.map(emp => {
-                const subReports = all.filter(e => e.direct_manager_id === emp.id)
+                const subReports = reportsFor(emp, all)
                 return (
                   <div key={emp.id} className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors group/row">
                     <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-xs font-black shrink-0">
@@ -555,7 +581,7 @@ export default function OrgChartTab() {
   useEffect(() => { load() }, [load])
 
   const ids       = new Set(employees.map(e => e.id))
-  const allRoots  = employees.filter(e => !e.direct_manager_id || !ids.has(e.direct_manager_id))
+  const allRoots  = employees.filter(e => !hasValidManager(e, employees))
 
   const ROLE_RANK = { depot_manager: 0, admin: 1, manager: 2 }
   const depotManager = employees.find(e => e.user_role === 'depot_manager')
@@ -564,11 +590,11 @@ export default function OrgChartTab() {
     : allRoots
         .filter(e => e.user_role in ROLE_RANK || employees.some(r => r.direct_manager_id === e.id))
         .sort((a, b) => (ROLE_RANK[a.user_role] ?? 9) - (ROLE_RANK[b.user_role] ?? 9))
-  const unmanaged = allRoots.filter(e =>
-    !(e.user_role in ROLE_RANK) && !employees.some(r => r.direct_manager_id === e.id)
+  const unmanaged = depotManager ? [] : allRoots.filter(e =>
+    !(e.user_role in ROLE_RANK) && reportsFor(e, employees).length === 0
   )
 
-  const withManager    = employees.filter(e => e.direct_manager_id).length
+  const withManager    = employees.filter(e => e.direct_manager_id || (depotManager && e.id !== depotManager.id)).length
   const uniqueManagers = new Set(employees.map(e => e.direct_manager_id).filter(Boolean)).size
 
   const filteredSearch = search.trim()
@@ -625,6 +651,7 @@ export default function OrgChartTab() {
               <p className="text-sm text-neutral-400 text-center py-4">No results</p>
             ) : filteredSearch.map(emp => {
               const mgr = employees.find(e => e.id === emp.direct_manager_id)
+              const displayMgr = mgr || (depotManager && emp.id !== depotManager.id ? depotManager : null)
               return (
                 <div key={emp.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-black shrink-0">{initials(emp.name)}</div>
@@ -632,8 +659,8 @@ export default function OrgChartTab() {
                     <p className="font-semibold text-sm text-secondary-700 truncate">{emp.name}</p>
                     <p className="text-[11px] text-neutral-400">{emp.position}</p>
                   </div>
-                  {mgr ? (
-                    <span className="flex items-center gap-1 text-[11px] text-green-600 font-semibold shrink-0"><UserCheck className="w-3 h-3" />{mgr.name}</span>
+                  {displayMgr ? (
+                    <span className="flex items-center gap-1 text-[11px] text-green-600 font-semibold shrink-0"><UserCheck className="w-3 h-3" />{displayMgr.name}</span>
                   ) : (
                     <span className="text-[11px] text-neutral-300 italic shrink-0">No manager</span>
                   )}

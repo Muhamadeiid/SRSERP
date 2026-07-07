@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSelector } from 'react-redux'
-import { ChevronLeft, ChevronRight, Loader2, Calendar, Users, Umbrella } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Calendar, Users, Umbrella, Activity, AlertTriangle } from 'lucide-react'
 import { getCalendarLeaves } from '../services/leaveService'
 
 // ── helpers ───────────────────────────────────────────────────
@@ -20,13 +20,25 @@ function getColor(leaveType) {
   return LEAVE_COLORS[leaveType] ?? LEAVE_COLORS.default
 }
 
+function toDateKey(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function parseDateKey(value) {
+  const [y, m, d] = String(value).split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
 // Returns array of date strings YYYY-MM-DD between start and end inclusive
 function dateRange(start, end) {
   const dates = []
-  const cur = new Date(start)
-  const last = new Date(end)
+  const cur = parseDateKey(start)
+  const last = parseDateKey(end)
   while (cur <= last) {
-    dates.push(cur.toISOString().slice(0, 10))
+    dates.push(toDateKey(cur))
     cur.setDate(cur.getDate() + 1)
   }
   return dates
@@ -112,7 +124,7 @@ export default function CalendarPage() {
   // Calendar grid
   const firstDay = new Date(year, month, 1).getDay()  // 0=Sun
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayStr = today.toISOString().slice(0, 10)
+  const todayStr = toDateKey(today)
 
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y-1) } else setMonth(m => m-1) }
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y+1) } else setMonth(m => m+1) }
@@ -124,6 +136,27 @@ export default function CalendarPage() {
   // Stats for current month (for reference)
   const monthStr = `${year}-${String(month+1).padStart(2,'0')}`
   const monthLeaves = leaves.filter(l => l.start_date?.startsWith(monthStr) || l.end_date?.startsWith(monthStr))
+  const sickSummary = Object.values(
+    leaves
+      .filter(l => l.leave_type === 'sick')
+      .reduce((acc, l) => {
+        const key = l.employee_name || `Employee #${l.employee_id ?? l.id}`
+        if (!acc[key]) {
+          acc[key] = {
+            employee_name: key,
+            requests: 0,
+            days: 0,
+            last_date: l.end_date || l.start_date,
+          }
+        }
+        acc[key].requests += 1
+        acc[key].days += Number(l.days || 0)
+        const last = l.end_date || l.start_date
+        if (last && (!acc[key].last_date || last > acc[key].last_date)) acc[key].last_date = last
+        return acc
+      }, {})
+  ).sort((a, b) => b.requests - a.requests || b.days - a.days || String(b.last_date).localeCompare(String(a.last_date)))
+  const sickWatchlist = sickSummary.filter(s => s.requests >= 3 || s.days >= 3)
 
   return (
     <div className="p-6 space-y-6">
@@ -243,6 +276,63 @@ export default function CalendarPage() {
             )
           })}
         </div>
+      </div>
+
+      {/* Sick leave watchlist */}
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center">
+              <Activity className="w-4 h-4 text-red-500" />
+            </div>
+            <div>
+              <p className="text-base font-extrabold text-secondary-700">Sick Leave Watchlist</p>
+              <p className="text-xs text-neutral-400">Employees with repeated approved sick leave</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-red-50 text-red-600">
+            {sickWatchlist.length} flagged
+          </span>
+        </div>
+        {sickSummary.length === 0 ? (
+          <div className="px-6 py-8 text-center text-sm text-neutral-400">No approved sick leaves yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-neutral-50 text-[11px] uppercase tracking-wide text-neutral-400">
+                <tr>
+                  <th className="text-left px-6 py-3 font-bold">Employee</th>
+                  <th className="text-left px-4 py-3 font-bold">Sick Requests</th>
+                  <th className="text-left px-4 py-3 font-bold">Total Days</th>
+                  <th className="text-left px-4 py-3 font-bold">Last Sick Leave</th>
+                  <th className="text-left px-4 py-3 font-bold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-50">
+                {sickSummary.slice(0, 10).map(row => {
+                  const flagged = row.requests >= 3 || row.days >= 3
+                  return (
+                    <tr key={row.employee_name}>
+                      <td className="px-6 py-3 font-semibold text-secondary-700">{row.employee_name}</td>
+                      <td className="px-4 py-3 text-neutral-600">{row.requests}</td>
+                      <td className="px-4 py-3 text-neutral-600">{row.days}</td>
+                      <td className="px-4 py-3 text-neutral-500">{row.last_date || '-'}</td>
+                      <td className="px-4 py-3">
+                        {flagged ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">
+                            <AlertTriangle className="w-3 h-3" /> Review
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-bold text-neutral-500">Normal</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Legend */}

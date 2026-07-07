@@ -41,7 +41,7 @@ const ALL_NAV = [
   { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              hrOnly: true },
   { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    hrOnly: true },
   { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  hrOnly: true },
-  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,       roles: ['admin','depot_manager','manager'] },
+  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,       roles: ['admin','depot_manager','manager','hr'] },
   { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   hrOnly: true },
 ]
 

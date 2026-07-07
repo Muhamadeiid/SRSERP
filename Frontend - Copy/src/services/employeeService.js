@@ -5,7 +5,7 @@
 
 // src/services/employeeService.js
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
@@ -100,6 +100,13 @@ export function bulkUpdateSaturdayGroup(employeeIds, saturdayGroup) {
   return request('/employees/bulk-saturday-group', {
     method: 'POST',
     body: JSON.stringify({ employee_ids: employeeIds, saturday_group: saturdayGroup }),
+  })
+}
+
+export function bulkUpdateDirectManager(employeeIds, directManagerId) {
+  return request('/employees/bulk-direct-manager', {
+    method: 'POST',
+    body: JSON.stringify({ employee_ids: employeeIds, direct_manager_id: directManagerId }),
   })
 }
 

@@ -41,6 +41,7 @@ async function loadLogoBytes() {
 
 function normalizeOTRData(raw) {
   const employee = raw?.employee || raw?.employee_data || {}
+  const directManager = employee?.direct_manager || employee?.directManager || null
   const department = raw?.department_label || raw?.department || employee.department_label || employee.department || ''
 
   return {
@@ -59,7 +60,7 @@ function normalizeOTRData(raw) {
     manager_signature: raw?.manager_signature || employee?.manager_signature || null,
     hr_signature: raw?.hr_signature || null,
     depot_signature: raw?.depot_signature || null,
-    direct_manager_name: raw?.direct_manager_name || employee?.direct_manager?.name || raw?.manager_approver?.name || raw?.manager_name || '',
+    direct_manager_name: raw?.direct_manager_name || directManager?.name || raw?.manager_approver?.name || raw?.managerApprover?.name || raw?.manager_name || '',
     hr_name: raw?.hr_name || raw?.hr_approver?.name || 'Hazem Khaled',
     depot_manager_name: raw?.depot_manager_name || raw?.approver?.name || 'Mohamed Awaad',
     manager_approved_at: raw?.manager_approved_at || '',
@@ -97,13 +98,13 @@ async function enrichOTRData(raw) {
   const hrEmployee = firstByPosition((position) => position.includes('hr'))
   const depotEmployee = firstByPosition((position) => position.includes('depot manager'))
   const workforceEmployee = employees.find((emp) => emp?.id === (employee?.id || raw?.employee_id)) || employee
-  const directManager = employees.find((emp) => emp?.id === workforceEmployee?.direct_manager_id) || null
+  const directManager = workforceEmployee?.direct_manager || workforceEmployee?.directManager || employees.find((emp) => emp?.id === workforceEmployee?.direct_manager_id) || null
 
   return {
     ...data,
     direct_manager_name: data.direct_manager_name || directManager?.name || '',
     manager_signature: ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
-      ? (data.manager_signature || directManager?.e_signature || null)
+      ? (data.manager_signature || raw?.manager_approver?.e_signature || raw?.managerApprover?.e_signature || directManager?.e_signature || null)
       : null,
     hr_name: hrEmployee?.name || data.hr_name,
     hr_signature: ['hr_approved', 'approved'].includes(data.status)
@@ -127,6 +128,26 @@ function statusLabel(status) {
     rescheduled: 'Rescheduled',
   }
   return labels[status] || status || ''
+}
+
+const OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
+
+function checkboxPara(label, checked) {
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 0, before: 0 },
+    children: [
+      new TextRun({ text: checked ? '☒ ' : '☐ ', size: 20, font: 'Arial' }),
+      new TextRun({ text: label, bold: true, size: 18, font: 'Arial' }),
+    ],
+  })
+}
+
+function overtimeResultParagraphs(value) {
+  if (OTR_RESULT_OPTIONS.includes(value)) {
+    return OTR_RESULT_OPTIONS.map(option => checkboxPara(option, value === option))
+  }
+  return [para(value || '', { size: 18, align: AlignmentType.CENTER })]
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -488,14 +509,14 @@ export async function generateOTR(d) {
     height: { value: 1800, rule: HeightRule.ATLEAST },
     children: [
       cell(
-        [para(data.overtime_results || '', { size: 18, align: AlignmentType.CENTER })],
+        overtimeResultParagraphs(data.overtime_results || ''),
         { width: CONTENT_W, colspan: 4, vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
 
   // Signature row: label cell (colspan 2) | signature image cell | date cell
-  const sigRow = (enLabel, arLabel, sigBase64, dateValue, heightVal = 1000) => {
+  const sigRow = (enLabel, arLabel, sigBase64, dateValue, signerName = '', heightVal = 1000) => {
     const sigChildren = []
     if (sigBase64) {
       try {
@@ -503,11 +524,14 @@ export async function generateOTR(d) {
           spacing: { after: 0, before: 0 },
           children: [new ImageRun({ data: base64ToBytes(sigBase64), transformation: { width: 120, height: 50 } })],
         }))
+        if (signerName) {
+          sigChildren.push(para(signerName, { size: 16, italics: true, color: '666666' }))
+        }
       } catch (_) {
-        sigChildren.push(para('', { size: 18 }))
+        sigChildren.push(para(signerName || '', { size: 18, italics: Boolean(signerName), color: signerName ? '666666' : '000000' }))
       }
     } else {
-      sigChildren.push(para('', { size: 18 }))
+      sigChildren.push(para(signerName || '', { size: 18, italics: Boolean(signerName), color: signerName ? '666666' : '000000' }))
     }
 
     return new TableRow({
@@ -557,9 +581,9 @@ export async function generateOTR(d) {
     })
   }
 
-  const row9  = sigRow('Direct Manager Signature', 'توقيع مدير المباشر', data.manager_signature ?? null, data.manager_approved_at ? fmtDate(data.manager_approved_at) : '')
-  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', data.hr_signature ?? null, data.hr_approved_at ? fmtDate(data.hr_approved_at) : '')
-  const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', data.depot_signature ?? null, data.approved_at ? fmtDate(data.approved_at) : '')
+  const row9  = sigRow('Direct Manager Signature', 'توقيع مدير المباشر', data.manager_signature ?? null, data.manager_approved_at ? fmtDate(data.manager_approved_at) : '', data.direct_manager_name || '')
+  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', data.hr_signature ?? null, data.hr_approved_at ? fmtDate(data.hr_approved_at) : '', data.hr_name || '')
+  const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', data.depot_signature ?? null, data.approved_at ? fmtDate(data.approved_at) : '', data.depot_manager_name || '')
 
   const mainTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },

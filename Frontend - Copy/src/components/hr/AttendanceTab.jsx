@@ -19,7 +19,6 @@ const ATTENDANCE_POLICY_DEFAULTS = {
   attendance_regular_expected_hours: 9,
   attendance_intervention_expected_hours: 9,
   attendance_regular_weekly_off_day: 5,
-  attendance_intervention_default_off_day: 5,
   attendance_saturday_rotation_enabled: '1',
   attendance_group_a_off_even_week: '1',
   attendance_absent_deduction_minutes: 540,
@@ -67,12 +66,22 @@ const attendancePolicyTime = (policy, key) => {
   return value.length === 5 ? `${value}:00` : value
 }
 const policyTimeMin = (policy, key) => toMin(attendancePolicyTime(policy, key))
+const isInterventionEmployee = (employee) => {
+  const department = String(employee?.department ?? '').toLowerCase()
+  const label = String(employee?.department_label ?? '').toLowerCase()
+  return ['intervention', 'cm_intervention'].includes(department) || label.includes('intervention')
+}
+const hasWeeklyOffDay = (employee) =>
+  employee?.weekly_off_day !== null && employee?.weekly_off_day !== undefined && employee?.weekly_off_day !== ''
+const weeklyOffLabel = (employee) => hasWeeklyOffDay(employee)
+  ? DAYS[Number(employee.weekly_off_day)]
+  : 'Not set'
 
 const otTimes = (rec, employee, policy = ATTENDANCE_POLICY_DEFAULTS) => {
   if (!rec?.overtime_hours || rec.overtime_hours <= 0) return null
   if (!rec.check_out) return null
 
-  const isIntervention = (employee?.department ?? '').toLowerCase() === 'intervention'
+  const isIntervention = isInterventionEmployee(employee)
   const outMin = toMin(rec.check_out)
 
   let otStart
@@ -130,12 +139,11 @@ const STATUS_OPTIONS = ['present','late','shortage','absent','incomplete','wfh',
 function isWorkingDay(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!employee) return true
   const dow = dateObj.getDay() // 0=Sun…6=Sat
-  const isIntervention = (employee.department ?? '').toLowerCase() === 'intervention'
+  const isIntervention = isInterventionEmployee(employee)
 
   if (isIntervention) {
-    // weekly_off_day is 0-6; default to Friday (5) if not set
-    const offDay = employee.weekly_off_day ?? policyNumber(policy, 'attendance_intervention_default_off_day')
-    return dow !== offDay
+    if (!hasWeeklyOffDay(employee)) return true
+    return dow !== Number(employee.weekly_off_day)
   }
 
   // Regular employees
@@ -160,7 +168,8 @@ function isWorkingDay(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
 
 function dayOffLabel(employee, dow, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!employee) return 'Day Off'
-  const isIntervention = (employee.department ?? '').toLowerCase() === 'intervention'
+  const isIntervention = isInterventionEmployee(employee)
+  if (isIntervention && hasWeeklyOffDay(employee) && dow === Number(employee.weekly_off_day)) return `${DAYS[dow]} Off`
   if (!isIntervention && dow === policyNumber(policy, 'attendance_regular_weekly_off_day')) return `${DAYS[dow]} Off`
   if (!isIntervention && dow === 6) return 'Weekend'
   return 'Day Off'
@@ -498,7 +507,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
   const totalDedHrs = totalDedMin / 60
 
   // OT breakdown per row — total = dayRate + nightRate (floor, same as the rate columns)
-  const isIntervention = (employee?.department ?? '').toLowerCase() === 'intervention'
+  const isIntervention = isInterventionEmployee(employee)
   const getOT = rec => {
     if (!rec?.overtime_hours || rec.overtime_hours<=0 || !rec.check_out) return null
     const outMin = toMinP(rec.check_out)
@@ -1182,11 +1191,11 @@ export default function AttendanceTab() {
                 <InfoRow label="Over Time (hrs)"  value={totalOT} />
 
                 <SectionHeader>Schedule</SectionHeader>
-                {(employee.department ?? '').toLowerCase() === 'intervention' ? (
+                {isInterventionEmployee(employee) ? (
                   <>
                     <InfoRow label="Type"    value="Intervention" highlight />
                     <InfoRow label="Shift"   value={`Variable (${policyNumber(attendancePolicy, 'attendance_intervention_expected_hours')} hrs)`} />
-                    <InfoRow label="Day Off" value={DAYS[employee.weekly_off_day ?? policyNumber(attendancePolicy, 'attendance_intervention_default_off_day')]} />
+                    <InfoRow label="Day Off" value={weeklyOffLabel(employee)} highlight={hasWeeklyOffDay(employee)} />
                   </>
                 ) : (
                   <>

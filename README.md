@@ -1,95 +1,135 @@
-# SRS — HR & Operations Management System
+# SRS ERP - Offline LAN Deployment
 
-Internal HR and operations management system for Rotem SRS Egypt — Laravel API + React/Vite frontend.
+Internal HR and operations system for Rotem SRS Egypt.
 
-## Stack
+The project is designed to run inside the company network without internet publishing:
 
-| Layer | Tech |
-|---|---|
-| Backend | Laravel 10, PHP 8.2, MySQL 8 |
-| Frontend | React 19, Vite, TailwindCSS, Redux Toolkit |
-| Auth | Laravel Sanctum (Bearer tokens) |
+- Backend: Laravel 10 API
+- Frontend: React + Vite
+- Database: MySQL / MariaDB
+- Auth: Laravel Sanctum bearer tokens
 
-## Project Structure
+## Main Modules
 
-```
-SRS/
-├── SRS-Backend/        # Laravel API
-├── Frontend - Copy/    # React + Vite frontend
-├── deploy/             # Deployment templates (nginx, server setup)
-└── start_local.bat     # Local dev launcher (Windows)
-```
+- Workforce and employee records
+- Attendance upload and attendance sheet
+- Leave Requests (LRF)
+- Overtime Requests (OTR)
+- Disciplinary cases
+- Assets and Clearance
+- Org Chart and direct manager approvals
+- Calendar
+- Settings and master data
 
-## Features
+## Local/LAN Quick Start
 
-### Human Resources Module
-- **Workforce** management — full employee registry with documents, certifications, contracts
-- **Attendance** — biometric file upload, late/shortage tracking, overtime calculation, "On Leave" integration
-- **Leave Requests (LRF)** — annual / casual / sick / early leave with manager → depot → HR approval flow
-- **Overtime Requests (OTR)** — request, approval, DOCX/HTML print
-- **Disciplinary** — warning letters
-- **Assets & Clearance** — IT/HR asset register with clearance reports
-- **Org Chart**
-- **Calendar** — leave calendar overview
-- **Settings** — managers, employee assignment
+On the server machine:
 
-### Approval Flow
-```
-Pending → Manager Approved → Approved
-        ↳ Rejected
-        ↳ Cancelled (refunds balance if was deducted)
-        ↳ Rescheduled
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-company-lan.ps1
 ```
 
-Leave balance auto-deducts when `end_date` passes (lazy on each list query).
-Annual leave overflows into casual when exhausted.
+The script starts:
 
-### Notifications
-- Bell in HR header — real-time notifications, polled every 30s
-- Click a notification → navigate directly to the related request
+- MySQL from XAMPP
+- Laravel API on port `8000`
+- Frontend on port `5175`
 
-## Local Development
+Open on the server:
 
-### Prerequisites
-- PHP 8.2 with extensions: `mysql`, `mbstring`, `xml`, `curl`, `zip`, `bcmath`
-- Node.js 18+
-- MySQL 8 (or MariaDB 10.6+)
-- Composer 2
+```text
+http://localhost:5175/login
+```
 
-### Setup
-```bash
-# Backend
+Open from another PC on the same LAN:
+
+```text
+http://SERVER-IP:5175/login
+```
+
+Replace `SERVER-IP` with the IP address printed by the script.
+
+## Environment Files
+
+Backend:
+
+```text
+SRS-Backend/.env
+```
+
+Use `SRS-Backend/.env.lan.example` as a template.
+
+Frontend:
+
+```text
+Frontend - Copy/.env
+```
+
+Use `Frontend - Copy/.env.lan.example` as a template.
+
+Important values:
+
+```text
+APP_URL=http://SERVER-IP:8000
+FRONTEND_ORIGINS=http://SERVER-IP:5175,http://localhost:5175,http://127.0.0.1:5175
+VITE_API_URL=http://SERVER-IP:8000/api
+VITE_API_BASE=http://SERVER-IP:8000/api
+```
+
+## Database
+
+Default local database:
+
+```text
+DB_DATABASE=srs
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+Run migrations:
+
+```powershell
 cd SRS-Backend
-composer install
-cp .env.example .env
-php artisan key:generate
-php artisan migrate
-php artisan serve --host=127.0.0.1 --port=8000
-
-# Frontend
-cd "../Frontend - Copy"
-npm install
-npm run dev
+php artisan migrate --force
 ```
 
-Or just double-click `start_local.bat` on Windows.
+## Default Admin
 
-Open: http://localhost:5173
+Current local database admin:
 
-### Default Accounts (seeded)
-| Email | Password | Role |
-|---|---|---|
-| admin@srs.com | Admin@1234 | Admin |
-| awad@srs.com | Admin@1234 | Depot Manager |
-| hr@srs.com | Rotem001! | HR Staff |
-| eid@rotem.com | Rotem001! | Manager |
+```text
+Email: admin@srs.com
+Password: password
+```
 
-## Deployment
+Change this password before company-wide use.
 
-See `deploy/README.txt` for full server setup instructions.
+## Build Frontend for LAN
 
-Production stack: **Nginx + PHP-FPM + MySQL**.
+```bat
+deploy\build_frontend.bat
+```
 
-## License
+It asks for the server IP and creates:
 
-Proprietary — internal use only.
+```text
+Frontend - Copy/.env.production
+Frontend - Copy/dist
+```
+
+## Firewall
+
+Allow inbound access on the server for:
+
+```text
+8000 - Laravel API
+5175 - Frontend
+3306 - MySQL only if remote DB administration is needed
+```
+
+Do not expose these ports to the internet.
+
+## Removed Online Deployment Artifacts
+
+Vercel, Render, ngrok, and Cloudflare tunnel defaults were removed from runtime code.
+All fallback API URLs now point to the local API.

@@ -1,13 +1,13 @@
 /**
  * inventory.js — Centralized API layer for Inventory Control
- * Base URL pulled from .env: VITE_API_BASE=http://192.168.1.x/api
+ * Base URL pulled from .env: VITE_API_BASE=http://SERVER-IP:8000/api
  *
  * Usage:
  *   import api from "../api/inventory";
  *   const products = await api.products.list({ site: "SC-01" });
  */
 
-const BASE = import.meta.env.VITE_API_BASE ?? "https://srs-backend.onrender.com/api";
+const BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000/api";
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────
 async function request(method, path, body = null) {

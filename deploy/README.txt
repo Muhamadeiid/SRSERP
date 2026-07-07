@@ -1,66 +1,64 @@
-═══════════════════════════════════════════════════════════════
-  SRS — دليل النشر على السيرفر
-═══════════════════════════════════════════════════════════════
+SRS ERP - Company LAN Deployment
+================================
 
-─── البرامج المطلوبة على السيرفر ────────────────────────────
-  ✅ PHP 8.2      (+ extensions: mysql, mbstring, xml, curl, zip, bcmath)
-  ✅ MySQL 8.0    (أو MariaDB 10.6+)
-  ✅ Nginx        (أو Apache)
-  ✅ Composer 2
+This folder contains helper files for an offline/local company server setup.
+No Vercel, Render, ngrok, or public tunnel is required.
 
-  ⬇️  روابط التنزيل (Windows Server):
-  PHP:      https://windows.php.net/download/
-  MySQL:    https://dev.mysql.com/downloads/installer/
-  Nginx:    https://nginx.org/en/download.html
-  Composer: https://getcomposer.org/Composer-Setup.exe
+1. Backend env
+--------------
+Copy:
 
-─── الخطوات ─────────────────────────────────────────────────
+  deploy\backend.env.production
 
-  1. اشغّل build_frontend.bat
-     → هيسألك عن IP السيرفر
-     → هيعمل dist/ جاهز للنشر
+to:
 
-  2. انسخ الملفات للسيرفر:
-     Backend  → /var/www/srs/backend   (كل مجلد SRS-Backend)
-     Frontend → /var/www/srs/frontend  (مجلد dist/ بس)
+  SRS-Backend\.env
 
-  3. على السيرفر:
-     cp deploy/backend.env.production /var/www/srs/backend/.env
-     (غيّر YOUR_SERVER_IP و YOUR_DB_PASSWORD في الملف)
+Then replace:
 
-  4. شغّل على السيرفر:
-     cd /var/www/srs/backend
-     composer install --no-dev
-     php artisan migrate --force
-     php artisan config:cache
+  YOUR_SERVER_IP
 
-  5. ضع nginx.conf في /etc/nginx/sites-available/srs
-     (غيّر YOUR_SERVER_IP بالـ IP الحقيقي)
+with the real LAN IP address of the server.
 
-─── ليه الـ WiFi بيقطع؟ ─────────────────────────────────────
+Generate an app key if APP_KEY is empty:
 
-  المشكلة: php artisan serve --host=0.0.0.0
-  → بيبث على كل واجهات الشبكة
-  → مع VPN/ShadowCube بيعمل تعارض في الـ routing
-  → الراوتر بيتخبط ويقطع الشبكة
+  cd SRS-Backend
+  php artisan key:generate
 
-  الحل على السيرفر: استخدم Nginx + PHP-FPM
-  → Laravel بيشتغل على 127.0.0.1 فقط (داخلي)
-  → Nginx هو اللي بيتكلم مع الشبكة
-  → مفيش تعارض خالص ✅
+2. Frontend env/build
+---------------------
+Run:
 
-  الحل المؤقت على اللابتوب:
-  → شغّل بـ --host=127.0.0.1 بدل 0.0.0.0
-  → بس مش هيقدر حد تاني يوصله
+  deploy\build_frontend.bat
 
-─── اكونتات النظام ──────────────────────────────────────────
+Enter the server LAN IP when prompted.
 
-  admin@srs.com        / Admin@1234      (Admin)
-  awad@srs.com         / (باسورده)       (Depot Manager)
-  abdallah@rotem.com   / (باسورده)       (Admin)
-  ccp@rotem.com        / Rotem001!       (Staff)
-  eid@rotem.com        / Rotem001!       (Manager)
-  ehab@srs.com         / Rotem001!       (Manager)
-  hr@srs.com           / Rotem001!       (HR Staff)
+3. Database
+-----------
+Create a MySQL database named:
 
-═══════════════════════════════════════════════════════════════
+  srs
+
+Then run:
+
+  cd SRS-Backend
+  php artisan migrate --force
+
+4. Start for LAN
+----------------
+From the project root:
+
+  powershell -ExecutionPolicy Bypass -File .\start-company-lan.ps1
+
+Open from other PCs:
+
+  http://SERVER-IP:5175/login
+
+5. Firewall
+-----------
+Allow inbound TCP:
+
+  8000
+  5175
+
+Keep the system inside the company network only.

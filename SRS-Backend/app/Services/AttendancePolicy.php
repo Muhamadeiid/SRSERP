@@ -17,7 +17,6 @@ class AttendancePolicy
         'attendance_single_punch_gap_minutes' => '30',
         'attendance_absent_deduction_minutes' => '540',
         'attendance_regular_weekly_off_day' => '5',
-        'attendance_intervention_default_off_day' => '5',
         'attendance_saturday_rotation_enabled' => '1',
         'attendance_group_a_off_even_week' => '1',
     ];

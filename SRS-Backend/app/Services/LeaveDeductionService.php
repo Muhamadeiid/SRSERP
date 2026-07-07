@@ -17,6 +17,9 @@ class LeaveDeductionService
             ->whereNotNull('employee_id')
             ->where('days', '>', 0)
             ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
+            ->where(function ($q) {
+                $q->where('paid', true)->orWhereNull('paid');
+            })
             ->whereDate('end_date', '<', Carbon::today());
 
         if ($employeeId) {

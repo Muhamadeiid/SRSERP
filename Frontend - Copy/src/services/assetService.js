@@ -1,5 +1,5 @@
 // src/services/assetService.js
-const BASE = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api'
+const BASE = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
 
 function authHeaders() {
   const token = localStorage.getItem('srs_token')

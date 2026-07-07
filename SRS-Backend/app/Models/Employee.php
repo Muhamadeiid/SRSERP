@@ -276,7 +276,7 @@ class Employee extends Model
     /** Is this employee in the Intervention department? */
     public function isIntervention(): bool
     {
-        return strtolower($this->department ?? '') === 'intervention';
+        return in_array(strtolower($this->department ?? ''), ['intervention', 'cm_intervention'], true);
     }
 
     /**
@@ -298,8 +298,8 @@ class Employee extends Model
         $policy = \App\Services\AttendancePolicy::all();
 
         if ($this->isIntervention()) {
-            $offDay = $this->weekly_off_day ?? (int) $policy['attendance_intervention_default_off_day'];
-            return $dow !== $offDay;
+            if ($this->weekly_off_day === null) return true;
+            return $dow !== (int) $this->weekly_off_day;
         }
 
         // Regular employees

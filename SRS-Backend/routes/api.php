@@ -21,6 +21,7 @@ use App\Http\Controllers\TeamTransferController;
 use App\Http\Controllers\AssignmentRuleController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\IssuingSourceController;
+use App\Http\Controllers\DisciplinaryCaseController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employees/export',                           [EmployeeController::class, 'export']);
         Route::get('/employees/org-chart',                        [EmployeeController::class, 'orgChart']);
         Route::post('/employees/bulk-saturday-group',             [EmployeeController::class, 'bulkSaturdayGroup']);
+        Route::post('/employees/bulk-direct-manager',              [EmployeeController::class, 'bulkDirectManager']);
         Route::put('/employees/{employee}/manager',               [EmployeeController::class, 'updateManager']);
         Route::get('/employees/{employee}',                       [EmployeeController::class, 'show']);
         Route::put('/employees/{employee}',                       [EmployeeController::class, 'update']);
@@ -152,6 +154,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/issuing-sources',                   [IssuingSourceController::class, 'store']);
         Route::put('/issuing-sources/{issuingSource}',    [IssuingSourceController::class, 'update']);
         Route::delete('/issuing-sources/{issuingSource}', [IssuingSourceController::class, 'destroy']);
+
+        // Disciplinary cases
+        Route::get('/disciplinary-cases/stats',           [DisciplinaryCaseController::class, 'stats']);
+        Route::get('/disciplinary-cases',                 [DisciplinaryCaseController::class, 'index']);
+        Route::post('/disciplinary-cases',                [DisciplinaryCaseController::class, 'store']);
+        Route::get('/disciplinary-cases/{disciplinaryCase}', [DisciplinaryCaseController::class, 'show']);
+        Route::put('/disciplinary-cases/{disciplinaryCase}', [DisciplinaryCaseController::class, 'update']);
+        Route::delete('/disciplinary-cases/{disciplinaryCase}', [DisciplinaryCaseController::class, 'destroy']);
 
         // Settings
         Route::get('/settings',                            [SettingsController::class, 'index']);

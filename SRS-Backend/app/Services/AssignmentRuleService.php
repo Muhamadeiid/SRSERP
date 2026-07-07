@@ -36,11 +36,15 @@ class AssignmentRuleService
 
     /**
      * Apply the first matching rule to a single employee.
-     * Manual manager picks are preserved, but department/location can still be
-     * normalized by the rule. Returns true if any employee field changed.
+     * Manual manager picks are preserved. Department/location are auto-filled
+     * unless the caller tells us the HR form explicitly changed them.
+     * Returns true if any employee field changed.
      */
-    public static function applyToEmployee(Employee $emp, ?array $rules = null): bool
+    public static function applyToEmployee(Employee $emp, ?array $rules = null, array $options = []): bool
     {
+        $preserveDepartment = (bool) ($options['preserve_department'] ?? false);
+        $preserveLocation = (bool) ($options['preserve_location'] ?? false);
+
         $rules ??= AssignmentRule::where('is_active', true)
             ->orderBy('priority')
             ->orderBy('id')
@@ -64,7 +68,7 @@ class AssignmentRuleService
         $rule = $matchingRules[0] ?? null;
         $dirty = false;
 
-        $positionDepartment = self::departmentFromPosition($emp);
+        $positionDepartment = $preserveDepartment ? null : self::departmentFromPosition($emp);
         if ($positionDepartment && $emp->department !== $positionDepartment) {
             $emp->department = $positionDepartment;
             $dirty = true;
@@ -76,11 +80,11 @@ class AssignmentRuleService
                 $dirty = true;
             }
             $ruleDepartment = self::normalizeDepartment($rule->department);
-            if ($ruleDepartment && $emp->department !== $ruleDepartment) {
+            if (!$preserveDepartment && $ruleDepartment && $emp->department !== $ruleDepartment) {
                 $emp->department = $ruleDepartment;
                 $dirty = true;
             }
-            if ($rule->work_location && $emp->work_location !== $rule->work_location) {
+            if (!$preserveLocation && $rule->work_location && $emp->work_location !== $rule->work_location) {
                 $emp->work_location = $rule->work_location;
                 $dirty = true;
             }

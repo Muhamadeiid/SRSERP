@@ -37,12 +37,12 @@ import {
   createEmployee,
   updateEmployee,
   bulkUpdateSaturdayGroup,
+  bulkUpdateDirectManager,
 } from "../../services/employeeService";
 import { saveEmployeeSignature, getLeaveBalance, updateLeaveBalance } from "../../services/leaveService";
 import SignaturePad from "./SignaturePad";
 import { useLookups } from "../../hooks/useLookups";
 import { searchPositions } from "../../services/positionService";
-import { listProjects } from "../../services/projectService";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
@@ -129,12 +129,6 @@ const Row = ({ label, value }) =>
 
 // ── Employee Detail Drawer ───────────────────────────────────
 function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
-  if (!emp) return null;
-  const statusCfg = STATUS[emp.status] ?? STATUS.on_site;
-  const deptCfg = DEPT[emp.department];
-  const DeptIcon = deptCfg?.icon;
-  const docsOk = DOCS.filter((d) => emp[d.key]).length;
-
   const [bal, setBal]           = useState(null);
   const [balEdit, setBalEdit]   = useState(false);
   const [balForm, setBalForm]   = useState({});
@@ -157,6 +151,12 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
     } catch (_) {}
     finally { setBalSaving(false); }
   };
+
+  if (!emp) return null;
+  const statusCfg = STATUS[emp.status] ?? STATUS.on_site;
+  const deptCfg = DEPT[emp.department];
+  const DeptIcon = deptCfg?.icon;
+  const docsOk = DOCS.filter((d) => emp[d.key]).length;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -461,12 +461,12 @@ export default function WorkforceTab() {
   const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState(null); // employee for drawer
   const [selIdx, setSelIdx] = useState(0);
+  const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
+  const [bulkManagerId, setBulkManagerId] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
-  const [projects, setProjects] = useState([]);
 
   const [locFilter,  setLocFilter]  = useState("all");
-  const [projectFilter, setProjectFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -517,7 +517,6 @@ export default function WorkforceTab() {
       const res = await getEmployees({
         view,
         location:   locFilter  !== "all" ? locFilter  : undefined,
-        project:    projectFilter !== "all" ? projectFilter : undefined,
         department: deptFilter || undefined,
         search:     search     || undefined,
         page,
@@ -531,7 +530,7 @@ export default function WorkforceTab() {
     } finally {
       setLoading(false);
     }
-  }, [view, locFilter, projectFilter, deptFilter, search, page]);
+  }, [view, locFilter, deptFilter, search, page]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -543,15 +542,18 @@ export default function WorkforceTab() {
     fetchStats();
   }, [fetchStats]);
   useEffect(() => {
-    listProjects().then(items => setProjects(items.filter(p => p.is_active))).catch(() => setProjects([]));
-  }, []);
-  useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
   const visibleIds = employees.map(emp => emp.id);
   const selectedCount = bulkSelectedIds.length;
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => bulkSelectedIds.includes(id));
+
+  useEffect(() => {
+    if (bulkManagerId && bulkSelectedIds.includes(Number(bulkManagerId))) {
+      setBulkManagerId("");
+    }
+  }, [bulkManagerId, bulkSelectedIds]);
 
   const toggleBulkSelected = (id) => {
     setBulkSelectedIds(prev =>
@@ -568,6 +570,12 @@ export default function WorkforceTab() {
     });
   };
 
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    setBulkSelectedIds([]);
+    setBulkManagerId("");
+  };
+
   const applySaturdayGroup = async (group) => {
     if (selectedCount === 0) return;
     setBulkSaving(true);
@@ -579,6 +587,29 @@ export default function WorkforceTab() {
       setEmployees(prev => prev.map(emp => byId[emp.id] ? { ...emp, ...byId[emp.id] } : emp));
       setSelected(prev => prev && byId[prev.id] ? { ...prev, ...byId[prev.id] } : prev);
       setBulkSelectedIds([]);
+      setBulkManagerId("");
+      setBulkMode(false);
+      fetchStats();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const applyDirectManager = async () => {
+    if (selectedCount === 0 || !bulkManagerId) return;
+    setBulkSaving(true);
+    setError(null);
+    try {
+      const res = await bulkUpdateDirectManager(bulkSelectedIds, Number(bulkManagerId));
+      const updated = res.data ?? [];
+      const byId = Object.fromEntries(updated.map(emp => [emp.id, emp]));
+      setEmployees(prev => prev.map(emp => byId[emp.id] ? { ...emp, ...byId[emp.id] } : emp));
+      setSelected(prev => prev && byId[prev.id] ? { ...prev, ...byId[prev.id] } : prev);
+      setBulkSelectedIds([]);
+      setBulkManagerId("");
+      setBulkMode(false);
       fetchStats();
     } catch (e) {
       setError(e.message);
@@ -590,7 +621,7 @@ export default function WorkforceTab() {
   // Fetch all employees for the direct manager dropdown
   useEffect(() => {
     const token = localStorage.getItem('srs_token');
-    const base  = import.meta.env.VITE_API_URL ?? 'https://srs-backend.onrender.com/api';
+    const base  = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api';
     const hdrs  = { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
     // Employees list for "Direct Manager" dropdown
@@ -652,20 +683,14 @@ export default function WorkforceTab() {
     }
   };
 
-  const locations   = stats?.locations ?? [];
   const byLocation  = stats?.by_location ?? {};
   const total        = stats?.total ?? 0;
 
   // Location cards — pulled from lookups (dynamic)
   const locCards = [
-    { key: 'all', label: 'All Staff', value: total, sub: `${stats?.by_status?.on_site ?? 0} on site` },
-    ...lookupLocs.map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0, sub: null })),
+    { key: 'all', label: 'All Locations', value: total },
+    ...lookupLocs.map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0 })),
   ];
-  const projectCards = [
-    { key: 'all', label: 'All Projects', value: total },
-    ...projects.map(project => ({ key: project.code, label: project.name, value: project.employees_count ?? 0 })),
-  ];
-
   const pageNums = () => {
     const T = pagination.last_page,
       C = pagination.current_page;
@@ -703,42 +728,21 @@ export default function WorkforceTab() {
         ))}
       </div>
 
-      {/* ── Location filter cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {locCards.map(({ key, label, value, sub }, idx) => {
-          const colors = ['text-secondary-700','text-primary','text-amber-600','text-blue-600','text-emerald-600','text-purple-600']
-          const color  = colors[idx % colors.length]
-          return (
-            <button
-              key={key}
-              onClick={() => { setLocFilter(key); setPage(1); }}
-              className={`bg-white rounded-2xl border-2 p-4 text-left transition-all hover:shadow-md ${
-                locFilter === key ? 'border-primary shadow-sm' : 'border-neutral-100'
-              }`}
-            >
-              <p className={`text-2xl font-black ${color}`}>{value}</p>
-              <p className="text-xs font-semibold text-neutral-500 mt-0.5">{label}</p>
-              {sub && <p className="text-[10px] text-neutral-400 mt-0.5">{sub}</p>}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* ── Department filter pills ── */}
+      {/* Location filter pills */}
       <div className="flex flex-wrap gap-2">
-        {projectCards.map(({ key, label, value }) => (
+        {locCards.map(({ key, label, value }) => (
           <button
             key={key}
-            onClick={() => { setProjectFilter(key); setPage(1); }}
+            onClick={() => { setLocFilter(key); setPage(1); }}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              projectFilter === key
+              locFilter === key
                 ? 'bg-secondary text-white border-secondary shadow-sm'
                 : 'bg-white text-neutral-500 border-neutral-200 hover:border-secondary/40 hover:text-secondary'
             }`}
           >
             {label}
             <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${
-              projectFilter === key ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
+              locFilter === key ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
             }`}>
               {value}
             </span>
@@ -818,6 +822,17 @@ export default function WorkforceTab() {
             Personnel
           </p>
           <button
+            onClick={() => bulkMode ? exitBulkMode() : setBulkMode(true)}
+            className={`flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-semibold border transition-colors ${
+              bulkMode
+                ? "bg-secondary text-white border-secondary"
+                : "bg-white text-secondary border-neutral-200 hover:bg-neutral-50"
+            }`}
+          >
+            {bulkMode ? <X className="w-4 h-4" /> : <FileCheck className="w-4 h-4" />}
+            <span className="hidden sm:inline">{bulkMode ? "Done" : "Select"}</span>
+          </button>
+          <button
             onClick={openAdd}
             className="flex items-center gap-1.5 px-3 h-9 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
           >
@@ -876,35 +891,63 @@ export default function WorkforceTab() {
       )}
 
       {/* ── Table ── */}
-      {selectedCount > 0 && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-          <div className="flex-1">
+      {bulkMode && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex-wrap">
+          <div className="min-w-[220px] flex-1">
             <p className="text-sm font-bold text-secondary-700">
-              {selectedCount} employee{selectedCount > 1 ? "s" : ""} selected
+              {selectedCount} employee{selectedCount === 1 ? "" : "s"} selected
             </p>
             <p className="text-xs text-neutral-400">
-              Assign selected employees to Saturday rotation group.
+              Select employees for bulk actions.
             </p>
           </div>
+          <div className="flex items-center gap-2 rounded-lg bg-white/70 border border-white px-2 py-1.5">
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide px-1">Sat Group</span>
+            <button
+              onClick={() => applySaturdayGroup("A")}
+              disabled={bulkSaving || selectedCount === 0}
+              className="px-3 py-1.5 rounded-lg bg-white border border-primary/30 text-primary text-sm font-bold hover:bg-primary hover:text-white disabled:opacity-50 transition-all"
+            >
+              A
+            </button>
+            <button
+              onClick={() => applySaturdayGroup("B")}
+              disabled={bulkSaving || selectedCount === 0}
+              className="px-3 py-1.5 rounded-lg bg-white border border-secondary/30 text-secondary text-sm font-bold hover:bg-secondary hover:text-white disabled:opacity-50 transition-all"
+            >
+              B
+            </button>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-white/70 border border-white px-2 py-1.5 min-w-[360px]">
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide px-1 whitespace-nowrap">Direct Manager</span>
+            <select
+              value={bulkManagerId}
+              onChange={e => setBulkManagerId(e.target.value)}
+              disabled={bulkSaving}
+              className="h-8 flex-1 min-w-[180px] rounded-lg border border-neutral-200 bg-white px-2 text-xs text-secondary-700 outline-none focus:border-primary disabled:opacity-60"
+            >
+              <option value="">Choose manager...</option>
+              {managers
+                .filter(m => !bulkSelectedIds.includes(m.id))
+                .map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.position ? ` - ${m.position}` : ''}
+                  </option>
+                ))}
+            </select>
+            <button
+              onClick={applyDirectManager}
+              disabled={bulkSaving || selectedCount === 0 || !bulkManagerId}
+              className="px-3 py-1.5 rounded-lg bg-secondary text-white text-sm font-bold hover:bg-secondary/90 disabled:opacity-50 transition-all"
+            >
+              Apply
+            </button>
+          </div>
           <button
-            onClick={() => applySaturdayGroup("A")}
-            disabled={bulkSaving}
-            className="px-4 py-2 rounded-lg bg-white border border-primary/30 text-primary text-sm font-bold hover:bg-primary hover:text-white disabled:opacity-50 transition-all"
-          >
-            Group A
-          </button>
-          <button
-            onClick={() => applySaturdayGroup("B")}
-            disabled={bulkSaving}
-            className="px-4 py-2 rounded-lg bg-white border border-secondary/30 text-secondary text-sm font-bold hover:bg-secondary hover:text-white disabled:opacity-50 transition-all"
-          >
-            Group B
-          </button>
-          <button
-            onClick={() => setBulkSelectedIds([])}
+            onClick={exitBulkMode}
             disabled={bulkSaving}
             className="p-2 rounded-lg text-neutral-400 hover:bg-white hover:text-neutral-600 disabled:opacity-50"
-            title="Clear selection"
+            title="Exit selection"
           >
             {bulkSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
           </button>
@@ -916,15 +959,17 @@ export default function WorkforceTab() {
           <table className="w-full min-w-[1120px]">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                <th className="px-4 py-3.5 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleVisibleSelected}
-                    className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
-                    aria-label="Select visible employees"
-                  />
-                </th>
+                {bulkMode && (
+                  <th className="px-4 py-3.5 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleVisibleSelected}
+                      className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
+                      aria-label="Select visible employees"
+                    />
+                  </th>
+                )}
                 {[
                   "#",
                   "Employee",
@@ -950,7 +995,7 @@ export default function WorkforceTab() {
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 11 }).map((_, j) => (
+                      {Array.from({ length: bulkMode ? 11 : 10 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div
                             className="h-4 bg-neutral-100 rounded animate-pulse"
@@ -979,19 +1024,25 @@ export default function WorkforceTab() {
                         key={emp.id}
                         className={`hover:bg-neutral-50/60 transition-colors group cursor-pointer ${isBulkSelected ? "bg-primary/5" : ""}`}
                         onClick={() => {
+                          if (bulkMode) {
+                            toggleBulkSelected(emp.id);
+                            return;
+                          }
                           setSelected(emp);
                           setSelIdx(i);
                         }}
                       >
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={isBulkSelected}
-                            onChange={() => toggleBulkSelected(emp.id)}
-                            className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
-                            aria-label={`Select ${emp.name}`}
-                          />
-                        </td>
+                        {bulkMode && (
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isBulkSelected}
+                              onChange={() => toggleBulkSelected(emp.id)}
+                              className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
+                              aria-label={`Select ${emp.name}`}
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-xs text-neutral-400 font-mono">
                           {rowNum}
                         </td>
@@ -1093,7 +1144,7 @@ export default function WorkforceTab() {
               {!loading && employees.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={bulkMode ? 11 : 10}
                     className="px-6 py-12 text-center text-sm text-neutral-400"
                   >
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -1286,7 +1337,7 @@ function buildInitialForm(emp) {
     sanctions_form: !!emp.sanctions_form,
     marital_status_form: !!emp.marital_status_form,
     no_warning_letters: emp.no_warning_letters ?? 0,
-    direct_manager_id: emp.direct_manager_id ?? null,
+    direct_manager_id: emp.direct_manager_id === emp.id ? null : (emp.direct_manager_id ?? null),
     user_id:           emp.user_id ?? null,
   };
 }

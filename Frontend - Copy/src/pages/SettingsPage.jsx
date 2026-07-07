@@ -21,7 +21,6 @@ const ATTENDANCE_POLICY_DEFAULTS = {
   attendance_single_punch_gap_minutes: 30,
   attendance_absent_deduction_minutes: 540,
   attendance_regular_weekly_off_day: 5,
-  attendance_intervention_default_off_day: 5,
   attendance_saturday_rotation_enabled: '1',
   attendance_group_a_off_even_week: '1',
 }
@@ -409,16 +408,10 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Regular Weekly Off</label>
               <select value={attendancePolicy.attendance_regular_weekly_off_day} onChange={e => setPolicy('attendance_regular_weekly_off_day', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
-                {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => <option key={day} value={i}>{day}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Intervention Default Off</label>
-              <select value={attendancePolicy.attendance_intervention_default_off_day} onChange={e => setPolicy('attendance_intervention_default_off_day', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
                 {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => <option key={day} value={i}>{day}</option>)}
               </select>
             </div>
@@ -1253,6 +1246,7 @@ const LOOKUP_TABS = [
   { key: 'location',   label: 'Locations',   color: 'bg-blue-100 text-blue-600' },
   { key: 'category',   label: 'Categories',  color: 'bg-amber-100 text-amber-600' },
   { key: 'role',       label: 'Roles',       color: 'bg-purple-100 text-purple-600' },
+  { key: 'disciplinary_violation', label: 'Violation Types', color: 'bg-red-100 text-red-600' },
 ]
 
 function LookupsPanel() {

@@ -22,6 +22,7 @@ export function useLookups() {
     locations:   data?.location   ?? [],
     categories:  data?.category   ?? [],
     roles:       data?.role       ?? [],
+    disciplinaryViolations: data?.disciplinary_violation ?? [],
     all:         data ?? {},
     loading,
   }

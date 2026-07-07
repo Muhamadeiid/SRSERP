@@ -99,6 +99,7 @@ const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digi
 const genLRFNo  = () => `LRF-GZ-????`
 const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
+const OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
 const threeName = (n) => n?.trim().split(/\s+/).slice(0, 3).join(' ') ?? ''
 const today     = () => new Date().toISOString().slice(0, 10)
 const pad2      = n => String(n).padStart(2, '0')
@@ -466,6 +467,13 @@ function printOTR(d) {
   const hrDate  = d.hr_approved_at      ? fmt(d.hr_approved_at)      : ''
   const appDate = d.approved_at         ? fmt(d.approved_at)         : ''
   const expl    = (d.explanation || '').replace(/\n/g, '<br/>')
+  const resultOptionsHtml = OTR_RESULT_OPTIONS.map(option => {
+    const checked = d.overtime_results === option ? 'X' : '&nbsp;'
+    return '<span style="display:inline-flex;align-items:center;gap:6px;margin:0 16px;font-weight:700;">'
+      + '<span style="display:inline-flex;width:13px;height:13px;border:1px solid #000;align-items:center;justify-content:center;font-size:8pt;line-height:1;">' + checked + '</span>'
+      + option
+      + '</span>'
+  }).join('')
 
   const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>OTR - ' + (d.tracking_no||'') + '</title>'
     + '<style>'
@@ -533,7 +541,7 @@ function printOTR(d) {
     + '<td style="font-size:9pt;font-weight:700;">Detailed Explanation why over time is required:</td>'
     + '<td style="font-size:7.5pt;font-weight:700;direction:rtl;text-align:right;color:#333;">&#x62A;&#x641;&#x633;&#x64A;&#x631; &#x633;&#x628;&#x628; &#x625;&#x62D;&#x62A;&#x64A;&#x627;&#x62C; &#x627;&#x644;&#x639;&#x645;&#x644; &#x644;&#x633;&#x627;&#x639;&#x627;&#x62A; &#x625;&#x636;&#x627;&#x641;&#x64A;&#x647;</td>'
     + '</tr></table></td></tr>'
-    + '<tr><td colspan="4" style="border:1px solid #000;padding:6px 9px;vertical-align:middle;text-align:center;font-size:9.5pt;height:48px;">' + expl + '</td></tr>'
+    + '<tr><td colspan="4" style="border:1px solid #000;padding:6px 9px;height:58px;font-size:9.5pt;"><div style="min-height:46px;display:flex;align-items:center;justify-content:center;text-align:center;">' + expl + '</div></td></tr>'
 
     // Results label
     + '<tr><td colspan="4" style="border:1px solid #000;padding:4px 8px;">'
@@ -541,7 +549,7 @@ function printOTR(d) {
     + '<td style="font-size:9pt;font-weight:700;">Overtime Results</td>'
     + '<td style="font-size:7.5pt;font-weight:700;direction:rtl;text-align:right;color:#333;">&#x646;&#x62A;&#x627;&#x626;&#x62C; &#x627;&#x644;&#x639;&#x645;&#x644; &#x644;&#x633;&#x627;&#x639;&#x627;&#x62A; &#x625;&#x636;&#x627;&#x641;&#x64A;&#x647;</td>'
     + '</tr></table></td></tr>'
-    + '<tr><td colspan="4" style="border:1px solid #000;padding:6px 9px;vertical-align:middle;text-align:center;height:48px;font-size:9pt;">' + (d.overtime_results || '') + '</td></tr>'
+    + '<tr><td colspan="4" style="border:1px solid #000;padding:6px 9px;vertical-align:middle;text-align:center;height:48px;font-size:9pt;">' + resultOptionsHtml + '</td></tr>'
 
     // Sig: Employee
     + '<tr>'
@@ -675,7 +683,7 @@ function LRFForm({ onSubmit, saving }) {
             department: fullDept,
             department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
           }))
-          const mgr = full?.direct_manager
+          const mgr = full?.direct_manager || full?.directManager
           if (mgr?.name && mgr?.user_role !== 'depot_manager') {
             setForm(f => ({ ...f, direct_manager_name: mgr.name }))
           }
@@ -1155,7 +1163,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
         job_title: full?.position ?? f.job_title,
         department: fullDept,
         department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
-        direct_manager_name: (full?.direct_manager?.user_role !== 'depot_manager' ? full?.direct_manager?.name : null) ?? f.direct_manager_name,
+        direct_manager_name: ((full?.direct_manager || full?.directManager)?.user_role !== 'depot_manager' ? (full?.direct_manager || full?.directManager)?.name : null) ?? f.direct_manager_name,
       }))
     }).catch(() => {})
   }
@@ -1218,11 +1226,11 @@ function OfficialLRFForm({ onSubmit, saving }) {
                   <div key={key} className="contents"><button type="button" onClick={() => set('leave_type', key)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === key} /></button><button type="button" onClick={() => set('leave_type', key)} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">{text}</button></div>
                 ))}
               </div>
-              <div className="grid grid-cols-[24px_1fr_90px_90px_60px_44px]">
+              <div className="grid grid-cols-[24px_1fr_132px_132px_60px_44px]">
                 <button type="button" onClick={() => set('leave_type', 'early')} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === 'early'} /></button>
                 <button type="button" onClick={() => set('leave_type', 'early')} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">Early Leave</button>
-                <div className="flex items-center gap-1 border-r border-neutral-400 px-2 py-2 text-[12px]">From:<PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="08:00" className="w-[74px]" inputClassName="w-full bg-transparent outline-none text-xs disabled:opacity-30" /></div>
-                <div className="flex items-center gap-1 border-r border-neutral-900 px-2 py-2 text-[12px]">To:<PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="10:00" className="w-[74px]" inputClassName="w-full bg-transparent outline-none text-xs disabled:opacity-30" /></div>
+                <div className="flex items-center gap-1 border-r border-neutral-400 px-2 py-2 text-[12px]">From:<PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="08:00" className="w-[112px]" inputClassName="w-full bg-transparent outline-none text-xs font-semibold disabled:opacity-30" /></div>
+                <div className="flex items-center gap-1 border-r border-neutral-900 px-2 py-2 text-[12px]">To:<PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="10:00" className="w-[112px]" inputClassName="w-full bg-transparent outline-none text-xs font-semibold disabled:opacity-30" /></div>
                 <div className="border-r border-neutral-400 px-2 py-2 text-center text-[12px]">( {form.leave_type === 'early' ? earlyDays(form.early_from, form.early_to) : ''} )</div><div className="px-2 py-2 text-[12px]">Day</div>
               </div>
             </td></tr>
@@ -1406,7 +1414,7 @@ function OTRForm({ onSubmit, saving }) {
       getEmployee(emp.id)
         .then(res => {
           const full = unwrapData(res)
-          const mgr = full?.direct_manager
+          const mgr = full?.direct_manager || full?.directManager
           if (mgr?.name && mgr?.user_role !== 'depot_manager') {
             setForm(f => ({ ...f, direct_manager_name: mgr.name }))
           }
@@ -1504,6 +1512,22 @@ function OTRForm({ onSubmit, saving }) {
             <p className="text-[10px] text-neutral-400">نتائج العمل لساعات إضافيه</p>
           </div>
           <div className="px-4 py-3">
+            <div className="flex flex-wrap gap-2 mb-3">
+              {OTR_RESULT_OPTIONS.map(option => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => set('overtime_results', option)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                    form.overtime_results === option
+                      ? 'bg-primary text-white border-primary shadow-sm'
+                      : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40 hover:text-primary'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
             <textarea value={form.overtime_results} onChange={e => set('overtime_results', e.target.value)} rows={4} className={INP + ' resize-none'} placeholder="Describe the results / outcomes of the overtime work…" />
           </div>
         </div>
@@ -1516,7 +1540,7 @@ function OTRForm({ onSubmit, saving }) {
         ].map(([en, ar, val]) => (
           <div key={en} className="grid grid-cols-[200px_1fr_100px_150px] divide-x divide-neutral-100">
             <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">{en}</p><p className="text-[10px] text-neutral-400">{ar}</p></div>
-            <div className="px-4 py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{val}</p></div>
+            <div className="px-4 py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{en === 'Direct Manager Signature' ? (form.direct_manager_name || val) : val}</p></div>
             <div className="px-4 py-3 bg-neutral-50 flex items-center"><p className="text-xs font-bold text-secondary-700">Date</p></div>
             <div className="px-4 py-4" />
           </div>
@@ -1585,17 +1609,21 @@ function ApprovalProgress({ req }) {
 
 // ── request detail modal ──────────────────────────────────────
 function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
+  const [trackingDraft, setTrackingDraft]   = useState(req?.tracking_no || '')
+  const [editingTracking, setEditingTracking] = useState(false)
+  const [savingTracking, setSavingTracking] = useState(false)
+
+  useEffect(() => {
+    setTrackingDraft(req?.tracking_no || '')
+    setEditingTracking(false)
+  }, [req?.tracking_no, req?.id])
+
   if (!req) return null
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
   const canHrApprove = userRole === 'admin' || userRole === 'hr'
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
-
-  // Tracking-number inline editor (HR only)
-  const [trackingDraft, setTrackingDraft]   = useState(req.tracking_no || '')
-  const [editingTracking, setEditingTracking] = useState(false)
-  const [savingTracking, setSavingTracking] = useState(false)
 
   const saveTracking = async () => {
     const value = trackingDraft.trim()

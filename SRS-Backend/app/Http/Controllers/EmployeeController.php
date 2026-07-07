@@ -52,7 +52,7 @@ class EmployeeController extends Controller
         $sortDir = $request->get('sort_dir', 'asc');
         $perPage = (int) $request->get('per_page', 12);
 
-        $result = $q->with('directManager:id,name,position')->orderBy($sortBy, $sortDir)->paginate($perPage);
+        $result = $q->with('directManager:id,name,position,user_id,e_signature')->orderBy($sortBy, $sortDir)->paginate($perPage);
 
         return response()->json([
             'data'       => $result->items(),
@@ -92,6 +92,9 @@ class EmployeeController extends Controller
         if ($managerId && (int)$managerId === $employee->id) {
             return response()->json(['message' => 'Employee cannot be their own manager'], 422);
         }
+        if ($managerId && $this->managerAssignmentCreatesCycle($employee->id, (int) $managerId)) {
+            return response()->json(['message' => 'This manager is already under the selected employee. Choose another manager.'], 422);
+        }
 
         // Picking a manager in the org chart is a manual override; clearing it
         // hands the employee back to the assignment rules.
@@ -102,7 +105,7 @@ class EmployeeController extends Controller
             \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh());
         }
 
-        $employee->refresh()->load('directManager:id,name,position');
+        $employee->refresh()->load('directManager:id,name,position,user_id,e_signature');
 
         return response()->json($employee);
     }
@@ -140,7 +143,7 @@ class EmployeeController extends Controller
 
         while ($managerId && !in_array($managerId, $visited)) {
             $visited[]  = $managerId;
-            $ancestor   = Employee::select('id','name','position','user_id','direct_manager_id')
+            $ancestor   = Employee::select('id','name','position','user_id','direct_manager_id','e_signature')
                             ->with('user:id,role')
                             ->find($managerId);
             if (!$ancestor) break;
@@ -176,7 +179,10 @@ class EmployeeController extends Controller
 
         // Otherwise auto-assign via the assignment rules.
         if (!$employee->manager_manual) {
-            \App\Services\AssignmentRuleService::applyToEmployee($employee);
+            \App\Services\AssignmentRuleService::applyToEmployee($employee, null, [
+                'preserve_department' => array_key_exists('department', $data) && $data['department'] !== null && $data['department'] !== '',
+                'preserve_location' => array_key_exists('work_location', $data) && $data['work_location'] !== null && $data['work_location'] !== '',
+            ]);
         }
 
         return response()->json($employee->fresh(), 201);
@@ -192,13 +198,22 @@ class EmployeeController extends Controller
         // An explicit manager pick on the form is a manual override.
         if (array_key_exists('direct_manager_id', $data)) {
             $data['manager_manual'] = !empty($data['direct_manager_id']);
+            if (!empty($data['direct_manager_id'])) {
+                $managerId = (int) $data['direct_manager_id'];
+                if ($managerId === $employee->id || $this->managerAssignmentCreatesCycle($employee->id, $managerId)) {
+                    return response()->json(['message' => 'This direct manager selection would break the organization chart hierarchy.'], 422);
+                }
+            }
         }
 
         $employee->update($data);
 
         // Position/department may have changed — re-apply rules unless manual.
         if (!$employee->manager_manual) {
-            \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh());
+            \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh(), null, [
+                'preserve_department' => array_key_exists('department', $data) && $data['department'] !== null && $data['department'] !== '',
+                'preserve_location' => array_key_exists('work_location', $data) && $data['work_location'] !== null && $data['work_location'] !== '',
+            ]);
         }
 
         return response()->json($employee->fresh());
@@ -226,6 +241,46 @@ class EmployeeController extends Controller
         ]);
     }
 
+    public function bulkDirectManager(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer|exists:employees,id',
+            'direct_manager_id' => 'required|integer|exists:employees,id',
+        ]);
+
+        $ids = array_values(array_unique($data['employee_ids']));
+        $managerId = (int) $data['direct_manager_id'];
+
+        if (in_array($managerId, $ids, true)) {
+            return response()->json([
+                'message' => 'The selected manager cannot be assigned as their own direct manager.',
+            ], 422);
+        }
+        foreach ($ids as $employeeId) {
+            if ($this->managerAssignmentCreatesCycle((int) $employeeId, $managerId)) {
+                $employee = Employee::find($employeeId);
+                return response()->json([
+                    'message' => 'Cannot assign this manager because it would place ' . ($employee?->name ?? 'an employee') . ' above their own manager.',
+                ], 422);
+            }
+        }
+
+        Employee::whereIn('id', $ids)->update([
+            'direct_manager_id' => $managerId,
+            'manager_manual' => true,
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'updated' => count($ids),
+            'data' => Employee::whereIn('id', $ids)
+                ->with('directManager:id,name,position,user_id,e_signature')
+                ->get(),
+        ]);
+    }
+
     private function normalizeFields(array $data): array
     {
         if (isset($data['department']) && $data['department'] !== null) {
@@ -241,6 +296,23 @@ class EmployeeController extends Controller
     }
 
     // ── DELETE /api/employees/{id} ──────────────────────────
+    private function managerAssignmentCreatesCycle(int $employeeId, int $managerId): bool
+    {
+        $visited = [];
+        $currentId = $managerId;
+
+        while ($currentId && !in_array($currentId, $visited, true)) {
+            if ($currentId === $employeeId) {
+                return true;
+            }
+
+            $visited[] = $currentId;
+            $currentId = (int) (Employee::whereKey($currentId)->value('direct_manager_id') ?? 0);
+        }
+
+        return false;
+    }
+
     public function destroy(Employee $employee): JsonResponse
     {
         $employee->delete();
