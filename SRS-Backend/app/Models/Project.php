@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Project extends Model
 {
     protected $fillable = [
-        'code', 'name', 'name_ar', 'match_prefix', 'is_default', 'is_active', 'sort',
+        'code', 'name', 'name_ar', 'match_prefix', 'match_locations', 'is_default', 'is_active', 'sort',
     ];
 
     protected $casts = [
@@ -39,12 +39,23 @@ class Project extends Model
     }
 
     /**
-     * Resolve a project code from an employee's project_budget string.
-     * Matches by prefix (case-insensitive); falls back to the default project.
+     * Resolve a project code from an employee's work location or project_budget string.
+     * Location matches are strongest; then budget prefix; then default project.
      */
-    public static function codeFor(?string $projectBudget): string
+    public static function codeFor(?string $projectBudget, ?string $workLocation = null): string
     {
         $projects = self::activeList();
+
+        $location = strtolower(trim($workLocation ?? ''));
+        if ($location !== '') {
+            foreach ($projects as $p) {
+                foreach (self::splitLocations($p->match_locations) as $matchLocation) {
+                    if ($location === strtolower($matchLocation)) {
+                        return $p->code;
+                    }
+                }
+            }
+        }
 
         $needle = strtolower(trim($projectBudget ?? ''));
         if ($needle !== '') {
@@ -60,6 +71,14 @@ class Project extends Model
             if ($p->is_default) return $p->code;
         }
         return $projects[0]->code ?? 'EG1';
+    }
+
+    public static function splitLocations(?string $locations): array
+    {
+        return array_values(array_filter(array_map(
+            fn ($value) => trim($value),
+            preg_split('/[,;\r\n]+/', (string) $locations)
+        )));
     }
 
     protected static function booted(): void

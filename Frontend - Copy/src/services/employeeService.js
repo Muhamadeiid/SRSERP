@@ -75,8 +75,9 @@ export function getHrOfficer() {
 function cleanPayload(data) {
   const DATE_FIELDS = ['hiring_date', 'birth_date', 'insurance_date', 'contract_start', 'contract_end']
   const INT_FIELDS  = ['education_year', 'military_serving_days', 'military_serving_months',
-                       'military_serving_years', 'no_warning_letters']
+                       'military_serving_years', 'no_warning_letters', 'weekly_off_day']
   const out = { ...data }
+  if (out.saturday_group === '') out.saturday_group = null
   for (const k of DATE_FIELDS) {
     if (out[k] === '') out[k] = null
   }
@@ -93,6 +94,13 @@ export function createEmployee(data) {
 
 export function updateEmployee(id, data) {
   return request(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(cleanPayload(data)) })
+}
+
+export function bulkUpdateSaturdayGroup(employeeIds, saturdayGroup) {
+  return request('/employees/bulk-saturday-group', {
+    method: 'POST',
+    body: JSON.stringify({ employee_ids: employeeIds, saturday_group: saturdayGroup }),
+  })
 }
 
 export function deleteEmployee(id) {

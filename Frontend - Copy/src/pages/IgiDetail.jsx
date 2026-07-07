@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { Loader2, ArrowLeft, ClipboardCheck, Printer } from 'lucide-react'
 import { getIgi, updateIgi, IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
-import { generateIGI } from '../utils/generateIGI'
 
 const fmtShort = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
@@ -52,6 +51,11 @@ export default function IgiDetail() {
     }
   }
 
+  const handlePrint = async () => {
+    const { generateIGI } = await import('../utils/generateIGI')
+    return generateIGI(igi)
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-32">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -96,7 +100,7 @@ export default function IgiDetail() {
           <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${IGI_STATUS_STYLES[igi.status]}`}>
             {IGI_STATUS_LABELS[igi.status]}
           </span>
-          <button onClick={() => generateIGI(igi)}
+          <button onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg transition-colors">
             <Printer className="w-3.5 h-3.5" /> Print (.docx)
           </button>

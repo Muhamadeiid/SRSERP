@@ -31,7 +31,7 @@ class LeaveBalance extends Model
     }
 
     // ── Remaining getters (fall back to total if no remaining stored) ─
-    public function getEffectiveRemaining(string $type): int
+    public function getEffectiveRemaining(string $type): float
     {
         $remaining = $this->{$type . '_remaining'};
         return $remaining !== null ? $remaining : ($this->{$type} ?? 0);
@@ -46,7 +46,7 @@ class LeaveBalance extends Model
     {
         if (!in_array($type, ['annual', 'casual', 'sick', 'early'])) return true;
 
-        if ($type === 'annual') {
+        if ($type === 'annual' || $type === 'early') {
             $annualLeft = $this->getEffectiveRemaining('annual');
             if ($annualLeft < $days) return false;
             $this->update(['annual_remaining' => $annualLeft - $days]);
@@ -77,7 +77,7 @@ class LeaveBalance extends Model
     {
         if (!in_array($type, ['annual', 'casual', 'sick', 'early'])) return;
 
-        if ($type === 'annual') {
+        if ($type === 'annual' || $type === 'early') {
             $annualTotal = $this->annual ?? 21;
             $annualLeft  = $this->getEffectiveRemaining('annual');
             $this->update(['annual_remaining' => min($annualTotal, $annualLeft + $days)]);

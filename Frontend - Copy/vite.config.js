@@ -13,12 +13,24 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    include: ['exceljs'],
-  },
   build: {
     commonjsOptions: {
       transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') || id.includes('redux')) {
+            return 'vendor-react'
+          }
+          if (id.includes('lucide-react')) return 'vendor-icons'
+          if (id.includes('axios')) return 'vendor-http'
+          if (id.includes('exceljs')) return 'office-excel'
+          if (id.includes('docx') || id.includes('file-saver')) return 'office-word'
+          return 'vendor'
+        },
+      },
     },
   },
 })

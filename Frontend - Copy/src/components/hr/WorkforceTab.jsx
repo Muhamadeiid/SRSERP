@@ -36,11 +36,13 @@ import {
   downloadBlob,
   createEmployee,
   updateEmployee,
+  bulkUpdateSaturdayGroup,
 } from "../../services/employeeService";
 import { saveEmployeeSignature, getLeaveBalance, updateLeaveBalance } from "../../services/leaveService";
 import SignaturePad from "./SignaturePad";
 import { useLookups } from "../../hooks/useLookups";
 import { searchPositions } from "../../services/positionService";
+import { listProjects } from "../../services/projectService";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
@@ -49,6 +51,7 @@ const DEPT = {
   pm:              { label: "PM",               icon: HardHat,    color: "text-blue-600" },
   warranty:        { label: "Warranty",         icon: FileCheck,  color: "text-green-600" },
   cm_intervention: { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
+  intervention:    { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
   admin:           { label: "Admin",            icon: Settings,   color: "text-purple-600" },
 };
 const STATUS = {
@@ -230,6 +233,8 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
               <Row label="Position (AR)" value={emp.position_arabic} />
               <Row label="Rotem Code" value={emp.rotem_code} />
               <Row label="Project Budget" value={emp.project_budget} />
+              <Row label="Saturday Group" value={emp.saturday_group} />
+              <Row label="Weekly Off Day" value={emp.weekly_off_day !== null && emp.weekly_off_day !== undefined ? WEEK_DAYS.find(d => d.value === Number(emp.weekly_off_day))?.label : null} />
               <Row label="Hiring Date" value={fmtD(emp.hiring_date)} />
               <Row label="Contract Start" value={fmtD(emp.contract_start)} />
               <Row label="Contract End" value={fmtD(emp.contract_end)} />
@@ -440,8 +445,12 @@ export default function WorkforceTab() {
   const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState(null); // employee for drawer
   const [selIdx, setSelIdx] = useState(0);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [projects, setProjects] = useState([]);
 
   const [locFilter,  setLocFilter]  = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -492,6 +501,7 @@ export default function WorkforceTab() {
       const res = await getEmployees({
         view,
         location:   locFilter  !== "all" ? locFilter  : undefined,
+        project:    projectFilter !== "all" ? projectFilter : undefined,
         department: deptFilter || undefined,
         search:     search     || undefined,
         page,
@@ -499,12 +509,13 @@ export default function WorkforceTab() {
       });
       setEmployees(res.data);
       setPagination(res.pagination);
+      setBulkSelectedIds([]);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [view, locFilter, deptFilter, search, page]);
+  }, [view, locFilter, projectFilter, deptFilter, search, page]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -516,8 +527,49 @@ export default function WorkforceTab() {
     fetchStats();
   }, [fetchStats]);
   useEffect(() => {
+    listProjects().then(items => setProjects(items.filter(p => p.is_active))).catch(() => setProjects([]));
+  }, []);
+  useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  const visibleIds = employees.map(emp => emp.id);
+  const selectedCount = bulkSelectedIds.length;
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => bulkSelectedIds.includes(id));
+
+  const toggleBulkSelected = (id) => {
+    setBulkSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleVisibleSelected = () => {
+    setBulkSelectedIds(prev => {
+      if (allVisibleSelected) {
+        return prev.filter(id => !visibleIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...visibleIds]));
+    });
+  };
+
+  const applySaturdayGroup = async (group) => {
+    if (selectedCount === 0) return;
+    setBulkSaving(true);
+    setError(null);
+    try {
+      const res = await bulkUpdateSaturdayGroup(bulkSelectedIds, group);
+      const updated = res.data ?? [];
+      const byId = Object.fromEntries(updated.map(emp => [emp.id, emp]));
+      setEmployees(prev => prev.map(emp => byId[emp.id] ? { ...emp, ...byId[emp.id] } : emp));
+      setSelected(prev => prev && byId[prev.id] ? { ...prev, ...byId[prev.id] } : prev);
+      setBulkSelectedIds([]);
+      fetchStats();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   // Fetch all employees for the direct manager dropdown
   useEffect(() => {
@@ -593,6 +645,10 @@ export default function WorkforceTab() {
     { key: 'all', label: 'All Staff', value: total, sub: `${stats?.by_status?.on_site ?? 0} on site` },
     ...lookupLocs.map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0, sub: null })),
   ];
+  const projectCards = [
+    { key: 'all', label: 'All Projects', value: total },
+    ...projects.map(project => ({ key: project.code, label: project.name, value: project.employees_count ?? 0 })),
+  ];
 
   const pageNums = () => {
     const T = pagination.last_page,
@@ -653,6 +709,27 @@ export default function WorkforceTab() {
       </div>
 
       {/* ── Department filter pills ── */}
+      <div className="flex flex-wrap gap-2">
+        {projectCards.map(({ key, label, value }) => (
+          <button
+            key={key}
+            onClick={() => { setProjectFilter(key); setPage(1); }}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+              projectFilter === key
+                ? 'bg-secondary text-white border-secondary shadow-sm'
+                : 'bg-white text-neutral-500 border-neutral-200 hover:border-secondary/40 hover:text-secondary'
+            }`}
+          >
+            {label}
+            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${
+              projectFilter === key ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
+            }`}>
+              {value}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         {[
           { key: '', label: 'All Departments' },
@@ -783,11 +860,55 @@ export default function WorkforceTab() {
       )}
 
       {/* ── Table ── */}
+      {selectedCount > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <div className="flex-1">
+            <p className="text-sm font-bold text-secondary-700">
+              {selectedCount} employee{selectedCount > 1 ? "s" : ""} selected
+            </p>
+            <p className="text-xs text-neutral-400">
+              Assign selected employees to Saturday rotation group.
+            </p>
+          </div>
+          <button
+            onClick={() => applySaturdayGroup("A")}
+            disabled={bulkSaving}
+            className="px-4 py-2 rounded-lg bg-white border border-primary/30 text-primary text-sm font-bold hover:bg-primary hover:text-white disabled:opacity-50 transition-all"
+          >
+            Group A
+          </button>
+          <button
+            onClick={() => applySaturdayGroup("B")}
+            disabled={bulkSaving}
+            className="px-4 py-2 rounded-lg bg-white border border-secondary/30 text-secondary text-sm font-bold hover:bg-secondary hover:text-white disabled:opacity-50 transition-all"
+          >
+            Group B
+          </button>
+          <button
+            onClick={() => setBulkSelectedIds([])}
+            disabled={bulkSaving}
+            className="p-2 rounded-lg text-neutral-400 hover:bg-white hover:text-neutral-600 disabled:opacity-50"
+            title="Clear selection"
+          >
+            {bulkSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+          </button>
+        </div>
+      )}
+
       <div className="bg-white border border-neutral-100 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
+          <table className="w-full min-w-[1120px]">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50/60">
+                <th className="px-4 py-3.5 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleVisibleSelected}
+                    className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
+                    aria-label="Select visible employees"
+                  />
+                </th>
                 {[
                   "#",
                   "Employee",
@@ -813,7 +934,7 @@ export default function WorkforceTab() {
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 10 }).map((_, j) => (
+                      {Array.from({ length: 11 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div
                             className="h-4 bg-neutral-100 rounded animate-pulse"
@@ -835,16 +956,26 @@ export default function WorkforceTab() {
                       i +
                       1;
                     const docsOk = DOCS.filter((d) => emp[d.key]).length;
+                    const isBulkSelected = bulkSelectedIds.includes(emp.id);
 
                     return (
                       <tr
                         key={emp.id}
-                        className="hover:bg-neutral-50/60 transition-colors group cursor-pointer"
+                        className={`hover:bg-neutral-50/60 transition-colors group cursor-pointer ${isBulkSelected ? "bg-primary/5" : ""}`}
                         onClick={() => {
                           setSelected(emp);
                           setSelIdx(i);
                         }}
                       >
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isBulkSelected}
+                            onChange={() => toggleBulkSelected(emp.id)}
+                            className="w-4 h-4 rounded border-neutral-300 text-primary focus:ring-primary/30"
+                            aria-label={`Select ${emp.name}`}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-xs text-neutral-400 font-mono">
                           {rowNum}
                         </td>
@@ -946,7 +1077,7 @@ export default function WorkforceTab() {
               {!loading && employees.length === 0 && (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-6 py-12 text-center text-sm text-neutral-400"
                   >
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -1040,6 +1171,8 @@ const EMPTY = {
   position: '', position_arabic: '', department: '',
   // Location
   work_location: '', city: '', address: '',
+  // Schedule
+  saturday_group: '', weekly_off_day: '',
   // Personal
   hiring_date: '', national_id: '', birth_date: '', phone: '', another_phone: '',
   // Education
@@ -1068,6 +1201,15 @@ const EMPTY = {
 
 const INP = "w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all";
 const LBL = "block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1";
+const WEEK_DAYS = [
+  { value: 0, label: 'Sunday' },
+  { value: 1, label: 'Monday' },
+  { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' },
+  { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' },
+];
 
 const FORM_TABS = [
   { key: 'basic',     label: 'Basic Info'        },
@@ -1094,6 +1236,8 @@ function buildInitialForm(emp) {
     position: emp.position ?? '', position_arabic: emp.position_arabic ?? '',
     department: emp.department ?? '',
     work_location: emp.work_location ?? '', city: emp.city ?? '', address: emp.address ?? '',
+    saturday_group: emp.saturday_group ?? '',
+    weekly_off_day: emp.weekly_off_day ?? '',
     hiring_date: dateStr(emp.hiring_date), national_id: emp.national_id ?? '',
     birth_date: dateStr(emp.birth_date), phone: emp.phone ?? '', another_phone: emp.another_phone ?? '',
     education_type: emp.education_type ?? '', education_school: emp.education_school ?? '',
@@ -1187,7 +1331,9 @@ function PositionPicker({ value, valueArabic, onChange, onTextChange }) {
 function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [], users = [], onSignatureSave }) {
   const [form, setForm] = useState(() => buildInitialForm(emp));
   const [tab, setTab] = useState('basic');
-  const { departments: lookupDepts, categories: lookupCats } = useLookups();
+  const { departments: lookupDepts, categories: lookupCats, locations: lookupLocs } = useLookups();
+  const isIntervention = ['cm_intervention', 'intervention'].includes(form.department)
+    || String(form.position || '').toLowerCase().includes('intervention');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const chk = (k) => set(k, !form[k]);
@@ -1281,7 +1427,7 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                           set('position', pos.name_en)
                           set('position_arabic', pos.name_ar ?? '')
                           set('position_id', pos.id)
-                          if (pos.department_key && !form.department) set('department', pos.department_key)
+                          if (pos.department_key) set('department', pos.department_key)
                         } else {
                           set('position_id', null)
                         }
@@ -1325,10 +1471,7 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                     <label className={LBL}>Work Location</label>
                     <select value={form.work_location} onChange={e => set('work_location', e.target.value)} className={INP}>
                       <option value="">— Select —</option>
-                      <option value="Kozzika">Kozzika</option>
-                      <option value="Tura">Tura</option>
-                      <option value="Ganz">Ganz</option>
-                      <option value="Mainline">Mainline</option>
+                      {lookupLocs.map(loc => <option key={loc.key} value={loc.key}>{loc.label_en}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1338,6 +1481,35 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                   <div>
                     <label className={LBL}>Address</label>
                     <input value={form.address} onChange={e => set('address', e.target.value)} className={INP} placeholder="Full address" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={LBL}>Saturday Group</label>
+                    <select
+                      value={form.saturday_group ?? ''}
+                      onChange={e => set('saturday_group', e.target.value)}
+                      disabled={isIntervention}
+                      className={`${INP} ${isIntervention ? 'bg-neutral-50 text-neutral-400' : ''}`}
+                    >
+                      <option value="">— Select —</option>
+                      <option value="A">Group A</option>
+                      <option value="B">Group B</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={LBL}>Weekly Off Day</label>
+                    <select
+                      value={form.weekly_off_day ?? ''}
+                      onChange={e => set('weekly_off_day', e.target.value)}
+                      disabled={!isIntervention}
+                      className={`${INP} ${!isIntervention ? 'bg-neutral-50 text-neutral-400' : ''}`}
+                    >
+                      <option value="">— Select —</option>
+                      {WEEK_DAYS.map(day => (
+                        <option key={day.value} value={day.value}>{day.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </>

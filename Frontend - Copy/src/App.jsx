@@ -21,6 +21,7 @@ const IgiNewPage        = lazy(() => import('./pages/IgiNewPage'))
 const IgiDetail         = lazy(() => import('./pages/IgiDetail'))
 const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
 const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
+const SaturdayRotationPage = lazy(() => import('./pages/SaturdayRotationPage'))
 
 // HR tab components — each mounted at its own route
 const WorkforceTab      = lazy(() => import('./components/hr/WorkforceTab'))
@@ -122,6 +123,11 @@ export default function App() {
           <Route path="attendance" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <AttendanceTab />
+            </ProtectedRoute>
+          } />
+          <Route path="saturday-rotation" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <SaturdayRotationPage />
             </ProtectedRoute>
           } />
           <Route path="certifications" element={

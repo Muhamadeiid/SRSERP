@@ -39,6 +39,8 @@ class EmployeeController extends Controller
             $q->byDepartment($request->department);
         if ($request->filled('location') && $request->location !== 'all')
             $q->byLocation($request->location);
+        if ($request->filled('project') && $request->project !== 'all')
+            $q->project($request->project);
         if ($request->filled('status') && $request->status !== 'all')
             $q->byStatus($request->status);
         if ($request->filled('category') && $request->category !== 'all')
@@ -202,10 +204,38 @@ class EmployeeController extends Controller
         return response()->json($employee->fresh());
     }
 
+    public function bulkSaturdayGroup(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer|exists:employees,id',
+            'saturday_group' => 'required|in:A,B',
+        ]);
+
+        $ids = array_values(array_unique($data['employee_ids']));
+
+        Employee::whereIn('id', $ids)->update([
+            'saturday_group' => $data['saturday_group'],
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'updated' => count($ids),
+            'data' => Employee::whereIn('id', $ids)->get(),
+        ]);
+    }
+
     private function normalizeFields(array $data): array
     {
         if (isset($data['department']) && $data['department'] !== null) {
             $data['department'] = strtolower($data['department']);
+        }
+        if (($data['saturday_group'] ?? null) === '') {
+            $data['saturday_group'] = null;
+        }
+        if (($data['weekly_off_day'] ?? null) === '') {
+            $data['weekly_off_day'] = null;
         }
         return $data;
     }
@@ -257,10 +287,31 @@ class EmployeeController extends Controller
                         $mapped = $this->mapRow($row);
                         if (empty($mapped['name'])) continue;
 
-                        Employee::updateOrCreate(
-                            ['ibs_code' => $mapped['ibs_code'] ?: null],
-                            $mapped
-                        );
+                        if ($mapped['ibs_code']) {
+                            Employee::updateOrCreate(
+                                ['ibs_code' => $mapped['ibs_code']],
+                                $mapped
+                            );
+                        } else {
+                            $existing = Employee::where('name', $mapped['name'])->first();
+                            if ($existing) {
+                                $existing->update($mapped);
+                            } else {
+                                Employee::create(array_merge($mapped, [
+                                    'doc_birth_certificate' => $mapped['doc_birth_certificate'] ?? false,
+                                    'doc_edu_certificate' => $mapped['doc_edu_certificate'] ?? false,
+                                    'doc_military_certificate' => $mapped['doc_military_certificate'] ?? false,
+                                    'doc_criminal_sheet' => $mapped['doc_criminal_sheet'] ?? false,
+                                    'doc_national_id' => $mapped['doc_national_id'] ?? false,
+                                    'doc_social_insurance_print' => $mapped['doc_social_insurance_print'] ?? false,
+                                    'doc_personal_photos' => $mapped['doc_personal_photos'] ?? false,
+                                    'doc_union_card' => $mapped['doc_union_card'] ?? false,
+                                    'form_1' => $mapped['form_1'] ?? false,
+                                    'no_warning_letters' => $mapped['no_warning_letters'] ?? 0,
+                                    'manager_manual' => false,
+                                ]));
+                            }
+                        }
                         $imported++;
                     } catch (\Throwable $e) {
                         $errors[] = "Row " . ($i + 2) . ": " . $e->getMessage();
@@ -325,6 +376,8 @@ class EmployeeController extends Controller
                 $e->position_arabic,                    // Position Arabic
                 $e->department_label,                   // Department
                 $e->work_location,                      // Work Location
+                $e->saturday_group,                     // Saturday Group
+                $e->weekly_off_day !== null ? $this->weekdayLabel((int) $e->weekly_off_day) : null, // Weekly Off Day
                 $e->city,                               // City
                 $e->address,                            // Address
                 $e->hiring_date?->format('d-M-Y'),      // Hiring Date
@@ -408,9 +461,24 @@ class EmployeeController extends Controller
         $pos  = $g(['position']);
         $dept = $g(['department']) ?: null;
 
+        if (!$dept && $pos) {
+            $dept = self::departmentFromPosition($pos);
+        }
+
+        $ibsCode = $g(['ibs code', 'ibscode']);
+        if ($ibsCode && !is_numeric($ibsCode)) {
+            $ibsCode = null;
+        }
+
+        $ecPhone = $g(['emergency contact phone no', 'ec phone']);
+        if ($ecPhone && str_contains($ecPhone, ' - ')) {
+            $ecPhone = trim(explode(' - ', $ecPhone)[0]);
+        }
+        if ($ecPhone) $ecPhone = substr($ecPhone, 0, 20);
+
         return [
-            'ibs_code'                   => $g(['ibs code', 'ibscode']),
-            'punch_code'                 => $g(['punch code', 'punchcode']) ?: 'WA',
+            'ibs_code'                   => $ibsCode,
+            'punch_code'                 => $this->cleanPunchCode($g(['punch code', 'punchcode'])),
             'rotem_code'                 => $g(['contract', 'rotemcode', 'rotem code']),
             'project_budget'             => $g(['project budget']),
             'name'                       => $g(['english name', 'name']),
@@ -419,6 +487,8 @@ class EmployeeController extends Controller
             'position_arabic'            => $g(['position in arabic']),
             'department'                 => $dept,
             'work_location'              => $g(['work location']),
+            'saturday_group'             => $this->cleanSaturdayGroup($g(['saturday group', 'saturday grp'])),
+            'weekly_off_day'             => $this->cleanWeeklyOffDay($g(['weekly off day', 'day off'])),
             'city'                       => $g(['city']),
             'address'                    => $g(['address']),
             'hiring_date'                => $d($g(['hiring date'])),
@@ -427,37 +497,37 @@ class EmployeeController extends Controller
             'phone'                      => $g(['phone no', 'phone']),
             'another_phone'              => $g(['another phone no', 'another phone']),
             'education_type'             => $g(['education category', 'type', 'education type']),
-            'education_school'           => $g(['university/school', 'university school', 'school']),
+            'education_school'           => $g(['university/school', 'university school', 'school/university']),
             'education_major'            => $g(['major']),
-            'education_year'             => (int) $g(['year']) ?: null,
+            'education_year'             => (int) $g(['year', 'grad year']) ?: null,
             'category'                   => $g(['category']) ?: 'Blue Collar',
             'military_status'            => $g(['military status']),
-            'military_serving_days'      => (int) $g(['day']) ?: null,
-            'military_serving_months'    => (int) $g(['month']) ?: null,
-            'military_serving_years'     => (int) $g(['year.1']) ?: null,
-            'emergency_contact_type'     => $g(['emergency contact type']),
-            'emergency_contact_name'     => $g(['emergency contact name']),
-            'emergency_contact_name_ar'  => $g(['emergency contact arabic name']),
-            'emergency_contact_phone'    => $g(['emergency contact phone no']),
-            'doc_birth_certificate'      => $b($g(['birth certificate'])),
-            'doc_edu_certificate'        => $b($g(['edu certificate'])),
-            'doc_military_certificate'   => $b($g(['military certificate'])),
+            'military_serving_days'      => (int) $g(['day', 'mil. days']) ?: null,
+            'military_serving_months'    => (int) $g(['month', 'mil. months']) ?: null,
+            'military_serving_years'     => (int) $g(['year.1', 'mil. years']) ?: null,
+            'emergency_contact_type'     => $g(['emergency contact type', 'ec type']),
+            'emergency_contact_name'     => $g(['emergency contact name', 'ec name']),
+            'emergency_contact_name_ar'  => $g(['emergency contact arabic name', 'ec name (ar)']),
+            'emergency_contact_phone'    => $ecPhone,
+            'doc_birth_certificate'      => $b($g(['birth certificate', 'birth cert'])),
+            'doc_edu_certificate'        => $b($g(['edu certificate', 'edu cert'])),
+            'doc_military_certificate'   => $b($g(['military certificate', 'military cert'])),
             'doc_criminal_sheet'         => $b($g(['creminal sheet', 'criminal sheet'])),
-            'doc_national_id'            => $b($g(['national id'])),
-            'doc_social_insurance_print' => $b($g(['social insurance print'])),
+            'doc_national_id'            => $b($g(['national id doc'])),
+            'doc_social_insurance_print' => $b($g(['social insurance print', 'soc. insurance print'])),
             'doc_personal_photos'        => $b($g(['personal photos'])),
             'doc_union_card'             => $b($g(['union card/ skills manag certificate', 'union card'])),
-            'social_insurance_number'    => $g(['social insurance number']),
+            'social_insurance_number'    => $g(['social insurance number', 'social insurance no']),
             'insurance_status'           => $g(['insurance status']),
-            'insurance_company'          => $g(['form 1 insurance date', 'insurance company']),
-            'form_1'                     => $b($g(['date of last available contract', 'form 1'])),
-            'insurance_date'             => $d($g(['vacation form', 'insurance date'])),
-            'contract_start'             => $d($g(['sanctions form', 'start'])),
-            'contract_end'               => $d($g(['marital status form', 'end'])),
-            'vacation_form'              => $g(['vacation form ref', 'vacation form']),
-            'sanctions_form'             => $g(['sanctions form ref', 'sanctions form']),
-            'marital_status_form'        => $g(['marital status form ref', 'marital status form']),
-            'no_warning_letters'         => (int) $g(['no of warning letters']) ?: 0,
+            'insurance_company'          => $g(['insurance company']),
+            'form_1'                     => $b($g(['form 1'])),
+            'insurance_date'             => $d($g(['insurance date'])),
+            'contract_start'             => $d($g(['contract start', 'start'])),
+            'contract_end'               => $d($g(['contract end', 'end'])),
+            'vacation_form'              => $g(['vacation form']),
+            'sanctions_form'             => $g(['sanctions form']),
+            'marital_status_form'        => $g(['marital status form']),
+            'no_warning_letters'         => (int) $g(['no of warning letters', 'warning letters']) ?: 0,
             'status'                     => 'on_site',
         ];
     }
@@ -468,7 +538,7 @@ class EmployeeController extends Controller
         return [
             '#', 'IBS Code', 'Punch Code', 'RotemCode', 'Project Budget',
             'English Name', 'Arabic Name', 'Position', 'Position In Arabic',
-            'Department', 'Work Location', 'City', 'Address',
+            'Department', 'Work Location', 'Saturday Group', 'Weekly Off Day', 'City', 'Address',
             'Hiring Date', 'National ID', 'Birth Date', 'Phone No', 'Another Phone',
             'Education Type', 'School/University', 'Major', 'Grad Year',
             'Category', 'Military Status', 'Mil. Days', 'Mil. Months', 'Mil. Years',
@@ -479,6 +549,62 @@ class EmployeeController extends Controller
             'Insurance Date', 'Contract Start', 'Contract End',
             'Vacation Form', 'Sanctions Form', 'Marital Status Form', 'Warning Letters',
         ];
+    }
+
+    private static function departmentFromPosition(string $position): string
+    {
+        $pos = strtolower($position);
+        if (str_contains($pos, 'intervention')) return 'cm_intervention';
+        if (str_contains($pos, 'hm ') || str_starts_with($pos, 'hm ') || $pos === 'hm head') return 'hm';
+        if (str_contains($pos, 'cm ') || str_starts_with($pos, 'cm ') || $pos === 'cm head') return 'cm';
+        if (str_contains($pos, 'pm ') || str_starts_with($pos, 'pm ')) return 'pm';
+        if (str_contains($pos, 'warranty')) return 'warranty';
+        return 'admin';
+    }
+
+    private function cleanPunchCode(?string $value): ?string
+    {
+        $code = trim((string) $value);
+        if ($code === '') return null;
+
+        $upper = strtoupper($code);
+        if (in_array($upper, ['WA', 'N/A', 'NA', 'NONE', 'NO', 'NULL', '-', '--', '0'], true)) {
+            return null;
+        }
+
+        return $code;
+    }
+
+    private function cleanSaturdayGroup(?string $value): ?string
+    {
+        $group = strtoupper(trim((string) $value));
+        return in_array($group, ['A', 'B'], true) ? $group : null;
+    }
+
+    private function cleanWeeklyOffDay(?string $value): ?int
+    {
+        $day = strtolower(trim((string) $value));
+        if ($day === '') return null;
+
+        $days = [
+            'sunday' => 0, 'sun' => 0,
+            'monday' => 1, 'mon' => 1,
+            'tuesday' => 2, 'tue' => 2,
+            'wednesday' => 3, 'wed' => 3,
+            'thursday' => 4, 'thu' => 4,
+            'friday' => 5, 'fri' => 5,
+            'saturday' => 6, 'sat' => 6,
+        ];
+
+        if (array_key_exists($day, $days)) return $days[$day];
+        if (is_numeric($day) && (int) $day >= 0 && (int) $day <= 6) return (int) $day;
+
+        return null;
+    }
+
+    private function weekdayLabel(int $day): string
+    {
+        return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][$day] ?? '';
     }
 
     private function rules(?int $excludeId = null): array
@@ -495,6 +621,8 @@ class EmployeeController extends Controller
             'position_id'  => 'nullable|exists:positions,id',
             'department'   => 'nullable|string|max:50',
             'work_location'=> 'nullable|string|max:100',
+            'saturday_group' => 'nullable|in:A,B',
+            'weekly_off_day' => 'nullable|integer|min:0|max:6',
             'hiring_date'  => 'nullable|date',
             'birth_date'   => 'nullable|date',
             'insurance_date'=> 'nullable|date',

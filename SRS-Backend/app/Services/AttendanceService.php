@@ -56,7 +56,11 @@ class AttendanceService
                         $dateStr = $parts[1];
                     }
                     $ts        = Carbon::parse($dateStr . ' ' . $timeStr);
-                    $punchCode = trim($parts[0]);
+                    $punchCode = $this->normalizePunchCode($parts[0]);
+                    if ($this->isPlaceholderPunchCode($punchCode)) {
+                        $errors[] = "Line {$lineNum}: Punch Code is empty or not a real fingerprint code.";
+                        continue;
+                    }
 
                     // Always track dates from the file (even duplicates) so we can
                     // force-reprocess them if no new rows were inserted.
@@ -95,7 +99,9 @@ class AttendanceService
             DB::commit();
 
             // Now process the logs into attendance records
-            $processed = $this->processUnprocessedLogs();
+            $processResult = $this->processUnprocessedLogs();
+            $processed = $processResult['processed'];
+            $errors = array_merge($errors, $processResult['warnings']);
 
             return [
                 'success'   => true,
@@ -120,27 +126,33 @@ class AttendanceService
     /**
      * Process unprocessed attendance logs into attendance records
      *
-     * @return int Number of records processed
+     * @return array{processed:int,warnings:array<int,string>}
      */
-    public function processUnprocessedLogs(): int
+    public function processUnprocessedLogs(): array
     {
         $unprocessedLogs = AttendanceLog::unprocessed()
             ->orderBy('timestamp')
             ->get();
 
-        // Group by punch_code and date
+        $employeeByPunchCode = $this->employeePunchCodeMap();
+
+        // Group by normalized punch_code and date. Biometric devices sometimes
+        // export leading zeroes (e.g. 0007), while Workforce stores 7.
         $grouped = $unprocessedLogs->groupBy(function ($log) {
-            return $log->punch_code . '_' . $log->timestamp->format('Y-m-d');
+            return $this->normalizePunchCode($log->punch_code) . '_' . $log->timestamp->format('Y-m-d');
         });
 
         $processedCount = 0;
+        $warnings = [];
+        $unmatchedPunchCodes = [];
 
         foreach ($grouped as $key => $newLogs) {
             [$punchCode, $date] = explode('_', $key);
 
             // Find employee by punch_code
-            $employee = Employee::where('punch_code', $punchCode)->first();
+            $employee = $employeeByPunchCode[$punchCode] ?? null;
             if (!$employee) {
+                $unmatchedPunchCodes[$punchCode] = true;
                 Log::warning("Employee not found for punch_code: {$punchCode}");
                 continue;
             }
@@ -155,23 +167,24 @@ class AttendanceService
             // Fetch ALL logs for this employee+date (including already-processed ones)
             // so that uploading multiple files for the same period always yields the
             // true first and last punch of the day.
-            $allLogsForDay = AttendanceLog::where('punch_code', $punchCode)
-                ->whereDate('timestamp', $date)
+            $allLogsForDay = AttendanceLog::whereDate('timestamp', $date)
                 ->orderBy('timestamp')
-                ->get();
+                ->get()
+                ->filter(fn ($log) => $this->normalizePunchCode($log->punch_code) === $punchCode)
+                ->values();
 
             $firstPunch  = $allLogsForDay->first()->timestamp;
             $lastPunch   = $allLogsForDay->last()->timestamp;
             $spanMinutes = $firstPunch->diffInMinutes($lastPunch);
 
-            $standardStart = Carbon::parse($date . ' 08:00:00');
-            $noon          = Carbon::parse($date . ' 12:00:00');
+            $standardStart = Carbon::parse($date . ' ' . AttendancePolicy::get('attendance_regular_start_time'));
+            $checkoutCutoff = Carbon::parse($date . ' ' . AttendancePolicy::get('attendance_checkout_cutoff_time'));
 
-            if ($spanMinutes >= 30) {
+            if ($spanMinutes >= AttendancePolicy::int('attendance_single_punch_gap_minutes')) {
                 // Enough gap between first and last punch → treat as full day
                 $attendanceData = $this->calculateAttendance($firstPunch, $lastPunch, $expectedHours, $isIntervention);
 
-            } elseif ($firstPunch->lt($noon)) {
+            } elseif ($firstPunch->lt($checkoutCutoff)) {
                 // Clustered morning punches → check-in only, no checkout yet
                 $lateMinutes = (!$isIntervention && $firstPunch->gt($standardStart))
                     ? $standardStart->diffInMinutes($firstPunch)
@@ -221,7 +234,54 @@ class AttendanceService
             $processedCount++;
         }
 
-        return $processedCount;
+        foreach (array_keys($unmatchedPunchCodes) as $code) {
+            $warnings[] = "Punch Code {$code} is not assigned to any employee or is duplicated.";
+        }
+
+        return [
+            'processed' => $processedCount,
+            'warnings' => $warnings,
+        ];
+    }
+
+    private function normalizePunchCode(?string $punchCode): string
+    {
+        $code = trim((string) $punchCode);
+        if ($code !== '' && ctype_digit($code)) {
+            return ltrim($code, '0') ?: '0';
+        }
+        return $code;
+    }
+
+    private function employeePunchCodeMap(): array
+    {
+        $map = [];
+        $seen = [];
+        $duplicates = [];
+
+        Employee::whereNotNull('punch_code')
+            ->get(['id', 'punch_code'])
+            ->each(function (Employee $employee) use (&$map, &$seen, &$duplicates) {
+                $raw = trim((string) $employee->punch_code);
+                if ($this->isPlaceholderPunchCode($raw)) return;
+
+                foreach (array_unique([$raw, $this->normalizePunchCode($raw)]) as $code) {
+                    if ($code === '' || $this->isPlaceholderPunchCode($code)) continue;
+
+                    if (isset($seen[$code]) && (int) $seen[$code]->id !== (int) $employee->id) {
+                        $duplicates[$code] = true;
+                        unset($map[$code]);
+                        continue;
+                    }
+
+                    $seen[$code] = $employee;
+                    if (!isset($duplicates[$code])) {
+                        $map[$code] = $employee;
+                    }
+                }
+            });
+
+        return $map;
     }
 
     /**
@@ -247,7 +307,7 @@ class AttendanceService
         // Late minutes only apply to regular employees with a fixed 08:00 start
         $lateMinutes = 0;
         if (!$isIntervention) {
-            $standardStart = Carbon::parse('08:00:00');
+            $standardStart = Carbon::parse(AttendancePolicy::get('attendance_regular_start_time'));
             $inCarbon      = Carbon::parse($checkInTime);
             if ($inCarbon->gt($standardStart)) {
                 $lateMinutes = $standardStart->diffInMinutes($inCarbon);
@@ -258,7 +318,7 @@ class AttendanceService
         // - Regular employees: OT starts at 17:00 (5 PM), regardless of check-in time.
         // - Intervention employees: OT = hours worked beyond expected shift length.
         if (!$isIntervention) {
-            $otStart = Carbon::parse($checkIn->toDateString() . ' 17:00:00');
+            $otStart = Carbon::parse($checkIn->toDateString() . ' ' . AttendancePolicy::get('attendance_regular_ot_start_time'));
             $overtimeHours = $checkOut->gt($otStart)
                 ? round($checkOut->diffInMinutes($otStart) / 60, 2)
                 : 0;
@@ -293,7 +353,7 @@ class AttendanceService
         if ($workHours < $expectedHours) return 'shortage';
 
         // Late only meaningful for regular employees
-        if (!$isIntervention && $lateMinutes > 15) return 'late';
+        if (!$isIntervention && $lateMinutes > AttendancePolicy::int('attendance_late_grace_minutes')) return 'late';
 
         return 'present';
     }
@@ -303,7 +363,9 @@ class AttendanceService
      */
     private function getExpectedHours(Employee $employee): float
     {
-        return 9.00;
+        return $employee->isIntervention()
+            ? AttendancePolicy::float('attendance_intervention_expected_hours')
+            : AttendancePolicy::float('attendance_regular_expected_hours');
     }
 
     /**
@@ -452,8 +514,31 @@ class AttendanceService
             });
         }
 
+        // Hide previously-created biometric records for employees that do not
+        // have a real fingerprint code. Manual entries for those employees still
+        // remain visible.
+        $query->where(function ($q) {
+            $q->where('is_manual', true)
+                ->orWhereHas('employee', function ($employeeQuery) {
+                    $employeeQuery
+                        ->whereNotNull('punch_code')
+                        ->whereNotIn(DB::raw('UPPER(TRIM(punch_code))'), $this->placeholderPunchCodes());
+                });
+        });
+
         return $query->orderBy('date', 'desc')
             ->orderBy('check_in', 'asc')
             ->get();
+    }
+
+    private function isPlaceholderPunchCode(?string $punchCode): bool
+    {
+        $code = strtoupper(trim((string) $punchCode));
+        return $code === '' || in_array($code, $this->placeholderPunchCodes(), true);
+    }
+
+    private function placeholderPunchCodes(): array
+    {
+        return ['', 'WA', 'N/A', 'NA', 'NONE', 'NO', 'NULL', '-', '--', '0'];
     }
 }

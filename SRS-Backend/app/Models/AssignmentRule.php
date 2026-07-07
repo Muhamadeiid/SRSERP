@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class AssignmentRule extends Model
 {
-    protected $fillable = ['match_field', 'match_value', 'direct_manager_id', 'is_active', 'priority'];
+    protected $fillable = ['match_field', 'match_value', 'direct_manager_id', 'department', 'work_location', 'is_active', 'priority'];
 
     protected $casts = [
         'is_active' => 'boolean',

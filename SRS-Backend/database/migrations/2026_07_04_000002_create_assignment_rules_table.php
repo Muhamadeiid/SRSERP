@@ -15,6 +15,8 @@ return new class extends Migration
             $table->string('match_value', 150);
             // Where matched employees get assigned.
             $table->foreignId('direct_manager_id')->nullable()->constrained('employees')->nullOnDelete();
+            $table->string('department', 50)->nullable();
+            $table->string('work_location', 100)->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('priority')->default(0);   // lower = evaluated first; first match wins
             $table->timestamps();

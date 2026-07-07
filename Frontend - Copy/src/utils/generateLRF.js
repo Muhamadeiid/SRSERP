@@ -1,7 +1,7 @@
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun,
   AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
-  HeightRule, TableLayoutType, Header, Footer, TabStopType, TabStopPosition,
+  HeightRule, TableLayoutType, Header, TabStopType, TabStopPosition,
 } from 'docx'
 import { saveAs } from 'file-saver'
 
@@ -39,12 +39,36 @@ async function loadLogoBytes() {
 }
 
 function earlyDays(from, to) {
-  if (!from || !to) return ''
-  const [fh, fm] = from.split(':').map(Number)
-  const [th, tm] = to.split(':').map(Number)
+  const start = normalizeTime(from)
+  const end = normalizeTime(to)
+  if (!start || !end) return ''
+  const [fh, fm] = start.split(':').map(Number)
+  const [th, tm] = end.split(':').map(Number)
   const mins = (th * 60 + tm) - (fh * 60 + fm)
   if (mins <= 0) return ''
   return (mins / 60 / 8).toFixed(2).replace(/\.?0+$/, '')
+}
+
+function normalizeTime(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const m = raw.match(/^(\d{1,2})(?::?(\d{2}))?(?::\d{2})?$/)
+  if (!m) return raw
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)))
+  const min = Math.min(59, Math.max(0, parseInt(m[2] ?? '0', 10)))
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+
+function formatBalance(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const n = parseFloat(value)
+  return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : value
+}
+
+function depotManagerNameFor(d) {
+  return d?.approver?.role === 'depot_manager'
+    ? d.approver.name
+    : (d?.depot_manager_name || DEPOT_MGR_FALLBACK)
 }
 
 function para(text, opts = {}) {
@@ -102,6 +126,7 @@ const DEPOT_MGR_FALLBACK  = 'Mohamed Awaad'
 
 // ── main export ────────────────────────────────────────────────────
 export async function generateLRF(d) {
+  d = { ...d, available_balance: formatBalance(d.available_balance) }
   const logoBytes = await loadLogoBytes()
 
   // ── Header (logo + title) — only bottom border + divider ──────
@@ -245,10 +270,10 @@ export async function generateLRF(d) {
     children: [
       cell([para(d.leave_type === 'early' ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
       cell([para('Early Leave', { size: 18 })], { width: TXT_W }),
-      cell([para(`From: ${d.early_from || ''}`, { size: 18 })], { colspan: 2 }),
-      cell([para(`To: ${d.early_to || ''}`, { size: 18 })], { colspan: 2 }),
-      cell([para(`( ${d.leave_type === 'early' ? earlyDays(d.early_from, d.early_to) : ''} )`, { size: 18, align: AlignmentType.CENTER })], { width: CHK_W }),
-      cell([para('Day', { size: 18 })], { width: REST }),
+      cell([para(`From: ${normalizeTime(d.early_from) || ''}`, { size: 18 })], { colspan: 2 }),
+      cell([para(`To: ${normalizeTime(d.early_to) || ''}`, { size: 18 })], { colspan: 2 }),
+      cell([para(`( ${d.leave_type === 'early' ? earlyDays(d.early_from, d.early_to) : ''} )`, { size: 16, align: AlignmentType.CENTER })], { width: CHK_W }),
+      cell([para('Day', { size: 16, align: AlignmentType.CENTER })], { width: REST, margins: { top: 40, bottom: 40, left: 40, right: 40 } }),
     ],
   })
 
@@ -275,7 +300,7 @@ export async function generateLRF(d) {
     alternate: d.alternate_employee_name || '',
     direct:    managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || ''),
     hr:        HR_OFFICER_FALLBACK,
-    depot:     d.approver?.name || DEPOT_MGR_FALLBACK,
+    depot:     depotManagerNameFor(d),
   }
 
   const sigRows = (en, ar, name) => [
@@ -359,14 +384,11 @@ export async function generateLRF(d) {
         properties: {
           page: {
             size: { width: PAGE_W, height: PAGE_H },
-            margin: { top: 1800, right: MARGIN, bottom: 1200, left: MARGIN, header: 360, footer: 360 },
+            margin: { top: 1650, right: MARGIN, bottom: 500, left: MARGIN, header: 300, footer: 0 },
           },
         },
         headers: {
           default: new Header({ children: [headerTable] }),
-        },
-        footers: {
-          default: new Footer({ children: [footerTable] }),
         },
         children: [
           trackingRow,
@@ -375,6 +397,7 @@ export async function generateLRF(d) {
           purposeAr,
           detailsHead,
           mainTable,
+          footerTable,
         ],
       },
     ],

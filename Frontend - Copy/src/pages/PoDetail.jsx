@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { Loader2, ArrowLeft, FileText, Printer, ClipboardCheck, Pencil, Check, X, FileSpreadsheet } from 'lucide-react'
 import { getPo, updatePo, PO_STATUS_LABELS, PO_STATUS_STYLES } from '../services/poService'
-import { generatePO } from '../utils/generatePO'
-import { generatePO_Excel } from '../utils/generatePO_Excel'
 import { IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
 
 const fmt      = (n) => (n == null ? '—' : Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -73,6 +71,16 @@ export default function PoDetail() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleExcel = async () => {
+    const { generatePO_Excel } = await import('../utils/generatePO_Excel')
+    return generatePO_Excel(po)
+  }
+
+  const handleWord = async () => {
+    const { generatePO } = await import('../utils/generatePO')
+    return generatePO(po)
   }
 
   if (loading) return (
@@ -161,11 +169,11 @@ export default function PoDetail() {
               <ClipboardCheck className="w-3.5 h-3.5" /> Create IGI
             </button>
           )}
-          <button onClick={() => generatePO_Excel(po)}
+          <button onClick={handleExcel}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
           </button>
-          <button onClick={() => generatePO(po)}
+          <button onClick={handleWord}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg transition-colors">
             <Printer className="w-3.5 h-3.5" /> Word (.docx)
           </button>

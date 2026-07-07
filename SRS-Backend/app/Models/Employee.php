@@ -189,6 +189,11 @@ class Employee extends Model
     public function getDepartmentLabelAttribute(): string
     {
         return match ($this->department) {
+            'cm'                => 'CM',
+            'hm'                => 'HM',
+            'pm'                => 'PM',
+            'warranty'          => 'Warranty',
+            'cm_intervention'   => 'CM (Intervention)',
             'workshop'          => 'Workshop',
             'heavy_maintenance' => 'Heavy Maintenance',
             'intervention'      => 'Intervention',
@@ -218,7 +223,7 @@ class Employee extends Model
 
     // ── Project helpers ─────────────────────────────────────
     // Project codes are resolved from the `projects` table (managed in Settings)
-    // by matching employees.project_budget against each project's match_prefix.
+    // by matching project_budget prefixes or configured work locations.
     // A project can also be flagged is_default to catch unmatched budgets.
 
     /**
@@ -227,7 +232,7 @@ class Employee extends Model
      */
     public function getProjectCodeAttribute(): string
     {
-        return \App\Models\Project::codeFor($this->project_budget);
+        return \App\Models\Project::codeFor($this->project_budget, $this->work_location);
     }
 
     public function projectCode(): string
@@ -242,17 +247,23 @@ class Employee extends Model
     /** Scope: employees whose resolved project code equals the given value. */
     public function scopeProject($q, string $code)
     {
-        $prefixes = \App\Models\Project::where('code', $code)
+        $project = \App\Models\Project::where('code', $code)
             ->where('is_active', true)
-            ->pluck('match_prefix')
-            ->filter()
-            ->all();
+            ->first();
 
-        if (empty($prefixes)) return $q;
+        if (!$project) return $q;
 
-        return $q->where(function ($sub) use ($prefixes) {
+        $prefixes = array_filter([$project->match_prefix]);
+        $locations = \App\Models\Project::splitLocations($project->match_locations);
+
+        if (empty($prefixes) && empty($locations)) return $q;
+
+        return $q->where(function ($sub) use ($prefixes, $locations) {
             foreach ($prefixes as $p) {
                 $sub->orWhere('project_budget', 'like', $p.'%');
+            }
+            foreach ($locations as $location) {
+                $sub->orWhere('work_location', $location);
             }
         });
     }
@@ -284,20 +295,24 @@ class Employee extends Model
     {
         $dow = $date->dayOfWeek; // 0=Sun … 6=Sat
 
+        $policy = \App\Services\AttendancePolicy::all();
+
         if ($this->isIntervention()) {
-            $offDay = $this->weekly_off_day ?? 5; // default Friday if not set
+            $offDay = $this->weekly_off_day ?? (int) $policy['attendance_intervention_default_off_day'];
             return $dow !== $offDay;
         }
 
         // Regular employees
-        if ($dow === 5) return false; // Friday always off
+        $regularOffDay = (int) $policy['attendance_regular_weekly_off_day'];
+        if ($dow === $regularOffDay) return false;
 
-        if ($dow === 6) { // Saturday — check rotation group
+        if ($dow === 6 && \App\Services\AttendancePolicy::bool('attendance_saturday_rotation_enabled')) {
             $isoWeek = (int) $date->format('W');
-            $groupA  = ($isoWeek % 2 === 0); // even week → Group A is off
-            if ($this->saturday_group === 'A') return !$groupA;
-            if ($this->saturday_group === 'B') return  $groupA;
-            return false; // no group assigned → treat as off
+            $evenWeek = ($isoWeek % 2 === 0);
+            $groupAOffEvenWeek = \App\Services\AttendancePolicy::bool('attendance_group_a_off_even_week');
+            if ($this->saturday_group === 'A') return !($evenWeek === $groupAOffEvenWeek);
+            if ($this->saturday_group === 'B') return  ($evenWeek === $groupAOffEvenWeek);
+            return false;
         }
 
         return true; // Sun–Thu always working for regular
@@ -341,8 +356,12 @@ class Employee extends Model
     {
         if (!$position) return null;
         $pos = strtolower($position);
-        if (preg_match('/\b(hm|heavy|cm)\b/', $pos)) return 'heavy_maintenance';
-        if (preg_match('/\b(workshop|admin|store|logistics|procurement|mmis|hr )\b/', $pos)) return 'workshop';
+        if (str_contains($pos, 'intervention')) return 'cm_intervention';
+        if (preg_match('/\bhm\b|heavy/', $pos)) return 'hm';
+        if (preg_match('/\bcm\b/', $pos)) return 'cm';
+        if (preg_match('/\bpm\b/', $pos)) return 'pm';
+        if (str_contains($pos, 'warranty')) return 'warranty';
+        if (preg_match('/\b(workshop|admin|store|logistics|procurement|mmis|hr)\b/', $pos)) return 'admin';
         return null;
     }
 }

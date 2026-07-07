@@ -21,7 +21,7 @@ class LeaveBalanceController extends Controller
         $annualEff = $balance->getEffectiveRemaining('annual');
         $casualEff = $balance->getEffectiveRemaining('casual');
         $sickEff   = $balance->getEffectiveRemaining('sick');
-        $earlyEff  = $balance->getEffectiveRemaining('early');
+        $earlyEff  = $annualEff;
 
         return array_merge($balance->toArray(), [
             // Effective (usable) remainings

@@ -10,6 +10,22 @@ import { listProjects, createProject, updateProject, deleteProject } from '../se
 import { listIssuingSources, createIssuingSource, updateIssuingSource, deleteIssuingSource } from '../services/issuingSourceService'
 import { useLookups } from '../hooks/useLookups'
 
+const ATTENDANCE_POLICY_DEFAULTS = {
+  attendance_regular_start_time: '08:00',
+  attendance_regular_ot_start_time: '17:00',
+  attendance_night_ot_start_time: '19:00',
+  attendance_checkout_cutoff_time: '12:00',
+  attendance_regular_expected_hours: 9,
+  attendance_intervention_expected_hours: 9,
+  attendance_late_grace_minutes: 15,
+  attendance_single_punch_gap_minutes: 30,
+  attendance_absent_deduction_minutes: 540,
+  attendance_regular_weekly_off_day: 5,
+  attendance_intervention_default_off_day: 5,
+  attendance_saturday_rotation_enabled: '1',
+  attendance_group_a_off_even_week: '1',
+}
+
 export default function SettingsPage() {
   // ── Org Structure state ───────────────────────────────────────────
   const [managers,       setManagers]       = useState([])
@@ -32,6 +48,10 @@ export default function SettingsPage() {
   const [leaveDefSaved,  setLeaveDefSaved]  = useState(false)
   const [leaveDefSaving, setLeaveDefSaving] = useState(false)
 
+  const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
+  const [attendancePolicySaved, setAttendancePolicySaved] = useState(false)
+  const [attendancePolicySaving, setAttendancePolicySaving] = useState(false)
+
   // ── Load managers + settings on mount ────────────────────────────
   useEffect(() => {
     getManagers().then(r => setManagers(r.data ?? []))
@@ -41,6 +61,13 @@ export default function SettingsPage() {
         default_annual_days: parseInt(r.data?.default_annual_days ?? 21),
         default_casual_days: parseInt(r.data?.default_casual_days ?? 7),
         default_sick_days:   parseInt(r.data?.default_sick_days   ?? 90),
+      })
+      setAttendancePolicy({
+        ...ATTENDANCE_POLICY_DEFAULTS,
+        ...Object.fromEntries(Object.keys(ATTENDANCE_POLICY_DEFAULTS).map(key => [
+          key,
+          r.data?.[key] ?? ATTENDANCE_POLICY_DEFAULTS[key],
+        ])),
       })
     })
   }, [])
@@ -107,6 +134,20 @@ export default function SettingsPage() {
       setHrSaved(true)
       setTimeout(() => setHrSaved(false), 2500)
     } finally { setHrSaving(false) }
+  }
+
+  const setPolicy = (key, value) => {
+    setAttendancePolicy(p => ({ ...p, [key]: value }))
+    setAttendancePolicySaved(false)
+  }
+
+  const handleSaveAttendancePolicy = async () => {
+    setAttendancePolicySaving(true)
+    try {
+      await Promise.all(Object.entries(attendancePolicy).map(([key, value]) => saveSetting(key, String(value))))
+      setAttendancePolicySaved(true)
+      setTimeout(() => setAttendancePolicySaved(false), 2500)
+    } finally { setAttendancePolicySaving(false) }
   }
 
   const roleLabel = (role) => {
@@ -320,6 +361,95 @@ export default function SettingsPage() {
       </div>
 
       {/* ── Section 3: HR Settings ── */}
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
+          <Settings className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-bold text-secondary-700">Attendance Policy</h2>
+          <p className="text-xs text-neutral-400 ml-2">Shift timing, late rules, weekly off, and Saturday rotation</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              ['attendance_regular_start_time', 'Regular Start', 'time'],
+              ['attendance_regular_ot_start_time', 'Regular OT Start', 'time'],
+              ['attendance_night_ot_start_time', 'Night OT Starts', 'time'],
+              ['attendance_checkout_cutoff_time', 'Single Punch Cutoff', 'time'],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">{label}</label>
+                <input
+                  type={type}
+                  value={attendancePolicy[key]}
+                  onChange={e => setPolicy(key, e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors font-bold"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[
+              ['attendance_regular_expected_hours', 'Regular Hours', 0, 24],
+              ['attendance_intervention_expected_hours', 'Intervention Hours', 0, 24],
+              ['attendance_late_grace_minutes', 'Late Grace Min', 0, 240],
+              ['attendance_single_punch_gap_minutes', 'Full Day Gap Min', 1, 240],
+              ['attendance_absent_deduction_minutes', 'Absent Deduction Min', 0, 1440],
+            ].map(([key, label, min, max]) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">{label}</label>
+                <input
+                  type="number"
+                  min={min}
+                  max={max}
+                  value={attendancePolicy[key]}
+                  onChange={e => setPolicy(key, e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors text-center font-bold"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Regular Weekly Off</label>
+              <select value={attendancePolicy.attendance_regular_weekly_off_day} onChange={e => setPolicy('attendance_regular_weekly_off_day', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
+                {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => <option key={day} value={i}>{day}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Intervention Default Off</label>
+              <select value={attendancePolicy.attendance_intervention_default_off_day} onChange={e => setPolicy('attendance_intervention_default_off_day', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
+                {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => <option key={day} value={i}>{day}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Saturday Rotation</label>
+              <select value={attendancePolicy.attendance_saturday_rotation_enabled} onChange={e => setPolicy('attendance_saturday_rotation_enabled', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Group A Off</label>
+              <select value={attendancePolicy.attendance_group_a_off_even_week} onChange={e => setPolicy('attendance_group_a_off_even_week', e.target.value)} className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white transition-colors">
+                <option value="1">Even ISO weeks</option>
+                <option value="0">Odd ISO weeks</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSaveAttendancePolicy}
+            disabled={attendancePolicySaving}
+            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl transition-all ${
+              attendancePolicySaved ? 'bg-green-600 text-white' : 'bg-primary text-white hover:bg-primary/90 disabled:opacity-40'
+            }`}
+          >
+            {attendancePolicySaved ? <><Check className="w-4 h-4" /> Saved</> : attendancePolicySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Attendance Policy'}
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
           <Settings className="w-4 h-4 text-primary" />
@@ -801,30 +931,36 @@ function PositionSearchInput({ value, onChange, direction = 'down' }) {
 // Assignment Rules — auto direct-manager by position / department
 // ─────────────────────────────────────────────────────────────────────
 function AssignmentRulesPanel() {
-  const { departments } = useLookups()
+  const { departments, locations } = useLookups()
   const [rules, setRules]   = useState([])
   const [loading, setLoad]  = useState(true)
   const [saving, setSaving] = useState(null)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied]   = useState(null)
   const [showAdd, setShowAdd]   = useState(false)
-  const [draft, setDraft] = useState({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '' })
+  const [ruleMode, setRuleMode] = useState('position_location')
+  const [draft, setDraft] = useState({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '', department: '', work_location: '' })
 
   const load = () => listAssignmentRules().then(setRules).finally(() => setLoad(false))
   useEffect(() => { load() }, [])
 
   const deptLabel = (key) => departments.find(d => d.key === key)?.label_en ?? key
+  const locationLabel = (key) => locations.find(l => l.key === key)?.label_en ?? key
+  const isLocationRule = (rule) => rule.match_field === 'position' && rule.work_location && !rule.department && !rule.manager
 
   const handleAdd = async () => {
-    if (!draft.match_value.trim() || !draft.direct_manager_id) return
+    if (!draft.match_value.trim()) return
+    if (ruleMode === 'position_location' && !draft.work_location) return
     setSaving('new')
     try {
       await createAssignmentRule({
         match_field: draft.match_field,
         match_value: draft.match_value,
-        direct_manager_id: draft.direct_manager_id,
+        direct_manager_id: ruleMode === 'position_location' ? null : draft.direct_manager_id || null,
+        department: ruleMode === 'position_location' ? null : draft.department || null,
+        work_location: draft.work_location || null,
       })
-      setDraft({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '' })
+      setDraft({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '', department: '', work_location: '' })
       setShowAdd(false)
       await load()
     } finally { setSaving(null) }
@@ -856,7 +992,7 @@ function AssignmentRulesPanel() {
       icon={Zap}
       iconTint="amber"
       title="Auto-Assignment Rules"
-      subtitle="Give everyone in a position or department the same direct manager — manual picks are always kept"
+      subtitle="Auto-assign department, location, and manager by position — manual picks are always kept"
       actions={
         <button
           onClick={handleApply}
@@ -885,18 +1021,34 @@ function AssignmentRulesPanel() {
               <div key={rule.id} className={`group flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-xl border transition-all ${
                 rule.is_active ? 'border-neutral-100 bg-white hover:border-primary/30 hover:shadow-sm' : 'border-neutral-100 bg-neutral-50/60 opacity-70'
               }`}>
-                <span className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg bg-amber-50 text-amber-700 shrink-0">
-                  {rule.match_field === 'position' ? 'Position' : 'Dept'}
+                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg shrink-0 ${
+                  isLocationRule(rule) ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {isLocationRule(rule) ? 'Position -> Location' : rule.match_field === 'position' ? 'Position rule' : 'Dept rule'}
                 </span>
                 <span className="text-sm font-medium text-secondary-700 min-w-0 truncate">
                   {rule.match_field === 'department' ? deptLabel(rule.match_value) : rule.match_value}
                 </span>
                 <ArrowRight className="w-4 h-4 text-neutral-300 shrink-0" />
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-black shrink-0">
-                    {rule.manager?.name?.[0]?.toUpperCase() ?? '?'}
-                  </div>
-                  <span className="text-sm font-semibold text-secondary-700 truncate">{rule.manager?.name ?? '—'}</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                  {rule.department && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 shrink-0">
+                      {deptLabel(rule.department)}
+                    </span>
+                  )}
+                  {rule.work_location && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700 shrink-0">
+                      {locationLabel(rule.work_location)}
+                    </span>
+                  )}
+                  {rule.manager && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-black shrink-0">
+                        {rule.manager.name?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                      <span className="text-xs font-semibold text-secondary-700 truncate">{rule.manager.name}</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => handleToggle(rule)}
@@ -922,58 +1074,128 @@ function AssignmentRulesPanel() {
         {/* Add rule */}
         {!showAdd ? (
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={() => {
+              setShowAdd(true)
+              setRuleMode('position_location')
+              setDraft({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '', department: '', work_location: '' })
+            }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-primary border border-dashed border-neutral-200 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all w-full justify-center"
           >
             <Plus className="w-4 h-4" /> Add rule
           </button>
         ) : (
-          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr_auto] gap-2 items-start">
-            {/* field toggle */}
-            <div className="inline-flex rounded-lg border border-neutral-200 overflow-hidden bg-white">
-              {['position', 'department'].map(f => (
-                <button key={f}
-                  onClick={() => setDraft(d => ({ ...d, match_field: f, match_value: '' }))}
-                  className={`px-3 py-2 text-xs font-semibold ${draft.match_field === f ? 'bg-primary text-white' : 'text-neutral-500'}`}
+          <div className="p-4 border border-primary/20 bg-primary/5 rounded-xl space-y-3">
+            <div>
+              <p className="text-xs font-bold text-secondary-700 mb-2">What do you want this rule to do?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRuleMode('position_location')
+                    setDraft(d => ({ ...d, match_field: 'position', direct_manager_id: null, manager_name: '', department: '' }))
+                  }}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    ruleMode === 'position_location'
+                      ? 'border-green-300 bg-green-50 shadow-sm'
+                      : 'border-neutral-200 bg-white hover:border-green-200'
+                  }`}
                 >
-                  {f === 'position' ? 'Position' : 'Dept'}
+                  <p className="text-sm font-black text-secondary-700">Set location by Position</p>
+                  <p className="text-xs text-neutral-500 mt-1">Pick one position, then move everyone with it to one work location.</p>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setRuleMode('advanced')}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    ruleMode === 'advanced'
+                      ? 'border-primary/40 bg-white shadow-sm'
+                      : 'border-neutral-200 bg-white hover:border-primary/30'
+                  }`}
+                >
+                  <p className="text-sm font-black text-secondary-700">Advanced assignment rule</p>
+                  <p className="text-xs text-neutral-500 mt-1">Match by position or department, then set department, location, or manager.</p>
+                </button>
+              </div>
             </div>
-            {/* value */}
-            {draft.match_field === 'department' ? (
+            <p className="text-xs font-bold text-secondary-700">When position/department matches…</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* field toggle */}
+              <div className={`${ruleMode === 'position_location' ? 'hidden' : 'inline-flex'} rounded-lg border border-neutral-200 overflow-hidden bg-white w-fit`}>
+                {['position', 'department'].map(f => (
+                  <button key={f}
+                    onClick={() => setDraft(d => ({ ...d, match_field: f, match_value: '' }))}
+                    className={`px-3 py-2 text-xs font-semibold ${draft.match_field === f ? 'bg-primary text-white' : 'text-neutral-500'}`}
+                  >
+                    {f === 'position' ? 'Position' : 'Dept'}
+                  </button>
+                ))}
+              </div>
+              {/* value */}
+              {draft.match_field === 'department' ? (
+                <select
+                  value={draft.match_value}
+                  onChange={e => setDraft(d => ({ ...d, match_value: e.target.value }))}
+                  className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+                >
+                  <option value="">Select department…</option>
+                  {departments.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
+                </select>
+              ) : (
+                <PositionSearchInput
+                  value={draft.match_value}
+                  onChange={v => setDraft(d => ({ ...d, match_value: v }))}
+                  direction="up"
+                />
+              )}
+            </div>
+
+            <p className="text-xs font-bold text-secondary-700">…assign these values:</p>
+            <div className={`grid grid-cols-1 ${ruleMode === 'position_location' ? '' : 'sm:grid-cols-3'} gap-2`}>
+              {/* department */}
               <select
-                value={draft.match_value}
-                onChange={e => setDraft(d => ({ ...d, match_value: e.target.value }))}
-                className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+                value={draft.department}
+                onChange={e => setDraft(d => ({ ...d, department: e.target.value }))}
+                className={`${ruleMode === 'position_location' ? 'hidden' : ''} px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary`}
               >
-                <option value="">Select department…</option>
+                <option value="">Department (optional)</option>
                 {departments.map(d => <option key={d.key} value={d.key}>{d.label_en}</option>)}
               </select>
-            ) : (
-              <PositionSearchInput
-                value={draft.match_value}
-                onChange={v => setDraft(d => ({ ...d, match_value: v }))}
-                direction="up"
-              />
-            )}
-            {/* manager */}
-            <ManagerPicker
-              valueName={draft.manager_name}
-              onSelect={emp => setDraft(d => ({ ...d, direct_manager_id: emp.id, manager_name: emp.name }))}
-              direction="up"
-            />
+              {/* location */}
+              <select
+                value={draft.work_location}
+                onChange={e => setDraft(d => ({ ...d, work_location: e.target.value }))}
+                className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+              >
+                <option value="">{ruleMode === 'position_location' ? 'Select location...' : 'Location (optional)'}</option>
+                {locations.map(l => <option key={l.key} value={l.key}>{l.label_en}</option>)}
+              </select>
+              {/* manager */}
+              {ruleMode !== 'position_location' && (
+                <ManagerPicker
+                  valueName={draft.manager_name}
+                  onSelect={emp => setDraft(d => ({ ...d, direct_manager_id: emp.id, manager_name: emp.name }))}
+                  direction="up"
+                />
+              )}
+            </div>
+
             {/* actions */}
-            <div className="flex gap-1">
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setShowAdd(false)
+                  setDraft({ match_field: 'position', match_value: '', direct_manager_id: null, manager_name: '', department: '', work_location: '' })
+                }}
+                className="px-3 py-2 text-xs text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-white"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleAdd}
-                disabled={saving === 'new' || !draft.match_value.trim() || !draft.direct_manager_id}
-                className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm"
+                disabled={saving === 'new' || !draft.match_value.trim() || (ruleMode === 'position_location' && !draft.work_location)}
+                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-40 shadow-sm"
               >
-                {saving === 'new' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Add'}
-              </button>
-              <button onClick={() => setShowAdd(false)} className="px-2 py-2 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-white">
-                <X className="w-3.5 h-3.5" />
+                {saving === 'new' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : ruleMode === 'position_location' ? 'Add Location Rule' : 'Add Rule'}
               </button>
             </div>
           </div>
@@ -1476,7 +1698,7 @@ function ProjectsPanel() {
   const [loading, setLoad]    = useState(true)
   const [saving, setSaving]   = useState(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [draft, setDraft]     = useState({ code: '', name: '', name_ar: '', match_prefix: '' })
+  const [draft, setDraft]     = useState({ code: '', name: '', name_ar: '', match_prefix: '', match_locations: '' })
 
   const load = () => listProjects().then(setItems).finally(() => setLoad(false))
   useEffect(() => { load() }, [])
@@ -1498,7 +1720,7 @@ function ProjectsPanel() {
     setSaving('new')
     try {
       await createProject({ ...draft })
-      setDraft({ code: '', name: '', name_ar: '', match_prefix: '' })
+      setDraft({ code: '', name: '', name_ar: '', match_prefix: '', match_locations: '' })
       setShowAdd(false)
       await load()
     } finally { setSaving(null) }
@@ -1569,6 +1791,13 @@ function ProjectsPanel() {
                     placeholder="e.g. CML3"
                     className="w-24 px-2 py-1.5 text-xs font-mono bg-white border border-neutral-200 hover:border-primary/40 focus:border-primary rounded-lg outline-none"
                   />
+                  <span className="text-neutral-400">locations</span>
+                  <input
+                    defaultValue={p.match_locations ?? ''}
+                    onBlur={e => e.target.value !== (p.match_locations ?? '') && handleUpdate(p.id, { match_locations: e.target.value || null })}
+                    placeholder="Ramses, AbuGhates, Farz"
+                    className="w-40 px-2 py-1.5 text-xs bg-white border border-neutral-200 hover:border-primary/40 focus:border-primary rounded-lg outline-none"
+                  />
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.employees_count > 0 ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
                   {p.employees_count} emp
@@ -1613,7 +1842,7 @@ function ProjectsPanel() {
             <Plus className="w-4 h-4" /> Add project
           </button>
         ) : (
-          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[100px_1fr_1fr_140px_auto] gap-2">
+          <div className="p-3 border border-primary/20 bg-primary/5 rounded-xl grid grid-cols-1 sm:grid-cols-[90px_1fr_1fr_120px_180px_auto] gap-2">
             <input
               value={draft.code}
               onChange={e => setDraft(d => ({ ...d, code: e.target.value.toUpperCase() }))}
@@ -1639,6 +1868,12 @@ function ProjectsPanel() {
               onChange={e => setDraft(d => ({ ...d, match_prefix: e.target.value }))}
               placeholder="budget prefix"
               className="px-3 py-2 text-xs font-mono bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
+            />
+            <input
+              value={draft.match_locations}
+              onChange={e => setDraft(d => ({ ...d, match_locations: e.target.value }))}
+              placeholder="locations"
+              className="px-3 py-2 text-xs bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary"
             />
             <div className="flex gap-1">
               <button

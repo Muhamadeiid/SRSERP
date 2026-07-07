@@ -9,7 +9,6 @@ import {
   getPrf, approvePrf, rejectPrf, updatePrfNumber,
   PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
-import { generatePRF } from '../utils/generatePRF'
 
 const fmtShort   = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtFullDay = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '—'
@@ -111,6 +110,11 @@ export default function PrfDetail() {
     }
   }
 
+  const handlePrint = async () => {
+    const { generatePRF } = await import('../utils/generatePRF')
+    return generatePRF(prf)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -184,7 +188,7 @@ export default function PrfDetail() {
             {PRF_STATUS_LABELS[prf.status]}
           </span>
           {isApproved && isProcurementUser && (
-            <button onClick={() => generatePRF(prf)}
+            <button onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg transition-all">
               <Printer className="w-3.5 h-3.5" /> Print (.docx)
             </button>

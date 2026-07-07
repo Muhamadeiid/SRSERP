@@ -6,7 +6,7 @@ import {
   Users, Calendar, Clock, ShieldCheck,
   AlertTriangle, ChevronLeft, ChevronRight,
   LogOut, Bell, FileText, Package, Settings,
-  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus,
+  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus, CalendarDays,
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
@@ -36,6 +36,7 @@ const ALL_NAV = [
   { label: 'Resignations',       path: '/human-resources/resignations',   icon: UserMinus },
   { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            hrOnly: true },
   { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      hrOnly: true },
+  { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,             hrOnly: true },
   { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                hrOnly: true },
   { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              hrOnly: true },
   { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    hrOnly: true },

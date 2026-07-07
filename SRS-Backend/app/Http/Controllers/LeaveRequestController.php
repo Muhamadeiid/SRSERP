@@ -24,8 +24,8 @@ class LeaveRequestController extends Controller
 
         $user = auth()->user();
         $query = LeaveRequest::with([
-            'approver:id,name,e_signature',
-            'managerApprover:id,name,e_signature',
+            'approver:id,name,e_signature,role',
+            'managerApprover:id,name,e_signature,role',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id,e_signature',
             'employee.userManager:id,name,e_signature',
@@ -52,17 +52,25 @@ class LeaveRequestController extends Controller
         //        'history' = approved-deducted/rejected/cancelled/rescheduled (closed)
         if ($request->filled('scope')) {
             if ($request->scope === 'active') {
-                $query->whereIn('status', ['pending', 'manager_approved'])
-                      ->orWhere(function ($q) {
-                          $q->where('status', 'approved')
+                $query->where(function ($q) {
+                    $q->whereIn('status', ['pending', 'manager_approved'])
+                      ->orWhere(function ($qq) {
+                          $qq->where('type', 'lrf')
+                            ->where('status', 'approved')
                             ->whereNull('balance_deducted_at');
                       });
+                });
             } elseif ($request->scope === 'history') {
                 $query->where(function ($q) {
                     $q->whereIn('status', ['rejected', 'cancelled', 'rescheduled'])
                       ->orWhere(function ($qq) {
-                          $qq->where('status', 'approved')
+                          $qq->where('type', 'lrf')
+                             ->where('status', 'approved')
                              ->whereNotNull('balance_deducted_at');
+                      })
+                      ->orWhere(function ($qq) {
+                          $qq->where('type', 'otr')
+                             ->where('status', 'approved');
                       });
                 });
             }
@@ -109,7 +117,7 @@ class LeaveRequestController extends Controller
             'employee_id' => 'nullable|exists:employees,id',
             'leave_type' => 'required_if:type,lrf|nullable|in:annual,casual,sick,early',
             'paid' => 'nullable|boolean',
-            'available_balance' => 'nullable|integer|min:0',
+            'available_balance' => 'nullable|numeric|min:0',
             'request_date' => 'nullable|date',
             'start_date' => 'required_if:type,lrf|nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
@@ -166,8 +174,8 @@ class LeaveRequestController extends Controller
     public function show(LeaveRequest $leaveRequest): JsonResponse
     {
         $leave = $leaveRequest->load([
-            'approver:id,name,e_signature',
-            'managerApprover:id,name,e_signature',
+            'approver:id,name,e_signature,role',
+            'managerApprover:id,name,e_signature,role',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id,e_signature',
             'employee.userManager:id,name,e_signature',
@@ -216,7 +224,7 @@ class LeaveRequestController extends Controller
             }
             Notification::notifyRole('admin', $leaveRequest->type . '_approved', "{$typeLabel} Fully Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was fully approved by {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
 
-            return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'managerApprover'])]);
+            return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role'])]);
         }
 
         // Regular direct manager (non-depot) — first step only, awaits depot.
@@ -233,7 +241,7 @@ class LeaveRequestController extends Controller
             Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_manager_approved', "{$typeLabel} - Manager Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was approved by your direct manager. Awaiting Depot Manager approval.", ['leave_request_id' => $leaveRequest->id]);
         }
 
-        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'managerApprover'])]);
+        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role'])]);
     }
 
     public function approve(Request $request, LeaveRequest $leaveRequest): JsonResponse
@@ -261,7 +269,7 @@ class LeaveRequestController extends Controller
         }
         Notification::notifyRole('admin', $leaveRequest->type . '_approved', "{$typeLabel} Fully Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was fully approved by {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
 
-        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'managerApprover'])]);
+        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role'])]);
     }
 
     public function reject(Request $request, LeaveRequest $leaveRequest): JsonResponse
@@ -477,15 +485,17 @@ class LeaveRequestController extends Controller
                 . '-' . ($employee?->projectCode() ?? 'EG1')
                 . '-';
 
-        $last = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
-            ->orderByDesc('id')
-            ->value('tracking_no');
-
-        $next = 1;
-        if ($last) {
-            $tail = substr($last, strlen($prefix));
-            if (is_numeric($tail)) $next = ((int) $tail) + 1;
-        }
+        $next = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
+            ->where(function ($q) {
+                $q->where('status', 'approved')
+                  ->orWhereIn('status', ['pending', 'manager_approved']);
+            })
+            ->pluck('tracking_no')
+            ->map(function ($tracking) use ($prefix) {
+                $tail = substr((string) $tracking, strlen($prefix));
+                return ctype_digit($tail) ? (int) $tail : 0;
+            })
+            ->max() + 1;
 
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }

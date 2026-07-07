@@ -5,9 +5,7 @@ import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download
 } from 'lucide-react'
-import { generateOTR } from '../utils/generateOTR'
-import { generateLRF } from '../utils/generateLRF'
-import { getEmployees, getEmployee, searchEmployees } from '../services/employeeService'
+import { getEmployees, getEmployee, searchEmployees, getDepotManager } from '../services/employeeService'
 import {
   getLeaveRequests, createLeaveRequest,
   managerApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
@@ -40,6 +38,16 @@ const deptLabel = (emp) => {
   return DEPT_LABEL[value] ?? value
 }
 
+async function generateRequestWord(req) {
+  if (req.type === 'lrf') {
+    const { generateLRF } = await import('../utils/generateLRF')
+    return generateLRF(req)
+  }
+
+  const { generateOTR } = await import('../utils/generateOTR')
+  return generateOTR(req)
+}
+
 const INP = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all'
 const LBL = 'block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1'
 
@@ -55,7 +63,37 @@ const diffHours = (s, e) => {
   return m === 0 ? 0 : Math.round(m / 60)
 }
 // Early leave: 2h=0.25 day, 4h=0.5 day, 6h=0.75 day (workday=8h)
-const earlyDays = (from, to) => { if (!from || !to) return ''; const [fh,fm]=from.split(':').map(Number); const [th,tm]=to.split(':').map(Number); const mins=(th*60+tm)-(fh*60+fm); if (mins<=0) return ''; return (mins/60/8).toFixed(2).replace(/\.?0+$/,'') }
+const normalizeTime = (value) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const m = raw.match(/^(\d{1,2})(?::?(\d{2}))?(?::\d{2})?$/)
+  if (!m) return raw
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)))
+  const min = Math.min(59, Math.max(0, parseInt(m[2] ?? '0', 10)))
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+const earlyDays = (from, to) => {
+  const start = normalizeTime(from)
+  const end = normalizeTime(to)
+  if (!start || !end) return ''
+  const [fh, fm] = start.split(':').map(Number)
+  const [th, tm] = end.split(':').map(Number)
+  const mins = (th * 60 + tm) - (fh * 60 + fm)
+  if (mins <= 0) return ''
+  return (mins / 60 / 8).toFixed(2).replace(/\.?0+$/, '')
+}
+const lrfDays = (form) => form.leave_type === 'early'
+  ? parseFloat(earlyDays(form.early_from, form.early_to) || 0)
+  : diffDays(form.start_date, form.end_date)
+const formatBalance = (value) => {
+  if (value === null || value === undefined || value === '') return ''
+  const n = parseFloat(value)
+  return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : value
+}
+const depotManagerNameFor = (request) =>
+  request?.approver?.role === 'depot_manager'
+    ? request.approver.name
+    : (request?.depot_manager_name || DEPOT_MGR)
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const genLRFNo  = () => `LRF-GZ-????`
@@ -63,6 +101,22 @@ const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
 const threeName = (n) => n?.trim().split(/\s+/).slice(0, 3).join(' ') ?? ''
 const today     = () => new Date().toISOString().slice(0, 10)
+const pad2      = n => String(n).padStart(2, '0')
+const dateString = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const currentMonthRange = () => {
+  const d = new Date()
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  return { from: dateString(first), to: dateString(last) }
+}
+const historyRange = (period) => {
+  if (period === 'all') return {}
+  if (period === 'current_month') return currentMonthRange()
+  const days = { last_30: 30, last_90: 90, last_year: 365 }[period] ?? 30
+  const from = new Date()
+  from.setDate(from.getDate() - days)
+  return { from: dateString(from), to: today() }
+}
 
 // ── status badge ──────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -568,7 +622,7 @@ function LRFForm({ onSubmit, saving }) {
   const [balances, setBalances] = useState(null)   // null=no employee, {}=loaded
   const [balLoading, setBalLoading] = useState(false)
   const set  = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const days = diffDays(form.start_date, form.end_date)
+  const days = lrfDays(form)
 
   // Use effective remaining (after deductions). Annual can overflow into casual.
   const effectiveRemaining = (type) => {
@@ -579,7 +633,7 @@ function LRFForm({ onSubmit, saving }) {
   }
   // For annual: show the combined pool (annual + casual since overflow is allowed)
   const availableBalance = balances
-    ? (form.leave_type === 'annual'
+    ? (form.leave_type === 'annual' || form.leave_type === 'early'
         ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
         : effectiveRemaining(form.leave_type))
     : null
@@ -671,7 +725,7 @@ function LRFForm({ onSubmit, saving }) {
 
       <form onSubmit={e => {
         e.preventDefault()
-        onSubmit({ ...form, days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+        onSubmit({ ...form, early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
       }}>
         {/* ══ MAIN TABLE ══ */}
         <table className="w-full border-collapse border-2 border-neutral-800 mx-[1px]" style={{width:'calc(100% - 2px)'}}>
@@ -743,13 +797,13 @@ function LRFForm({ onSubmit, saving }) {
                       <td className="px-2 py-2 border-r border-neutral-300" colSpan={2}>
                         <div className="flex items-center gap-2 text-[11px] text-secondary-700">
                           <span>From:</span>
-                          <input type="time" value={form.early_from} onChange={e => set('early_from', e.target.value)}
+                          <PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))}
                             disabled={form.leave_type !== 'early'}
-                            className="border border-neutral-200 rounded px-1 py-0.5 text-xs outline-none focus:border-primary/50 disabled:opacity-40" />
+                            placeholder="08:00" className="w-[86px]" inputClassName="w-full border border-neutral-200 rounded px-1 py-0.5 text-xs outline-none focus:border-primary/50 disabled:opacity-40" />
                           <span>To:</span>
-                          <input type="time" value={form.early_to} onChange={e => set('early_to', e.target.value)}
+                          <PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))}
                             disabled={form.leave_type !== 'early'}
-                            className="border border-neutral-200 rounded px-1 py-0.5 text-xs outline-none focus:border-primary/50 disabled:opacity-40" />
+                            placeholder="10:00" className="w-[86px]" inputClassName="w-full border border-neutral-200 rounded px-1 py-0.5 text-xs outline-none focus:border-primary/50 disabled:opacity-40" />
                         </div>
                       </td>
                       <td className="px-2 py-2 border-r border-neutral-200 text-[11px] text-center whitespace-nowrap text-secondary-700">
@@ -808,12 +862,12 @@ function LRFForm({ onSubmit, saving }) {
                     <div className="flex items-center gap-4 flex-wrap">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Annual</span>
-                        <span className="text-base font-black text-blue-600">{annualRemaining}</span>
+                        <span className="text-base font-black text-blue-600">{formatBalance(annualRemaining)}</span>
                         <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.annual ?? 21)} d</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Casual</span>
-                        <span className="text-base font-black text-purple-600">{casualRemaining}</span>
+                        <span className="text-base font-black text-purple-600">{formatBalance(casualRemaining)}</span>
                         <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.casual ?? 7)} d</span>
                       </div>
                       {form.leave_type === 'annual' && annualRemaining === 0 && casualRemaining > 0 && (
@@ -826,9 +880,9 @@ function LRFForm({ onSubmit, saving }) {
                     {form.leave_type && (
                       <div className="flex items-center gap-2">
                         <span className="text-xl font-black text-primary">
-                          {availableBalance}
+                          {formatBalance(availableBalance)}
                           {casualRemaining !== null && (
-                            <span className="text-base font-bold text-purple-500 ml-1">({casualRemaining} Casual)</span>
+                            <span className="text-base font-bold text-purple-500 ml-1">({formatBalance(casualRemaining)} Casual)</span>
                           )}
                         </span>
                         <span className="text-xs text-neutral-400">days available</span>
@@ -850,7 +904,7 @@ function LRFForm({ onSubmit, saving }) {
                 <span className={L_EN}>Annual Leave Request Date:</span>
                 <span className={L_AR}>تاريخ طلب الاجازة</span>
               </td>
-              <td className={TD_VAL}><input type="date" value={form.request_date} onChange={e => set('request_date', e.target.value)} className={FINP} /></td>
+              <td className={TD_VAL}><PickerInput type="date" placeholder="YYYY-MM-DD" value={form.request_date} onChange={v => set('request_date', v)} /></td>
             </tr>
 
             {/* Row 8 — Start Date */}
@@ -860,10 +914,8 @@ function LRFForm({ onSubmit, saving }) {
                 <span className={L_AR}>بداية تاريخ الأجازه</span>
               </td>
               <td className={TD_VAL}>
-                <input type="date" required value={form.start_date}
-                  onChange={e => set('start_date', e.target.value)}
-                  disabled={form.leave_type==='early'}
-                  className={FINP + (form.leave_type==='early' ? ' opacity-40' : '')} />
+                <PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD"
+                  onChange={v => set('start_date', v)} />
               </td>
             </tr>
 
@@ -874,11 +926,8 @@ function LRFForm({ onSubmit, saving }) {
                 <span className={L_AR}>تاريخ انتهاء الأجازه</span>
               </td>
               <td className={TD_VAL}>
-                <input type="date" required={form.leave_type!=='early'} value={form.end_date}
-                  min={form.start_date}
-                  onChange={e => set('end_date', e.target.value)}
-                  disabled={form.leave_type==='early'}
-                  className={FINP + (form.leave_type==='early' ? ' opacity-40' : '')} />
+                <PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD"
+                  onChange={v => set('end_date', v)} />
               </td>
             </tr>
 
@@ -991,12 +1040,81 @@ function CheckMark({ checked }) {
   )
 }
 
+function PickerInput({
+  type,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  disabled = false,
+  className = '',
+  inputClassName = FINP,
+  required = false,
+}) {
+  const pickerRef = useRef(null)
+  const Icon = type === 'date' ? Calendar : Clock
+  const pickerValue = (() => {
+    if (type === 'date') return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value : ''
+    const normalized = normalizeTime(value)
+    return /^\d{2}:\d{2}$/.test(normalized) ? normalized : ''
+  })()
+
+  const openPicker = () => {
+    if (disabled || !pickerRef.current) return
+    if (pickerRef.current.showPicker) pickerRef.current.showPicker()
+    else pickerRef.current.click()
+  }
+
+  return (
+    <div className={`relative flex items-center ${className}`}>
+      <input
+        type="text"
+        inputMode="numeric"
+        required={required}
+        disabled={disabled}
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+        onBlur={onBlur}
+        className={`${inputClassName} pr-8`}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        className="absolute right-1.5 inline-flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
+        title={type === 'date' ? 'Pick date' : 'Pick time'}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </button>
+      <input
+        ref={pickerRef}
+        type={type}
+        value={pickerValue}
+        onChange={e => onChange(e.target.value)}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="sr-only"
+      />
+    </div>
+  )
+}
+
 function OfficialLRFForm({ onSubmit, saving }) {
   const [form, setForm] = useState({ ...LRF_EMPTY })
   const [balances, setBalances] = useState(null)
   const [balLoading, setBalLoading] = useState(false)
+  const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const days = diffDays(form.start_date, form.end_date)
+  const days = lrfDays(form)
+
+  useEffect(() => {
+    getDepotManager()
+      .then(dm => {
+        if (dm?.name) setDepotManagerName(dm.name)
+      })
+      .catch(() => {})
+  }, [])
 
   const effectiveRemaining = (type) => {
     if (!balances) return null
@@ -1005,7 +1123,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
   }
 
   const availableBalance = balances
-    ? (form.leave_type === 'annual'
+    ? (form.leave_type === 'annual' || form.leave_type === 'early'
         ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
         : effectiveRemaining(form.leave_type))
     : null
@@ -1067,7 +1185,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
 
   const submit = (e) => {
     e.preventDefault()
-    onSubmit({ ...form, days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1101,22 +1219,22 @@ function OfficialLRFForm({ onSubmit, saving }) {
               <div className="grid grid-cols-[24px_1fr_90px_90px_60px_44px]">
                 <button type="button" onClick={() => set('leave_type', 'early')} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === 'early'} /></button>
                 <button type="button" onClick={() => set('leave_type', 'early')} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">Early Leave</button>
-                <div className="flex items-center gap-1 border-r border-neutral-400 px-2 py-2 text-[12px]">From:<input type="time" value={form.early_from} onChange={e => set('early_from', e.target.value)} disabled={form.leave_type !== 'early'} className="w-16 bg-transparent outline-none disabled:opacity-30" /></div>
-                <div className="flex items-center gap-1 border-r border-neutral-900 px-2 py-2 text-[12px]">To:<input type="time" value={form.early_to} onChange={e => set('early_to', e.target.value)} disabled={form.leave_type !== 'early'} className="w-16 bg-transparent outline-none disabled:opacity-30" /></div>
+                <div className="flex items-center gap-1 border-r border-neutral-400 px-2 py-2 text-[12px]">From:<PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="08:00" className="w-[74px]" inputClassName="w-full bg-transparent outline-none text-xs disabled:opacity-30" /></div>
+                <div className="flex items-center gap-1 border-r border-neutral-900 px-2 py-2 text-[12px]">To:<PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="10:00" className="w-[74px]" inputClassName="w-full bg-transparent outline-none text-xs disabled:opacity-30" /></div>
                 <div className="border-r border-neutral-400 px-2 py-2 text-center text-[12px]">( {form.leave_type === 'early' ? earlyDays(form.early_from, form.early_to) : ''} )</div><div className="px-2 py-2 text-[12px]">Day</div>
               </div>
             </td></tr>
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
-            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{availableBalance ?? ''}{casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({casualRem2} Casual)</span>}</span>}</td></tr>
-            <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><input type="date" value={form.request_date} onChange={e => set('request_date', e.target.value)} className={FINP} /></td></tr>
-            <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><input type="date" required value={form.start_date} onChange={e => set('start_date', e.target.value)} disabled={form.leave_type === 'early'} className={FINP} /></td></tr>
-            <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><input type="date" required={form.leave_type !== 'early'} value={form.end_date} min={form.start_date} onChange={e => set('end_date', e.target.value)} disabled={form.leave_type === 'early'} className={FINP} /></td></tr>
+            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(availableBalance)}{casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
+            <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
+            <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>
+            <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} /></td></tr>
             <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2"><div className="flex gap-6">{[['Sick', 'مرضي'], ['Personal matter', 'أمر شخصي']].map(([value, ar]) => <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span><span className="text-neutral-500" dir="rtl">{ar}</span></button>)}</div></td></tr>
             {sigRows('Employee Name / signature:', 'إسم الموظف / توقيعه', form.employee_name)}
             {sigRows('Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', '', 'alternate_employee_name')}
             {sigRows('Direct manager Name / signature', 'المدير المباشر / التوقيع', form.direct_manager_name)}
             {sigRows('Human Resource', 'موظف الموارد البشريه', HR_OFFICER)}
-            {sigRows('Depot Manager Signature', 'توقيع مدير الموقع', DEPOT_MGR)}
+            {sigRows('Depot Manager Signature', 'توقيع مدير الموقع', depotManagerName)}
           </tbody></table>
           <div className="mt-2 flex items-center justify-between border-t-2 border-neutral-950 pt-2 text-[10px] font-bold"><span>Document No: <span className="text-red-600">SRS-HR-P02-F01</span> | <span className="text-red-600">Rev.: 03</span> | Rev. Date: 06/05/2026</span><span>| Page 1 of 1</span></div>
         </div>
@@ -1128,7 +1246,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
 
 function printOfficialLRF(d) {
   const checked = (v) => v ? '<span class="box">X</span>' : '<span class="box"></span>'
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>LRF</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;font-family:Arial,sans-serif;color:#000}.page{width:210mm;height:297mm;padding:12mm 13mm 8mm;display:flex;flex-direction:column}table{width:100%;border-collapse:collapse}.hdr{border:2px solid #000}.hdr td{border:2px solid #000}.logo{width:42mm;text-align:center;padding:5mm}.logo img{max-height:16mm;max-width:34mm}.title{text-align:center;font-weight:900;font-size:17pt}.ar{direction:rtl;text-align:right;font-weight:700}.sub{font-size:9pt;line-height:1.45;margin:3mm 0}.main{border:2px solid #000;flex:1}.main td{border:1px solid #000;font-size:9pt;vertical-align:middle}.lbl{width:34%;padding:2.5mm;background:#fff}.lbl b{display:block}.lbl span{display:block;direction:rtl;text-align:right;font-size:8pt}.val{padding:2.5mm}.box{display:inline-flex;width:12px;height:12px;border:1px solid #000;align-items:center;justify-content:center;font-size:8pt;font-weight:700}.inner td{padding:2mm;border-color:#000}.sig{height:11mm}.sig-name{height:6mm;color:#444;font-style:italic}.foot{border-top:2px solid #000;margin-top:2mm;padding-top:1.5mm;font-size:8pt;font-weight:700;display:flex;justify-content:space-between}.red{color:#c00}</style></head><body><div class="page"><table class="hdr"><tr><td class="logo"><img src="${window.location.origin}/logo.svg" alt="Rotem SRS Egypt"></td><td class="title">Leave Request Form (LRF)<div class="ar" style="text-align:center;font-size:12pt;margin-top:2mm">نموذج طلب اجازة</div></td></tr></table><div class="sub"><div style="display:flex;justify-content:space-between;font-weight:900"><span>■ Document purpose:</span><span dir="rtl">الغرض من النموذج:</span></div><div>This form is for employees to use to take a leave of annual, casual, sick leaves and early leave</div><div class="ar">هذا النموذج خاص برصيد الأجازات السنويه، الاجازات العارضه و الاجازات المرضي والأذونات</div><b>■ Details:</b></div><table class="main"><tbody><tr><td class="lbl"><b>Employee Name:</b><span>إسم الموظف</span></td><td class="val">${d.employee_name || ''}</td></tr><tr><td class="lbl"><b>Job Title:</b><span>المسمى الوظيفى</span></td><td class="val">${d.job_title || ''}</td></tr><tr><td class="lbl"><b>Department:</b><span>الإداره</span></td><td class="val">${d.department_label || d.department || ''}</td></tr><tr><td class="lbl"><b>Leave Type:</b><span>نوع الاذن</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.leave_type==='annual')}</td><td>Annual Leave</td><td>${checked(d.leave_type==='casual')}</td><td>Casual Leave</td><td>${checked(d.leave_type==='sick')}</td><td>Sick Leave</td></tr><tr><td>${checked(d.leave_type==='early')}</td><td>Early Leave</td><td>From: ${d.early_from || ''}</td><td>To: ${d.early_to || ''}</td><td>( ${d.leave_type==='early' ? earlyDays(d.early_from,d.early_to) : ''} )</td><td>Day</td></tr></table></td></tr><tr><td class="lbl"><b>Paid/Unpaid:</b><span>مدفوع الاجر / غير مدفوع الاجر</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.paid===true)}</td><td>Paid</td><td>${checked(d.paid===false)}</td><td>Unpaid</td></tr></table></td></tr><tr><td class="lbl"><b>Available Balance</b><span>الرصيد المتاح</span></td><td class="val">${d.available_balance ?? ''}</td></tr><tr><td class="lbl"><b>Annual Leave Request Date:</b><span>تاريخ طلب الاجازة</span></td><td class="val">${fmtDate(d.request_date)}</td></tr><tr><td class="lbl"><b>Annual Leave start Date:</b><span>تاريخ بداية الأجازه</span></td><td class="val">${fmtDate(d.start_date)}</td></tr><tr><td class="lbl"><b>Annual Leave End Date:</b><span>تاريخ انتهاء الأجازه</span></td><td class="val">${fmtDate(d.end_date)}</td></tr><tr><td class="lbl"><b>The purpose:</b><span>الغرض</span></td><td class="val">${d.purpose || ''}</td></tr>${[['Employee Name / signature:', 'إسم الموظف / توقيعه', d.employee_name || ''], ['Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', d.alternate_employee_name || ''], ['Direct manager Name / signature', 'المدير المباشر / التوقيع', d.manager_approver?.name || d.direct_manager_name || ''], ['Human Resource', 'موظف الموارد البشريه', HR_OFFICER], ['Depot Manager Signature', 'توقيع مدير الموقع', d.approver?.name || DEPOT_MGR]].map(([en, ar, name]) => `<tr><td class="lbl" rowspan="2"><b>${en}</b><span>${ar}</span></td><td class="sig"></td></tr><tr><td class="sig-name">${name}</td></tr>`).join('')}</tbody></table><div class="foot"><span>Document No: <span class="red">SRS-HR-P02-F01</span> | <span class="red">Rev.: 03</span> | Rev. Date: 06/05/2026</span><span>| Page 1 of 1</span></div></div></body></html>`
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>LRF</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;font-family:Arial,sans-serif;color:#000}.page{width:210mm;height:297mm;padding:12mm 13mm 8mm;display:flex;flex-direction:column}table{width:100%;border-collapse:collapse}.hdr{border:2px solid #000}.hdr td{border:2px solid #000}.logo{width:42mm;text-align:center;padding:5mm}.logo img{max-height:16mm;max-width:34mm}.title{text-align:center;font-weight:900;font-size:17pt}.ar{direction:rtl;text-align:right;font-weight:700}.sub{font-size:9pt;line-height:1.45;margin:3mm 0}.main{border:2px solid #000;flex:1}.main td{border:1px solid #000;font-size:9pt;vertical-align:middle}.lbl{width:34%;padding:2.5mm;background:#fff}.lbl b{display:block}.lbl span{display:block;direction:rtl;text-align:right;font-size:8pt}.val{padding:2.5mm}.box{display:inline-flex;width:12px;height:12px;border:1px solid #000;align-items:center;justify-content:center;font-size:8pt;font-weight:700}.inner td{padding:2mm;border-color:#000}.sig{height:11mm}.sig-name{height:6mm;color:#444;font-style:italic}.foot{border-top:2px solid #000;margin-top:2mm;padding-top:1.5mm;font-size:8pt;font-weight:700;display:flex;justify-content:space-between}.red{color:#c00}</style></head><body><div class="page"><table class="hdr"><tr><td class="logo"><img src="${window.location.origin}/logo.svg" alt="Rotem SRS Egypt"></td><td class="title">Leave Request Form (LRF)<div class="ar" style="text-align:center;font-size:12pt;margin-top:2mm">نموذج طلب اجازة</div></td></tr></table><div class="sub"><div style="display:flex;justify-content:space-between;font-weight:900"><span>■ Document purpose:</span><span dir="rtl">الغرض من النموذج:</span></div><div>This form is for employees to use to take a leave of annual, casual, sick leaves and early leave</div><div class="ar">هذا النموذج خاص برصيد الأجازات السنويه، الاجازات العارضه و الاجازات المرضي والأذونات</div><b>■ Details:</b></div><table class="main"><tbody><tr><td class="lbl"><b>Employee Name:</b><span>إسم الموظف</span></td><td class="val">${d.employee_name || ''}</td></tr><tr><td class="lbl"><b>Job Title:</b><span>المسمى الوظيفى</span></td><td class="val">${d.job_title || ''}</td></tr><tr><td class="lbl"><b>Department:</b><span>الإداره</span></td><td class="val">${d.department_label || d.department || ''}</td></tr><tr><td class="lbl"><b>Leave Type:</b><span>نوع الاذن</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.leave_type==='annual')}</td><td>Annual Leave</td><td>${checked(d.leave_type==='casual')}</td><td>Casual Leave</td><td>${checked(d.leave_type==='sick')}</td><td>Sick Leave</td></tr><tr><td>${checked(d.leave_type==='early')}</td><td>Early Leave</td><td>From: ${normalizeTime(d.early_from) || ''}</td><td>To: ${normalizeTime(d.early_to) || ''}</td><td>( ${d.leave_type==='early' ? earlyDays(d.early_from,d.early_to) : ''} )</td><td>Day</td></tr></table></td></tr><tr><td class="lbl"><b>Paid/Unpaid:</b><span>مدفوع الاجر / غير مدفوع الاجر</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.paid===true)}</td><td>Paid</td><td>${checked(d.paid===false)}</td><td>Unpaid</td></tr></table></td></tr><tr><td class="lbl"><b>Available Balance</b><span>الرصيد المتاح</span></td><td class="val">${formatBalance(d.available_balance)}</td></tr><tr><td class="lbl"><b>Annual Leave Request Date:</b><span>تاريخ طلب الاجازة</span></td><td class="val">${fmtDate(d.request_date)}</td></tr><tr><td class="lbl"><b>Annual Leave start Date:</b><span>تاريخ بداية الأجازه</span></td><td class="val">${fmtDate(d.start_date)}</td></tr><tr><td class="lbl"><b>Annual Leave End Date:</b><span>تاريخ انتهاء الأجازه</span></td><td class="val">${fmtDate(d.end_date)}</td></tr><tr><td class="lbl"><b>The purpose:</b><span>الغرض</span></td><td class="val">${d.purpose || ''}</td></tr>${[['Employee Name / signature:', 'إسم الموظف / توقيعه', d.employee_name || ''], ['Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', d.alternate_employee_name || ''], ['Direct manager Name / signature', 'المدير المباشر / التوقيع', d.manager_approver?.name || d.direct_manager_name || ''], ['Human Resource', 'موظف الموارد البشريه', HR_OFFICER], ['Depot Manager Signature', 'توقيع مدير الموقع', depotManagerNameFor(d)]].map(([en, ar, name]) => `<tr><td class="lbl" rowspan="2"><b>${en}</b><span>${ar}</span></td><td class="sig"></td></tr><tr><td class="sig-name">${name}</td></tr>`).join('')}</tbody></table><div class="foot"><span>Document No: <span class="red">SRS-HR-P02-F01</span> | <span class="red">Rev.: 03</span> | Rev. Date: 06/05/2026</span><span>| Page 1 of 1</span></div></div></body></html>`
   const w = window.open('', '_blank', 'width=860,height=1200')
   w.document.write(html)
   w.document.close()
@@ -1137,6 +1255,7 @@ function printOfficialLRF(d) {
 }
 
 function printOfficialLRFGrid(d) {
+  d = { ...d, available_balance: formatBalance(d.available_balance) }
   const esc = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -1157,10 +1276,13 @@ function printOfficialLRFGrid(d) {
     ['Direct manager Name / signature', 'المدير المباشر / التوقيع', directNameOnForm],
     ['Human Resource', 'موظف الموارد البشريه', HR_OFFICER],
     ['Depot Manager Signature', 'توقيع مدير الموقع', d.approver?.name || DEPOT_MGR],
-  ].map(([en, ar, name]) => `
+  ].map(([en, ar, name]) => {
+    const displayName = en === 'Depot Manager Signature' ? depotManagerNameFor(d) : name
+    return `
     <tr><td class="lbl" rowspan="2"><b>${en}</b><span dir="rtl">${ar}</span></td><td class="sig"></td></tr>
-    <tr><td class="sig-name">${esc(name)}</td></tr>
-  `).join('')
+    <tr><td class="sig-name">${esc(displayName)}</td></tr>
+  `
+  }).join('')
 
   const leaveType = `
     <div class="cell-grid leave-grid top-row">
@@ -1170,8 +1292,8 @@ function printOfficialLRFGrid(d) {
     </div>
     <div class="cell-grid early-grid">
       <div class="check">${box(d.leave_type === 'early')}</div><div class="txt">Early Leave</div>
-      <div class="txt">From: ${esc(d.early_from)}</div>
-      <div class="txt">To: ${esc(d.early_to)}</div>
+      <div class="txt">From: ${esc(normalizeTime(d.early_from))}</div>
+      <div class="txt">To: ${esc(normalizeTime(d.early_to))}</div>
       <div class="txt center">( ${d.leave_type === 'early' ? esc(earlyDays(d.early_from, d.early_to)) : ''} )</div>
       <div class="txt last">Day</div>
     </div>`
@@ -1501,7 +1623,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onApprove, onRejec
   }
   const handleDownloadWord = () => {
     if (!confirmMissing('Download')) return
-    return isLRF ? generateLRF(req) : generateOTR(req)
+    return generateRequestWord(req)
   }
 
   return (
@@ -1690,7 +1812,7 @@ export default function LeaveRequestsPage() {
   // History filters
   const [historyType,   setHistoryType]   = useState('all')  // all | lrf | otr
   const [historyStatus, setHistoryStatus] = useState('all')  // all | approved | rejected | cancelled | rescheduled
-  const [historyPeriod, setHistoryPeriod] = useState('90')   // 30 | 90 | 365 | all
+  const [historyPeriod, setHistoryPeriod] = useState('current_month')   // current_month | last_30 | last_90 | last_year | all
   const [historyPage,   setHistoryPage]   = useState(1)
   const HISTORY_PER_PAGE = 25
 
@@ -1731,7 +1853,7 @@ export default function LeaveRequestsPage() {
         <button onClick={() => setViewReq(r)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
         {r.status === 'approved' && (
           <button
-            onClick={() => r.type === 'lrf' ? generateLRF(r) : generateOTR(r)}
+            onClick={() => generateRequestWord(r)}
             className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">
             <Download className="w-4 h-4" />
           </button>
@@ -1749,11 +1871,15 @@ export default function LeaveRequestsPage() {
   const fetchRequests = useCallback(async () => {
     setLoadingReqs(true)
     try {
-      const res = await getLeaveRequests()
-      setRequests(res.data ?? [])
+      const [activeRes, historyRes] = await Promise.all([
+        getLeaveRequests({ scope: 'active' }),
+        getLeaveRequests({ scope: 'history', ...historyRange(historyPeriod) }),
+      ])
+      const merged = [...(activeRes.data ?? []), ...(historyRes.data ?? [])]
+      setRequests(Array.from(new Map(merged.map(r => [r.id, r])).values()))
     } catch (_) {}
     finally { setLoadingReqs(false) }
-  }, [])
+  }, [historyPeriod])
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
@@ -1960,7 +2086,7 @@ export default function LeaveRequestsPage() {
       {(() => {
         const active = requests.filter(r =>
           ['pending', 'manager_approved'].includes(r.status) ||
-          (r.status === 'approved' && !r.balance_deducted_at)
+          (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
         )
         if (active.length === 0) return null
         return (
@@ -1996,17 +2122,16 @@ export default function LeaveRequestsPage() {
             r.status === 'rejected' ||
             r.status === 'cancelled' ||
             r.status === 'rescheduled' ||
-            (r.status === 'approved' && r.balance_deducted_at) ||
-            // Approved OTR is "history" once date passes
+            (r.type === 'lrf' && r.status === 'approved' && r.balance_deducted_at) ||
+            // Approved OTR is history once it is approved.
             (r.type === 'otr' && r.status === 'approved')
           )
 
           // Apply period filter
           let periodFiltered = historyPool
           if (historyPeriod !== 'all') {
-            const days = parseInt(historyPeriod, 10)
-            const cutoff = new Date()
-            cutoff.setDate(cutoff.getDate() - days)
+            const { from } = historyRange(historyPeriod)
+            const cutoff = new Date(from)
             periodFiltered = historyPool.filter(r => new Date(r.created_at) >= cutoff)
           }
 
@@ -2073,9 +2198,10 @@ export default function LeaveRequestsPage() {
                   value={historyPeriod}
                   onChange={e => { setHistoryPeriod(e.target.value); setHistoryPage(1) }}
                   className="px-3 py-1 text-xs font-bold bg-white border border-neutral-200 rounded-md outline-none focus:border-primary cursor-pointer">
-                  <option value="30">Last 30 days</option>
-                  <option value="90">Last 90 days</option>
-                  <option value="365">Last year</option>
+                  <option value="current_month">This month</option>
+                  <option value="last_30">Last 30 days</option>
+                  <option value="last_90">Last 90 days</option>
+                  <option value="last_year">Last year</option>
                   <option value="all">All time</option>
                 </select>
               </div>

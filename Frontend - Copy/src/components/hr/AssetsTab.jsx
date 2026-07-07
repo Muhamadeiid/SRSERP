@@ -7,7 +7,6 @@ import {
   Printer, RotateCcw, Trash2, Filter, Monitor, FileDown,
 } from 'lucide-react'
 import ITAssetsTab from './ITAssetsTab'
-import { generateAssetReturnReport } from '../../utils/generateAssetReturn'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const DEPARTMENTS = [
@@ -507,6 +506,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
     setReportBusy(true)
     try {
       const data = clearanceData ?? await assetService.clearance(clearanceEmp.id)
+      const { generateAssetReturnReport } = await import('../../utils/generateAssetReturn')
       await generateAssetReturnReport({ employee: clearanceEmp, clearanceData: data })
     } catch (e) {
       alert('Failed to generate report: ' + e.message)
@@ -520,6 +520,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
     setDirectReportId(emp.id)
     try {
       const data = await assetService.clearance(emp.id)
+      const { generateAssetReturnReport } = await import('../../utils/generateAssetReturn')
       await generateAssetReturnReport({ employee: emp, clearanceData: data })
     } catch (e) {
       alert('Failed to generate report: ' + e.message)

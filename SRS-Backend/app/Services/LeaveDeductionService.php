@@ -32,7 +32,7 @@ class LeaveDeductionService
                     ['annual' => 14, 'casual' => 7, 'sick' => 90, 'early' => 0]
                 );
 
-                if ($balance->deduct($leaveRequest->leave_type, (int) $leaveRequest->days)) {
+                if ($balance->deduct($leaveRequest->leave_type, (float) $leaveRequest->days)) {
                     $leaveRequest->forceFill(['balance_deducted_at' => now()])->save();
                     $processed++;
                 }

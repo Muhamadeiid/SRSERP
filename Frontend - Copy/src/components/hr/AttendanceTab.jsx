@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { attendanceService } from '../../services/Attendanceservice'
 import { getEmployees } from '../../services/employeeService'
 import { getLeaveBalance } from '../../services/leaveService'
+import { getSettings } from '../../services/settingsService'
 import {
   Search, Upload, Download, RefreshCw, Printer,
   Loader2, X, Pencil, Plus, CalendarDays
@@ -11,6 +12,18 @@ import {
 const pad = n => String(n).padStart(2, '0')
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const MON  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const ATTENDANCE_POLICY_DEFAULTS = {
+  attendance_regular_start_time: '08:00',
+  attendance_regular_ot_start_time: '17:00',
+  attendance_night_ot_start_time: '19:00',
+  attendance_regular_expected_hours: 9,
+  attendance_intervention_expected_hours: 9,
+  attendance_regular_weekly_off_day: 5,
+  attendance_intervention_default_off_day: 5,
+  attendance_saturday_rotation_enabled: '1',
+  attendance_group_a_off_even_week: '1',
+  attendance_absent_deduction_minutes: 540,
+}
 
 // "02-Mar-26"
 const fmtDate = ds => {
@@ -47,10 +60,15 @@ const toMin = t => {
 // calc OT start / end / rates
 // Regular employees: OT starts at 17:00 (fixed), night boundary at 19:00
 // Intervention employees: OT starts after expected shift (check_in + 9h), same night boundary
-const OT_START_REGULAR = 17 * 60 // 5 PM
-const NIGHT_START      = 19 * 60 // 7 PM
+const policyNumber = (policy, key) => Number(policy?.[key] ?? ATTENDANCE_POLICY_DEFAULTS[key])
+const policyBool = (policy, key) => ['1', 'true', 'yes', 'on'].includes(String(policy?.[key] ?? ATTENDANCE_POLICY_DEFAULTS[key]).toLowerCase())
+const attendancePolicyTime = (policy, key) => {
+  const value = String(policy?.[key] ?? ATTENDANCE_POLICY_DEFAULTS[key])
+  return value.length === 5 ? `${value}:00` : value
+}
+const policyTimeMin = (policy, key) => toMin(attendancePolicyTime(policy, key))
 
-const otTimes = (rec, employee) => {
+const otTimes = (rec, employee, policy = ATTENDANCE_POLICY_DEFAULTS) => {
   if (!rec?.overtime_hours || rec.overtime_hours <= 0) return null
   if (!rec.check_out) return null
 
@@ -60,15 +78,16 @@ const otTimes = (rec, employee) => {
   let otStart
   if (isIntervention) {
     if (!rec.check_in) return null
-    otStart = toMin(rec.check_in) + (rec.expected_hours || 9) * 60
+    otStart = toMin(rec.check_in) + (rec.expected_hours || policyNumber(policy, 'attendance_intervention_expected_hours')) * 60
   } else {
-    otStart = OT_START_REGULAR
+    otStart = policyTimeMin(policy, 'attendance_regular_ot_start_time')
   }
 
   if (outMin <= otStart) return null
   const fmt      = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
-  const dayMins   = Math.max(0, Math.min(outMin, NIGHT_START) - otStart)
-  const nightMins = Math.max(0, outMin - Math.max(otStart, NIGHT_START))
+  const nightStart = policyTimeMin(policy, 'attendance_night_ot_start_time')
+  const dayMins   = Math.max(0, Math.min(outMin, nightStart) - otStart)
+  const nightMins = Math.max(0, outMin - Math.max(otStart, nightStart))
   // >= 30 min → full hour; < 30 min → 0
   const dayRate   = Math.round(dayMins / 60)
   const nightRate = Math.round(nightMins / 60)
@@ -108,21 +127,21 @@ const STATUS_OPTIONS = ['present','late','shortage','absent','incomplete','wfh',
 
 // ── schedule helpers ───────────────────────────────────────────────────────
 // Returns true if the given date is a working day for the employee
-function isWorkingDay(employee, dateObj) {
+function isWorkingDay(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!employee) return true
   const dow = dateObj.getDay() // 0=Sun…6=Sat
   const isIntervention = (employee.department ?? '').toLowerCase() === 'intervention'
 
   if (isIntervention) {
     // weekly_off_day is 0-6; default to Friday (5) if not set
-    const offDay = employee.weekly_off_day ?? 5
+    const offDay = employee.weekly_off_day ?? policyNumber(policy, 'attendance_intervention_default_off_day')
     return dow !== offDay
   }
 
   // Regular employees
-  if (dow === 5) return false // Friday always off
+  if (dow === policyNumber(policy, 'attendance_regular_weekly_off_day')) return false
 
-  if (dow === 6) { // Saturday — rotation
+  if (dow === 6 && policyBool(policy, 'attendance_saturday_rotation_enabled')) {
     // ISO week number
     const d = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()))
     const dayNum = d.getUTCDay() || 7
@@ -130,19 +149,19 @@ function isWorkingDay(employee, dateObj) {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
     const isoWeek = Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
     const evenWeek = isoWeek % 2 === 0
-    // even ISO week → Group A is off  (matches PHP: $groupA = even; return !$groupA for A)
-    if (employee.saturday_group === 'A') return !evenWeek  // A works odd weeks, off even weeks
-    if (employee.saturday_group === 'B') return  evenWeek  // B works even weeks, off odd weeks
+    const groupAOffEvenWeek = policyBool(policy, 'attendance_group_a_off_even_week')
+    if (employee.saturday_group === 'A') return !(evenWeek === groupAOffEvenWeek)
+    if (employee.saturday_group === 'B') return  (evenWeek === groupAOffEvenWeek)
     return false // no group → off
   }
 
   return true // Sun–Thu always work
 }
 
-function dayOffLabel(employee, dow) {
+function dayOffLabel(employee, dow, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!employee) return 'Day Off'
   const isIntervention = (employee.department ?? '').toLowerCase() === 'intervention'
-  if (!isIntervention && dow === 5) return 'Friday Off'
+  if (!isIntervention && dow === policyNumber(policy, 'attendance_regular_weekly_off_day')) return `${DAYS[dow]} Off`
   if (!isIntervention && dow === 6) return 'Weekend'
   return 'Day Off'
 }
@@ -158,7 +177,7 @@ function leaveOnDate(leaves, employeeId, dateStr) {
   ) ?? null
 }
 
-function buildRows(startDate, endDate, records, employee, leaves = []) {
+function buildRows(startDate, endDate, records, employee, leaves = [], policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!startDate || !endDate) return []
   const rows = []
   const cur  = new Date(startDate + 'T00:00:00')
@@ -167,11 +186,11 @@ function buildRows(startDate, endDate, records, employee, leaves = []) {
     const y   = cur.getFullYear(), m = cur.getMonth()+1, d = cur.getDate()
     const dow = cur.getDay()
     const dateStr   = `${y}-${pad(m)}-${pad(d)}`
-    const isDayOff  = !isWorkingDay(employee, new Date(cur))
+    const isDayOff  = !isWorkingDay(employee, new Date(cur), policy)
     rows.push({
       day: d, dayName: DAYS[dow], dateStr,
       isWeekend: isDayOff,        // reuse isWeekend flag for any day-off
-      dayOffLabel: dayOffLabel(employee, dow),
+      dayOffLabel: dayOffLabel(employee, dow, policy),
       record: records.find(r => r.date?.slice(0,10) === dateStr) ?? null,
       leave:  leaveOnDate(leaves, employee?.id, dateStr),
     })
@@ -456,9 +475,9 @@ function SectionHeader({ children }) {
 }
 
 // ── print ──────────────────────────────────────────────────────────────────
-function printReport(employee, balance, startDate, endDate, rows) {
+function printReport(employee, balance, startDate, endDate, rows, policy = ATTENDANCE_POLICY_DEFAULTS) {
   const logoSrc  = `${window.location.origin}/logo.svg`
-  const nightStart = 19 * 60 // 7 PM in minutes
+  const nightStart = policyTimeMin(policy, 'attendance_night_ot_start_time')
 
   // helpers
   const toMinP = t => t ? parseInt(t.slice(0,2))*60 + parseInt(t.slice(3,5)) : null
@@ -475,7 +494,7 @@ function printReport(employee, balance, startDate, endDate, rows) {
 
   // summaries
   const withRec     = rows.filter(r => r.record)
-  const totalDedMin = withRec.filter(r => r.record.status==='absent').length * 540
+  const totalDedMin = withRec.filter(r => r.record.status==='absent').length * policyNumber(policy, 'attendance_absent_deduction_minutes')
   const totalDedHrs = totalDedMin / 60
 
   // OT breakdown per row — total = dayRate + nightRate (floor, same as the rate columns)
@@ -487,10 +506,10 @@ function printReport(employee, balance, startDate, endDate, rows) {
     if (isIntervention) {
       if (!rec.check_in) return null
       const inMin  = toMinP(rec.check_in)
-      const expMin = (rec.expected_hours || 9) * 60
+      const expMin = (rec.expected_hours || policyNumber(policy, 'attendance_intervention_expected_hours')) * 60
       otStartMin   = inMin + expMin
     } else {
-      otStartMin = 17 * 60 // 5 PM fixed for regular employees
+      otStartMin = policyTimeMin(policy, 'attendance_regular_ot_start_time')
     }
     if (outMin <= otStartMin) return null
     const dayMins   = Math.max(0, Math.min(outMin, nightStart) - otStartMin)
@@ -651,8 +670,8 @@ function printReport(employee, balance, startDate, endDate, rows) {
   ${infoRow('Deduction in Hours', totalDedHrs.toFixed(2))}
   ${infoRow('Over Time in Hours', totalOTHrs.toFixed(2))}
   <tr><td colspan="2" class="sec">Work Hours</td></tr>
-  ${infoRow('Start', '8:00:00 AM')}
-  ${infoRow('End', '5:00:00 PM')}
+  ${infoRow('Start', fmt12P(attendancePolicyTime(policy, 'attendance_regular_start_time')))}
+  ${infoRow('End', fmt12P(attendancePolicyTime(policy, 'attendance_regular_ot_start_time')))}
   <tr><td colspan="2" class="sec">Attendance Trans. Role</td></tr>
   ${infoRow('Salary', '')}
   ${infoRow('Day Rate', 0)}
@@ -737,6 +756,22 @@ export default function AttendanceTab() {
   const [overviewEditRec, setOverviewEditRec] = useState(null)   // for overview inline edit
   const [leaves,          setLeaves]          = useState([])     // approved leaves overlapping range
   const [overviewLeaves,  setOverviewLeaves]  = useState([])     // approved leaves on overview date
+  const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
+
+  useEffect(() => {
+    getSettings()
+      .then(r => {
+        const data = r.data ?? {}
+        setAttendancePolicy({
+          ...ATTENDANCE_POLICY_DEFAULTS,
+          ...Object.fromEntries(Object.keys(ATTENDANCE_POLICY_DEFAULTS).map(key => [
+            key,
+            data[key] ?? ATTENDANCE_POLICY_DEFAULTS[key],
+          ])),
+        })
+      })
+      .catch(() => setAttendancePolicy(ATTENDANCE_POLICY_DEFAULTS))
+  }, [])
 
   // ── Overview data ─────────────────────────────────────────────────────────
   const loadOverview = async (dateOverride) => {
@@ -788,13 +823,13 @@ export default function AttendanceTab() {
   const ovOT      = overviewRecs.filter(r => Number(r.overtime_hours) > 0).length
 
   // ── Detail data ───────────────────────────────────────────────────────────
-  const rows = buildRows(startDate, endDate, records, employee, leaves)
+  const rows = buildRows(startDate, endDate, records, employee, leaves, attendancePolicy)
   const withRec     = rows.filter(r => r.record)
-  const totalOT     = withRec.reduce((s,r) => { const ot = otTimes(r.record, employee); return s + (ot?.total ?? 0) }, 0)
+  const totalOT     = withRec.reduce((s,r) => { const ot = otTimes(r.record, employee, attendancePolicy); return s + (ot?.total ?? 0) }, 0)
   const totalHrs    = withRec.reduce((s,r) => s + Number(r.record.work_hours||0), 0)
   const totalLatMin = withRec.reduce((s,r) => s + Number(r.record.late_minutes||0), 0)
   // Absences on approved-leave days don't count as deductions
-  const totalDedMin = withRec.filter(r => r.record.status === 'absent' && !r.leave).length * 540
+  const totalDedMin = withRec.filter(r => r.record.status === 'absent' && !r.leave).length * policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes')
   const summary = {
     workingDays: rows.filter(r => !r.isWeekend).length,
     present:     withRec.filter(r => r.record.status === 'present').length,
@@ -1088,7 +1123,7 @@ export default function AttendanceTab() {
                 className="flex items-center gap-1.5 px-4 h-9 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-all">
                 <Upload className="w-4 h-4" />Upload Data
               </button>
-              <button onClick={() => printReport(employee, balance, startDate, endDate, rows)}
+              <button onClick={() => printReport(employee, balance, startDate, endDate, rows, attendancePolicy)}
                 className="flex items-center gap-1.5 px-4 h-9 bg-secondary-700 text-white rounded-lg text-sm font-medium hover:bg-secondary-800 transition-all">
                 <Printer className="w-4 h-4" />Print
               </button>
@@ -1150,15 +1185,15 @@ export default function AttendanceTab() {
                 {(employee.department ?? '').toLowerCase() === 'intervention' ? (
                   <>
                     <InfoRow label="Type"    value="Intervention" highlight />
-                    <InfoRow label="Shift"   value="Variable (9 hrs)" />
-                    <InfoRow label="Day Off" value={DAYS[employee.weekly_off_day ?? 5]} />
+                    <InfoRow label="Shift"   value={`Variable (${policyNumber(attendancePolicy, 'attendance_intervention_expected_hours')} hrs)`} />
+                    <InfoRow label="Day Off" value={DAYS[employee.weekly_off_day ?? policyNumber(attendancePolicy, 'attendance_intervention_default_off_day')]} />
                   </>
                 ) : (
                   <>
                     <InfoRow label="Type"         value="Regular" />
-                    <InfoRow label="Start"        value="8:00 AM" />
-                    <InfoRow label="End"          value="5:00 PM" />
-                    <InfoRow label="Friday"       value="Off" />
+                    <InfoRow label="Start"        value={fmt12(attendancePolicy.attendance_regular_start_time)} />
+                    <InfoRow label="End"          value={fmt12(attendancePolicy.attendance_regular_ot_start_time)} />
+                    <InfoRow label={DAYS[policyNumber(attendancePolicy, 'attendance_regular_weekly_off_day')]} value="Off" />
                     <InfoRow label="Saturday Grp" value={employee.saturday_group ?? '—'} highlight={!!employee.saturday_group} />
                   </>
                 )}
@@ -1232,10 +1267,10 @@ export default function AttendanceTab() {
                       <tbody>
                         {rows.map((r, i) => {
                           const rec    = r.record
-                          const ot     = rec ? otTimes(rec, employee) : null
+                          const ot     = rec ? otTimes(rec, employee, attendancePolicy) : null
                           const s      = rec?.status
                           const cfg    = STATUS_CFG[s]
-                          const dedMin = rec?.status === 'absent' && !r.leave ? 540 : 0
+                          const dedMin = rec?.status === 'absent' && !r.leave ? policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes') : 0
                           const onLeave = !!r.leave && !r.isWeekend
                           return (
                             <tr key={r.dateStr}

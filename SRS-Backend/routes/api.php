@@ -106,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employees/import',                          [EmployeeController::class, 'import']);
         Route::get('/employees/export',                           [EmployeeController::class, 'export']);
         Route::get('/employees/org-chart',                        [EmployeeController::class, 'orgChart']);
+        Route::post('/employees/bulk-saturday-group',             [EmployeeController::class, 'bulkSaturdayGroup']);
         Route::put('/employees/{employee}/manager',               [EmployeeController::class, 'updateManager']);
         Route::get('/employees/{employee}',                       [EmployeeController::class, 'show']);
         Route::put('/employees/{employee}',                       [EmployeeController::class, 'update']);

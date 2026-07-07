@@ -37,8 +37,8 @@ class LeaveRequest extends Model
         'approved_at'         => 'datetime',
         'balance_deducted_at' => 'datetime',
         'cancelled_at'        => 'datetime',
-        'available_balance'   => 'integer',
-        'days'                => 'integer',
+        'available_balance'   => 'decimal:2',
+        'days'                => 'decimal:2',
         'hours'               => 'float',
     ];
 

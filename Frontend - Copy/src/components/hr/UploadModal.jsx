@@ -140,10 +140,20 @@ export default function UploadModal({ onClose, onSuccess }) {
                 </div>
               </div>
               {result.errors && result.errors.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-orange-600 font-semibold">
+                <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-2">
+                  <p className="text-xs text-orange-700 font-semibold">
                     {result.errors.length} warnings
                   </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {result.errors.slice(0, 5).map((msg, i) => (
+                      <li key={i} className="text-[11px] text-orange-700">{msg}</li>
+                    ))}
+                  </ul>
+                  {result.errors.length > 5 && (
+                    <p className="mt-1 text-[11px] text-orange-600">
+                      +{result.errors.length - 5} more
+                    </p>
+                  )}
                 </div>
               )}
             </div>

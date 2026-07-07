@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Printer, Download, FileText, Search, Loader2 } from 'lucide-react'
-import { generateERF } from '../utils/generateERF'
 import { getEmployee, searchEmployees, getDepotManager, getHrOfficer, updateEmployee } from '../services/employeeService'
 
 // ── constants ─────────────────────────────────────────────────
@@ -376,6 +375,7 @@ export default function ResignationsPage() {
     setDownloading(true)
     try {
       await saveResignation()
+      const { generateERF } = await import('../utils/generateERF')
       await generateERF(form)
     } catch (err) {
       console.error(err)
