@@ -543,7 +543,7 @@ function ManagerSelect({ users, value, onChange, excludeId }) {
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-[#e2e4ea] rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-[90] mt-1 w-full bg-white border border-[#e2e4ea] rounded-xl shadow-2xl overflow-hidden">
           <div className="p-2 border-b border-[#f0f1f5]">
             <div className="relative">
               <Svg d={Icon.search} cls="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#b0b7c9] pointer-events-none" />

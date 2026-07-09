@@ -85,7 +85,7 @@ function EmployeePicker({ value, onChange, placeholder = 'Search employee…', c
         </button>
       )}
       {open && results.length > 0 && (
-        <div className="absolute z-30 w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+        <div className="absolute z-[90] w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-2xl max-h-64 overflow-y-auto">
           {results.map(emp => (
             <button key={emp.id} type="button" onClick={() => select(emp)}
               className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-primary/5 text-left border-b border-neutral-50 last:border-0">

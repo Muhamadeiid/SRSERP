@@ -20,6 +20,7 @@ const PoDetail          = lazy(() => import('./pages/PoDetail'))
 const IgiNewPage        = lazy(() => import('./pages/IgiNewPage'))
 const IgiDetail         = lazy(() => import('./pages/IgiDetail'))
 const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
+const WeeklyLeaveReportPage = lazy(() => import('./pages/WeeklyLeaveReportPage'))
 const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
 const SaturdayRotationPage = lazy(() => import('./pages/SaturdayRotationPage'))
 
@@ -114,6 +115,11 @@ export default function App() {
           <Route path="leave-master" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <LeaveMasterList />
+            </ProtectedRoute>
+          } />
+          <Route path="weekly-leave-report" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <WeeklyLeaveReportPage />
             </ProtectedRoute>
           } />
           <Route path="calendar"     element={<CalendarPage />} />

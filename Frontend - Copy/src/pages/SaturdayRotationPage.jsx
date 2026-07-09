@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Printer, RefreshCw, Search, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Plus, Printer, RefreshCw, Save, Search, Trash2, Users } from 'lucide-react'
 import { bulkUpdateSaturdayGroup, getEmployees } from '../services/employeeService'
-import { getSettings } from '../services/settingsService'
+import { getSettings, saveSetting } from '../services/settingsService'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const TEAM_STYLE = {
@@ -25,6 +25,15 @@ const DEFAULT_POLICY = {
   attendance_saturday_rotation_enabled: '1',
   attendance_group_a_off_even_week: '1',
 }
+
+const CENTER_ITEMS_SETTING = 'saturday_rotation_center_items'
+const DEFAULT_CENTER_ITEMS = [
+  { title: 'PM', names: 'Mohamed Samy' },
+  { title: 'PM Doc.', names: 'A. Elshaker' },
+  { title: 'HR', names: 'Mohamed Ragab' },
+  { title: 'Safety', names: 'Salah Mohamed' },
+  { title: 'Electronic Technician', names: 'Moawad Ibrahim' },
+]
 
 function isoWeek(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -91,6 +100,23 @@ function titleCase(value) {
 function twoPartName(value) {
   const parts = String(value ?? '').trim().split(/\s+/).filter(Boolean)
   return parts.slice(0, 2).join(' ') || 'Unnamed'
+}
+
+function parseCenterItems(value) {
+  if (!value) return DEFAULT_CENTER_ITEMS
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return DEFAULT_CENTER_ITEMS
+    const cleanItems = parsed
+      .map(item => ({
+        title: String(item?.title ?? '').trim(),
+        names: String(item?.names ?? '').trim(),
+      }))
+      .filter(item => item.title || item.names)
+    return cleanItems.length ? cleanItems : DEFAULT_CENTER_ITEMS
+  } catch {
+    return DEFAULT_CENTER_ITEMS
+  }
 }
 
 function sectionFor(emp) {
@@ -240,6 +266,27 @@ function EmployeeMiniList({ title, employees, tone = 'neutral' }) {
   )
 }
 
+function CenterSupportColumn({ items }) {
+  const safeItems = items?.length ? items : DEFAULT_CENTER_ITEMS
+  return (
+    <div className="relative flex justify-center">
+      <div className="absolute top-5 bottom-0 border-l border-dashed border-neutral-400" />
+      <div className="mt-12 space-y-2 w-full">
+        {safeItems.map((item, index) => (
+          <div key={`${item.title}-${index}`}>
+            <div className="border border-neutral-500 bg-[#b8a7cc] px-1 py-1 text-center text-sm font-black leading-tight">
+              {item.title || 'Role'}
+            </div>
+            <div className="border-x border-b border-neutral-500 bg-[#dfeccb] px-1 py-2 text-center text-[11px] leading-snug whitespace-pre-line">
+              {item.names || '-'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SaturdayRotationPage() {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -252,6 +299,8 @@ export default function SaturdayRotationPage() {
   const [assigning, setAssigning] = useState(false)
   const [selectedSaturdayIndex, setSelectedSaturdayIndex] = useState(0)
   const [employeeSearch, setEmployeeSearch] = useState('')
+  const [centerItems, setCenterItems] = useState(DEFAULT_CENTER_ITEMS)
+  const [savingCenterItems, setSavingCenterItems] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -262,7 +311,9 @@ export default function SaturdayRotationPage() {
         getSettings(),
       ])
       setEmployees(empRes.data ?? [])
-      setPolicy({ ...DEFAULT_POLICY, ...(settingsRes.data ?? {}) })
+      const settings = settingsRes.data ?? {}
+      setPolicy({ ...DEFAULT_POLICY, ...settings })
+      setCenterItems(parseCenterItems(settings[CENTER_ITEMS_SETTING]))
       setSelectedIds([])
     } catch (e) {
       setError(e.message || 'Unable to load Saturday rotation plan')
@@ -328,6 +379,38 @@ export default function SaturdayRotationPage() {
       setError(e.message || 'Unable to assign Saturday group')
     } finally {
       setAssigning(false)
+    }
+  }
+
+  const updateCenterItem = (index, field, value) => {
+    setCenterItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item))
+  }
+
+  const addCenterItem = () => {
+    setCenterItems(prev => [...prev, { title: '', names: '' }])
+  }
+
+  const removeCenterItem = (index) => {
+    setCenterItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index))
+  }
+
+  const saveCenterItems = async () => {
+    setSavingCenterItems(true)
+    setError('')
+    try {
+      const cleaned = centerItems
+        .map(item => ({
+          title: String(item.title ?? '').trim(),
+          names: String(item.names ?? '').trim(),
+        }))
+        .filter(item => item.title || item.names)
+      const next = cleaned.length ? cleaned : DEFAULT_CENTER_ITEMS
+      await saveSetting(CENTER_ITEMS_SETTING, JSON.stringify(next))
+      setCenterItems(next)
+    } catch (e) {
+      setError(e.message || 'Unable to save middle names')
+    } finally {
+      setSavingCenterItems(false)
     }
   }
 
@@ -554,6 +637,60 @@ export default function SaturdayRotationPage() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-neutral-100 bg-white p-4 space-y-3 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-secondary-700">Middle Column Names</p>
+            <p className="text-xs text-neutral-400">These boxes appear between Team A and Team B on the printed plan.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={addCenterItem}
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs font-bold text-secondary-700 hover:bg-neutral-50"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add
+            </button>
+            <button
+              onClick={saveCenterItems}
+              disabled={savingCenterItems}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {savingCenterItems ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {centerItems.map((item, index) => (
+            <div key={index} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={item.title}
+                  onChange={e => updateCenterItem(index, 'title', e.target.value)}
+                  placeholder="Box title, e.g. PM"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-secondary-700 outline-none focus:border-primary"
+                />
+                <button
+                  onClick={() => removeCenterItem(index)}
+                  disabled={centerItems.length <= 1}
+                  className="h-9 w-9 rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 disabled:opacity-30"
+                  title="Remove"
+                >
+                  <Trash2 className="mx-auto w-4 h-4" />
+                </button>
+              </div>
+              <textarea
+                value={item.names}
+                onChange={e => updateCenterItem(index, 'names', e.target.value)}
+                placeholder="Names shown under the title"
+                rows={2}
+                className="w-full resize-y rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-secondary-700 outline-none focus:border-primary"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="saturday-plan-print bg-white border border-neutral-200 overflow-x-auto print:border-0">
         <div className="saturday-plan-sheet min-w-[1120px] p-4 font-sans text-black">
           <div className="mx-auto mb-1 w-[610px] border border-black py-1 text-center text-3xl leading-tight">
@@ -571,17 +708,7 @@ export default function SaturdayRotationPage() {
               onToggle={toggleSelected}
             />
 
-            <div className="relative flex justify-center">
-              <div className="absolute top-5 bottom-0 border-l border-dashed border-neutral-400" />
-              <div className="mt-12 space-y-2 w-full">
-                <div className="border border-neutral-500 bg-[#b8a7cc] py-1 text-center text-xl font-black">PM</div>
-                <div className="border border-neutral-500 bg-[#dfeccb] py-2 text-center text-[11px]">Rotation</div>
-                <div className="border border-neutral-500 bg-[#b8a7cc] py-1 text-center text-xl font-black">HR</div>
-                <div className="border border-neutral-500 bg-[#dfeccb] py-2 text-center text-[11px]">Support</div>
-                <div className="border border-neutral-500 bg-[#b8a7cc] py-1 text-center text-xl font-black">Safety</div>
-                <div className="border border-neutral-500 bg-[#dfeccb] py-2 text-center text-[11px]">Cover</div>
-              </div>
-            </div>
+            <CenterSupportColumn items={centerItems} />
 
             <TeamPanel
               team="B"

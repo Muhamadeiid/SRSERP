@@ -1,3 +1,3 @@
 @echo off
-cd /d "C:\Users\hp\SRS\Frontend - Copy"
+cd /d "C:\Users\elash\srserp\Frontend - Copy"
 npm run dev

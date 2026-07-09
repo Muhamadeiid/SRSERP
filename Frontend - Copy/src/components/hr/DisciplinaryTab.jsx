@@ -181,7 +181,7 @@ function EmployeePicker({ value, onChange }) {
         {busy && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-neutral-300" />}
       </div>
       {results.length > 0 && (
-        <div className="absolute z-30 mt-1 w-full bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+        <div className="absolute z-[90] mt-1 w-full bg-white border border-neutral-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto">
           {results.map(emp => (
             <button
               key={emp.id}

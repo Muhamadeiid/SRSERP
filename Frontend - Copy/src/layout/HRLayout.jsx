@@ -35,6 +35,7 @@ const ALL_NAV = [
   { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText },
   { label: 'Resignations',       path: '/human-resources/resignations',   icon: UserMinus },
   { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            hrOnly: true },
+  { label: 'Weekly Leave Report', path: '/human-resources/weekly-leave-report', icon: CalendarDays,          hrOnly: true },
   { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      hrOnly: true },
   { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,             hrOnly: true },
   { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                hrOnly: true },
@@ -131,16 +132,16 @@ export default function HRLayout() {
         style={{ width: sidebarW }}
       >
         {/* Logo / collapse toggle */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100 min-h-[64px]">
+        <div className={`flex border-b border-neutral-100 transition-all duration-200 ${collapsed ? 'items-center justify-center px-2 py-4 min-h-[64px]' : 'flex-col items-start gap-1 px-4 py-4 min-h-[82px]'}`}>
           <button
             onClick={() => collapsed ? setCollapsed(false) : navigate('/')}
             title={collapsed ? 'Expand' : 'Back to Dashboard'}
-            className="shrink-0 hover:opacity-80 transition-opacity"
+            className="max-w-full shrink-0 hover:opacity-80 transition-opacity"
           >
-            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8' : 'h-10'} w-auto object-contain`} />
+            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8 max-w-10' : 'h-10 max-w-full'} w-auto object-contain`} />
           </button>
-          <div className={`flex flex-col leading-tight overflow-hidden transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-            <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Human Resources</span>
+          <div className={`flex flex-col leading-tight transition-all duration-200 ${collapsed ? 'hidden w-0 opacity-0' : 'w-full opacity-100'}`}>
+            <span className="block max-w-full text-[10px] text-neutral-400 uppercase tracking-widest break-words leading-snug">Human Resources</span>
           </div>
         </div>
 
@@ -162,7 +163,7 @@ export default function HRLayout() {
               }
             >
               <item.icon className="w-[18px] h-[18px] shrink-0" />
-              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              {!collapsed && <span className="min-w-0 flex-1 break-words leading-tight">{item.label}</span>}
             </NavLink>
           ))}
         </nav>
@@ -195,12 +196,12 @@ export default function HRLayout() {
           )}
 
           {/* Breadcrumb */}
-          <div className="hidden sm:flex items-center gap-1.5 text-sm text-neutral-400 min-w-0">
-            <span className="text-secondary-700 font-medium">Rotem SRS</span>
+          <div className="hidden sm:flex flex-1 flex-wrap items-center gap-1.5 text-sm text-neutral-400 min-w-0">
+            <span className="text-secondary-700 font-medium break-words">Rotem SRS</span>
             <span className="opacity-40">/</span>
-            <span className="text-neutral-500">Human Resources</span>
+            <span className="text-neutral-500 break-words">Human Resources</span>
             <span className="opacity-40">/</span>
-            <span className="text-secondary-700 font-semibold">{pageLabel}</span>
+            <span className="text-secondary-700 font-semibold break-words">{pageLabel}</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
@@ -281,9 +282,9 @@ export default function HRLayout() {
 
             {/* User info */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-bold text-secondary-700 leading-none">{user?.name ?? 'User'}</p>
-                <p className="text-[11px] text-neutral-400 mt-0.5 capitalize">{user?.role?.replace('_', ' ') ?? ''}</p>
+              <div className="hidden sm:block min-w-0 max-w-[180px] text-right">
+                <p className="text-sm font-bold text-secondary-700 leading-tight break-words">{user?.name ?? 'User'}</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5 capitalize break-words">{user?.role?.replace('_', ' ') ?? ''}</p>
               </div>
               <div className="w-[34px] h-[34px] rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
                 {initials(user?.name)}

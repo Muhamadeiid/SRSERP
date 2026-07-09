@@ -1,7 +1,7 @@
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun,
   AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
-  HeightRule, TableLayoutType, Header, TabStopType, TabStopPosition,
+  HeightRule, TableLayoutType, Header, Footer, TabStopType, TabStopPosition,
 } from 'docx'
 import { saveAs } from 'file-saver'
 
@@ -65,10 +65,26 @@ function formatBalance(value) {
   return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : value
 }
 
+function twoName(value) {
+  return String(value ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ')
+}
+
+function lrfTwoNameData(d = {}) {
+  return {
+    ...d,
+    employee_name: twoName(d.employee_name),
+    alternate_employee_name: twoName(d.alternate_employee_name),
+    direct_manager_name: twoName(d.direct_manager_name),
+    manager_approver: d.manager_approver ? { ...d.manager_approver, name: twoName(d.manager_approver.name) } : d.manager_approver,
+    hr_approver: d.hr_approver ? { ...d.hr_approver, name: twoName(d.hr_approver.name) } : d.hr_approver,
+    approver: d.approver ? { ...d.approver, name: twoName(d.approver.name) } : d.approver,
+  }
+}
+
 function depotManagerNameFor(d) {
   return d?.approver?.role === 'depot_manager'
-    ? d.approver.name
-    : (d?.depot_manager_name || DEPOT_MGR_FALLBACK)
+    ? twoName(d.approver.name)
+    : twoName(d?.depot_manager_name || DEPOT_MGR_FALLBACK)
 }
 
 function para(text, opts = {}) {
@@ -126,7 +142,7 @@ const DEPOT_MGR_FALLBACK  = 'Mohamed Awaad'
 
 // ── main export ────────────────────────────────────────────────────
 export async function generateLRF(d) {
-  d = { ...d, available_balance: formatBalance(d.available_balance) }
+  d = { ...lrfTwoNameData(d), available_balance: formatBalance(d.available_balance) }
   const logoBytes = await loadLogoBytes()
 
   // ── Header (logo + title) — only bottom border + divider ──────
@@ -239,7 +255,8 @@ export async function generateLRF(d) {
   const LBL_W = Math.round(CONTENT_W * 0.34)
   const CHK_W = 500
   const TXT_W = 1400
-  const REST  = CONTENT_W - LBL_W - CHK_W * 4 - TXT_W * 3
+  const DAYS_W = 820
+  const REST  = CONTENT_W - LBL_W - CHK_W * 3 - TXT_W * 3 - DAYS_W
 
   // Simple row: label + value (colspan=8 fills the value area)
   const simpleRow = (en, ar, val) => new TableRow({
@@ -272,7 +289,7 @@ export async function generateLRF(d) {
       cell([para('Early Leave', { size: 18 })], { width: TXT_W }),
       cell([para(`From: ${normalizeTime(d.early_from) || ''}`, { size: 18 })], { colspan: 2 }),
       cell([para(`To: ${normalizeTime(d.early_to) || ''}`, { size: 18 })], { colspan: 2 }),
-      cell([para(`( ${d.leave_type === 'early' ? earlyDays(d.early_from, d.early_to) : ''} )`, { size: 16, align: AlignmentType.CENTER })], { width: CHK_W }),
+      cell([para(`( ${d.leave_type === 'early' ? earlyDays(d.early_from, d.early_to) : ''} )`, { size: 14, align: AlignmentType.CENTER })], { width: DAYS_W, margins: { top: 40, bottom: 40, left: 20, right: 20 } }),
       cell([para('Day', { size: 16, align: AlignmentType.CENTER })], { width: REST, margins: { top: 40, bottom: 40, left: 40, right: 40 } }),
     ],
   })
@@ -297,27 +314,33 @@ export async function generateLRF(d) {
                           : false;
   const sigNames = {
     employee:  d.employee_name || '',
-    alternate: d.alternate_employee_name || '',
+    alternate: d.alternate_employee_name || twoName(d.alternate_employee?.name) || '',
     direct:    managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || ''),
-    hr:        d.hr_approver?.name || d.hr_name || HR_OFFICER_FALLBACK,
+    hr:        d.hr_approver?.name || twoName(d.hr_name) || HR_OFFICER_FALLBACK,
     depot:     depotManagerNameFor(d),
   }
 
-  const sigRows = (en, ar, name) => [
+  const sigRows = (en, ar, name, mode = 'normal') => {
+    const compact = mode === 'compact'
+    const emptyHeight = compact ? 620 : 840
+    const nameHeight = compact ? 390 : 470
+
+    return [
     new TableRow({
-      height: { value: 800, rule: HeightRule.ATLEAST },
+      height: { value: emptyHeight, rule: HeightRule.ATLEAST },
       children: [
         cell(labelPara(en, ar), { width: LBL_W, rowspan: 2, vAlign: VerticalAlign.TOP }),
         cell([para('', { size: 18 })], { colspan: 8 }),
       ],
     }),
     new TableRow({
-      height: { value: 450, rule: HeightRule.ATLEAST },
+      height: { value: nameHeight, rule: HeightRule.ATLEAST },
       children: [
         cell([para(name, { size: 16, italics: true, color: '888888' })], { colspan: 8 }),
       ],
     }),
   ]
+  }
 
   const mainRows = [
     simpleRow('Employee Name:', 'إسم الموظف', d.employee_name),
@@ -331,7 +354,7 @@ export async function generateLRF(d) {
     simpleRow('Annual Leave start Date:',   'تاريخ بداية الأجازه', fmtDate(d.start_date)),
     simpleRow('Annual Leave End Date:',     'تاريخ انتهاء الأجازه', fmtDate(d.end_date)),
     simpleRow('The purpose:',               'الغرض', d.purpose),
-    ...sigRows('Employee Name / signature:',              'إسم الموظف / توقيعه',           sigNames.employee),
+    ...sigRows('Employee Name / signature:',              'إسم الموظف / توقيعه',           sigNames.employee, 'compact'),
     ...sigRows('Alternate Employee name / signature:',    'إسم الموظف البديل / توقيعه',    sigNames.alternate),
     ...sigRows('Direct manager Name / signature',         'المدير المباشر / التوقيع',       sigNames.direct),
     ...sigRows('Human Resource',                          'موظف الموارد البشريه',           sigNames.hr),
@@ -340,7 +363,7 @@ export async function generateLRF(d) {
 
   const mainTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
-    columnWidths: [LBL_W, CHK_W, TXT_W, CHK_W, TXT_W, CHK_W, TXT_W, CHK_W, REST],
+    columnWidths: [LBL_W, CHK_W, TXT_W, CHK_W, TXT_W, CHK_W, TXT_W, DAYS_W, REST],
     layout: TableLayoutType.FIXED,
     borders: ALL_BORDERS,
     rows: mainRows,
@@ -357,7 +380,7 @@ export async function generateLRF(d) {
           new TableCell({
             width: { size: CONTENT_W - 1500, type: WidthType.DXA },
             borders: { top: BORDER, bottom: NO_BORDERS.bottom, left: NO_BORDERS.left, right: NO_BORDERS.right },
-            margins: { top: 60, bottom: 0, left: 0, right: 0 },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
             children: [new Paragraph({ children: [
               new TextRun({ text: 'Document No: ', bold: true, size: 16, font: 'Arial' }),
               new TextRun({ text: 'SRS-HR-P02-F01', bold: true, size: 16, font: 'Arial', color: 'CC0000' }),
@@ -369,7 +392,7 @@ export async function generateLRF(d) {
           new TableCell({
             width: { size: 1500, type: WidthType.DXA },
             borders: { top: BORDER, bottom: NO_BORDERS.bottom, left: NO_BORDERS.left, right: NO_BORDERS.right },
-            margins: { top: 60, bottom: 0, left: 0, right: 0 },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
             children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Page 1 of 1', bold: true, size: 16, font: 'Arial' })] })],
           }),
         ],
@@ -384,11 +407,14 @@ export async function generateLRF(d) {
         properties: {
           page: {
             size: { width: PAGE_W, height: PAGE_H },
-            margin: { top: 1650, right: MARGIN, bottom: 500, left: MARGIN, header: 300, footer: 0 },
+            margin: { top: 1650, right: MARGIN, bottom: 900, left: MARGIN, header: 300, footer: 760 },
           },
         },
         headers: {
           default: new Header({ children: [headerTable] }),
+        },
+        footers: {
+          default: new Footer({ children: [footerTable] }),
         },
         children: [
           trackingRow,
@@ -397,7 +423,6 @@ export async function generateLRF(d) {
           purposeAr,
           detailsHead,
           mainTable,
-          footerTable,
         ],
       },
     ],

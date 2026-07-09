@@ -8,7 +8,7 @@ class LeaveRequest extends Model
 {
     protected $fillable = [
         'tracking_no', 'user_id', 'employee_id',
-        'employee_name', 'job_title', 'department', 'department_label', 'direct_manager_name',
+        'employee_name', 'job_title', 'department', 'department_label', 'direct_manager_name', 'alternate_employee_name',
         'type',
         // LRF
         'leave_type', 'paid', 'available_balance',

@@ -469,7 +469,7 @@ function ManagerAssignPanel() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-visible">
       <div className="px-5 py-4 border-b border-neutral-100 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-primary" />
         <h3 className="text-sm font-bold text-secondary-700">Manager Account Assignments</h3>
@@ -514,7 +514,7 @@ function ManagerAssignPanel() {
                 {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-neutral-300" />}
               </div>
               {results.length > 0 && (
-                <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg overflow-hidden">
+                <div className="absolute z-[80] left-0 right-0 bottom-full mb-1 max-h-72 overflow-y-auto bg-white border border-neutral-200 rounded-xl shadow-2xl">
                   {results.map(emp => (
                     <button key={emp.id} onClick={() => assign(emp)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-primary/5 transition-colors text-left">

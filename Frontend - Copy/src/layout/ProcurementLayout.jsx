@@ -103,16 +103,16 @@ export default function ProcurementLayout() {
         style={{ width: sidebarW }}
       >
         {/* Logo / collapse toggle */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100 min-h-[64px]">
+        <div className={`flex border-b border-neutral-100 transition-all duration-200 ${collapsed ? 'items-center justify-center px-2 py-4 min-h-[64px]' : 'flex-col items-start gap-1 px-4 py-4 min-h-[82px]'}`}>
           <button
             onClick={() => collapsed ? setCollapsed(false) : navigate('/')}
             title={collapsed ? 'Expand' : 'Back to Dashboard'}
-            className="shrink-0 hover:opacity-80 transition-opacity"
+            className="max-w-full shrink-0 hover:opacity-80 transition-opacity"
           >
-            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8' : 'h-10'} w-auto object-contain`} />
+            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8 max-w-10' : 'h-10 max-w-full'} w-auto object-contain`} />
           </button>
-          <div className={`flex flex-col leading-tight overflow-hidden transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-            <span className="text-[10px] text-neutral-400 uppercase tracking-widest whitespace-nowrap mt-0.5">Purchase Requests</span>
+          <div className={`flex flex-col leading-tight transition-all duration-200 ${collapsed ? 'hidden w-0 opacity-0' : 'w-full opacity-100'}`}>
+            <span className="block max-w-full text-[10px] text-neutral-400 uppercase tracking-widest break-words leading-snug">Purchase Requests</span>
           </div>
         </div>
 
@@ -134,7 +134,7 @@ export default function ProcurementLayout() {
               }
             >
               <item.icon className="w-[18px] h-[18px] shrink-0" />
-              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              {!collapsed && <span className="min-w-0 flex-1 break-words leading-tight">{item.label}</span>}
             </NavLink>
           ))}
         </nav>

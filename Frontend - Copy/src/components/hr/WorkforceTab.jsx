@@ -1376,7 +1376,7 @@ function PositionPicker({ value, valueArabic, onChange, onTextChange }) {
       />
       {busy && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-neutral-300" />}
       {open && results.length > 0 && (
-        <div className="absolute z-30 w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+        <div className="absolute z-[90] w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-2xl max-h-64 overflow-y-auto">
           {results.map(p => (
             <button key={p.id} type="button"
               onMouseDown={e => e.preventDefault()}

@@ -199,7 +199,7 @@ export default function SettingsPage() {
       {/* ── Org Structure Tab ── */}
       {activeTab === 'org' && <>
       {/* ── Section 1: Org Structure ── */}
-      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-visible">
         <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold text-secondary-700">Manager Account Assignments</h2>
@@ -253,7 +253,7 @@ export default function SettingsPage() {
 
                 {/* Search results dropdown */}
                 {searchResults.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute z-[80] left-0 right-0 bottom-full mb-1 max-h-72 overflow-y-auto bg-white border border-neutral-200 rounded-xl shadow-2xl">
                     {searchResults.map(emp => (
                       <button
                         key={emp.id}
@@ -443,7 +443,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-visible">
         <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
           <Settings className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold text-secondary-700">HR Settings</h2>

@@ -51,7 +51,6 @@ export default function LeaveMasterList() {
   const [err,     setErr]     = useState('')
   const [type,    setType]    = useState('all')   // all | lrf | otr
   const [search,  setSearch]  = useState('')
-
   const fetchAll = useCallback(async () => {
     setLoading(true)
     setErr('')

@@ -90,17 +90,26 @@ const formatBalance = (value) => {
   const n = parseFloat(value)
   return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : value
 }
+const twoName = (n) => n?.trim().split(/\s+/).slice(0, 2).join(' ') ?? ''
+const lrfTwoNameData = (d = {}) => ({
+  ...d,
+  employee_name: twoName(d.employee_name),
+  alternate_employee_name: twoName(d.alternate_employee_name),
+  direct_manager_name: twoName(d.direct_manager_name),
+  manager_approver: d.manager_approver ? { ...d.manager_approver, name: twoName(d.manager_approver.name) } : d.manager_approver,
+  hr_approver: d.hr_approver ? { ...d.hr_approver, name: twoName(d.hr_approver.name) } : d.hr_approver,
+  approver: d.approver ? { ...d.approver, name: twoName(d.approver.name) } : d.approver,
+})
 const depotManagerNameFor = (request) =>
   request?.approver?.role === 'depot_manager'
-    ? request.approver.name
-    : (request?.depot_manager_name || DEPOT_MGR)
+    ? twoName(request.approver.name)
+    : twoName(request?.depot_manager_name || DEPOT_MGR)
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const genLRFNo  = () => `LRF-GZ-????`
 const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
 const OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
-const threeName = (n) => n?.trim().split(/\s+/).slice(0, 3).join(' ') ?? ''
 const today     = () => new Date().toISOString().slice(0, 10)
 const pad2      = n => String(n).padStart(2, '0')
 const dateString = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
@@ -138,7 +147,7 @@ function StatusBadge({ status }) {
 }
 
 // ── employee autocomplete ─────────────────────────────────────
-function EmployeeSearch({ onSelect, initialName = '' }) {
+function EmployeeSearch({ onSelect, initialName = '', onInputChange }) {
   const [q, setQ]           = useState(initialName)
   const [results, setResults] = useState([])
   const [open, setOpen]     = useState(false)
@@ -166,7 +175,7 @@ function EmployeeSearch({ onSelect, initialName = '' }) {
         <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-300 pointer-events-none" />
         <input
           value={q}
-          onChange={e => { setQ(e.target.value); setOpen(true) }}
+          onChange={e => { setQ(e.target.value); onInputChange?.(e.target.value); setOpen(true) }}
           onFocus={() => q.length >= 2 && setOpen(true)}
           placeholder="Search employee name…"
           className={INP + ' pl-8'}
@@ -174,7 +183,7 @@ function EmployeeSearch({ onSelect, initialName = '' }) {
         {busy && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-neutral-300" />}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-30 w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+        <div className="absolute z-[90] w-full mt-1 bg-white rounded-xl border border-neutral-200 shadow-2xl max-h-64 overflow-y-auto">
           {results.map(emp => (
             <button key={emp.id} type="button"
               onClick={() => { onSelect(emp); setQ(emp.name); setOpen(false) }}
@@ -658,7 +667,7 @@ function LRFForm({ onSubmit, saving }) {
     setForm(f => ({
       ...f,
       employee_id:      emp.id ?? null,
-      employee_name:    threeName(emp.name),
+      employee_name:    twoName(emp.name),
       job_title:        emp.position ?? '',
       department:       selectedDept,
       department_label: deptLabel(emp),
@@ -685,7 +694,7 @@ function LRFForm({ onSubmit, saving }) {
           }))
           const mgr = full?.direct_manager || full?.directManager
           if (mgr?.name && mgr?.user_role !== 'depot_manager') {
-            setForm(f => ({ ...f, direct_manager_name: mgr.name }))
+            setForm(f => ({ ...f, direct_manager_name: twoName(mgr.name) }))
           }
         })
         .catch(() => {})
@@ -735,7 +744,7 @@ function LRFForm({ onSubmit, saving }) {
 
       <form onSubmit={e => {
         e.preventDefault()
-        onSubmit({ ...form, early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
       }}>
         {/* ══ MAIN TABLE ══ */}
         <table className="w-full border-collapse border-2 border-neutral-800 mx-[1px]" style={{width:'calc(100% - 2px)'}}>
@@ -1121,7 +1130,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
   useEffect(() => {
     getDepotManager()
       .then(dm => {
-        if (dm?.name) setDepotManagerName(dm.name)
+        if (dm?.name) setDepotManagerName(twoName(dm.name))
       })
       .catch(() => {})
   }, [])
@@ -1145,7 +1154,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
     setForm(f => ({
       ...f,
       employee_id: emp.id ?? null,
-      employee_name: threeName(emp.name),
+      employee_name: twoName(emp.name),
       job_title: emp.position ?? '',
       department: selectedDept,
       department_label: deptLabel(emp),
@@ -1163,7 +1172,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
         job_title: full?.position ?? f.job_title,
         department: fullDept,
         department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
-        direct_manager_name: ((full?.direct_manager || full?.directManager)?.user_role !== 'depot_manager' ? (full?.direct_manager || full?.directManager)?.name : null) ?? f.direct_manager_name,
+        direct_manager_name: ((full?.direct_manager || full?.directManager)?.user_role !== 'depot_manager' ? twoName((full?.direct_manager || full?.directManager)?.name) : null) ?? f.direct_manager_name,
       }))
     }).catch(() => {})
   }
@@ -1182,8 +1191,9 @@ function OfficialLRFForm({ onSubmit, saving }) {
         <td className="border border-neutral-900 px-3 py-1 text-xs italic text-neutral-500">
           {editableKey === 'alternate_employee_name'
             ? <EmployeeSearch
-                onSelect={emp => set(editableKey, threeName(emp.name))}
+                onSelect={emp => set(editableKey, twoName(emp.name))}
                 initialName={form[editableKey]}
+                onInputChange={value => set(editableKey, value)}
               />
             : editableKey
               ? <input value={form[editableKey] ?? ''} onChange={e => set(editableKey, e.target.value)} className="w-full bg-transparent outline-none" placeholder="Name" />
@@ -1195,7 +1205,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
 
   const submit = (e) => {
     e.preventDefault()
-    onSubmit({ ...form, early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1255,6 +1265,7 @@ function OfficialLRFForm({ onSubmit, saving }) {
 }
 
 function printOfficialLRF(d) {
+  d = lrfTwoNameData(d)
   const checked = (v) => v ? '<span class="box">X</span>' : '<span class="box"></span>'
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>LRF</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;font-family:Arial,sans-serif;color:#000}.page{width:210mm;height:297mm;padding:12mm 13mm 8mm;display:flex;flex-direction:column}table{width:100%;border-collapse:collapse}.hdr{border:2px solid #000}.hdr td{border:2px solid #000}.logo{width:42mm;text-align:center;padding:5mm}.logo img{max-height:16mm;max-width:34mm}.title{text-align:center;font-weight:900;font-size:17pt}.ar{direction:rtl;text-align:right;font-weight:700}.sub{font-size:9pt;line-height:1.45;margin:3mm 0}.main{border:2px solid #000;flex:1}.main td{border:1px solid #000;font-size:9pt;vertical-align:middle}.lbl{width:34%;padding:2.5mm;background:#fff}.lbl b{display:block}.lbl span{display:block;direction:rtl;text-align:right;font-size:8pt}.val{padding:2.5mm}.box{display:inline-flex;width:12px;height:12px;border:1px solid #000;align-items:center;justify-content:center;font-size:8pt;font-weight:700}.inner td{padding:2mm;border-color:#000}.sig{height:11mm}.sig-name{height:6mm;color:#444;font-style:italic}.foot{border-top:2px solid #000;margin-top:2mm;padding-top:1.5mm;font-size:8pt;font-weight:700;display:flex;justify-content:space-between}.red{color:#c00}</style></head><body><div class="page"><table class="hdr"><tr><td class="logo"><img src="${window.location.origin}/logo.svg" alt="Rotem SRS Egypt"></td><td class="title">Leave Request Form (LRF)<div class="ar" style="text-align:center;font-size:12pt;margin-top:2mm">نموذج طلب اجازة</div></td></tr></table><div class="sub"><div style="display:flex;justify-content:space-between;font-weight:900"><span>■ Document purpose:</span><span dir="rtl">الغرض من النموذج:</span></div><div>This form is for employees to use to take a leave of annual, casual, sick leaves and early leave</div><div class="ar">هذا النموذج خاص برصيد الأجازات السنويه، الاجازات العارضه و الاجازات المرضي والأذونات</div><b>■ Details:</b></div><table class="main"><tbody><tr><td class="lbl"><b>Employee Name:</b><span>إسم الموظف</span></td><td class="val">${d.employee_name || ''}</td></tr><tr><td class="lbl"><b>Job Title:</b><span>المسمى الوظيفى</span></td><td class="val">${d.job_title || ''}</td></tr><tr><td class="lbl"><b>Department:</b><span>الإداره</span></td><td class="val">${d.department_label || d.department || ''}</td></tr><tr><td class="lbl"><b>Leave Type:</b><span>نوع الاذن</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.leave_type==='annual')}</td><td>Annual Leave</td><td>${checked(d.leave_type==='casual')}</td><td>Casual Leave</td><td>${checked(d.leave_type==='sick')}</td><td>Sick Leave</td></tr><tr><td>${checked(d.leave_type==='early')}</td><td>Early Leave</td><td>From: ${normalizeTime(d.early_from) || ''}</td><td>To: ${normalizeTime(d.early_to) || ''}</td><td>( ${d.leave_type==='early' ? earlyDays(d.early_from,d.early_to) : ''} )</td><td>Day</td></tr></table></td></tr><tr><td class="lbl"><b>Paid/Unpaid:</b><span>مدفوع الاجر / غير مدفوع الاجر</span></td><td style="padding:0"><table class="inner"><tr><td>${checked(d.paid===true)}</td><td>Paid</td><td>${checked(d.paid===false)}</td><td>Unpaid</td></tr></table></td></tr><tr><td class="lbl"><b>Available Balance</b><span>الرصيد المتاح</span></td><td class="val">${formatBalance(d.available_balance)}</td></tr><tr><td class="lbl"><b>Annual Leave Request Date:</b><span>تاريخ طلب الاجازة</span></td><td class="val">${fmtDate(d.request_date)}</td></tr><tr><td class="lbl"><b>Annual Leave start Date:</b><span>تاريخ بداية الأجازه</span></td><td class="val">${fmtDate(d.start_date)}</td></tr><tr><td class="lbl"><b>Annual Leave End Date:</b><span>تاريخ انتهاء الأجازه</span></td><td class="val">${fmtDate(d.end_date)}</td></tr><tr><td class="lbl"><b>The purpose:</b><span>الغرض</span></td><td class="val">${d.purpose || ''}</td></tr>${[['Employee Name / signature:', 'إسم الموظف / توقيعه', d.employee_name || ''], ['Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', d.alternate_employee_name || ''], ['Direct manager Name / signature', 'المدير المباشر / التوقيع', d.manager_approver?.name || d.direct_manager_name || ''], ['Human Resource', 'موظف الموارد البشريه', HR_OFFICER], ['Depot Manager Signature', 'توقيع مدير الموقع', depotManagerNameFor(d)]].map(([en, ar, name]) => `<tr><td class="lbl" rowspan="2"><b>${en}</b><span>${ar}</span></td><td class="sig"></td></tr><tr><td class="sig-name">${name}</td></tr>`).join('')}</tbody></table><div class="foot"><span>Document No: <span class="red">SRS-HR-P02-F01</span> | <span class="red">Rev.: 03</span> | Rev. Date: 06/05/2026</span><span>| Page 1 of 1</span></div></div></body></html>`
   const w = window.open('', '_blank', 'width=860,height=1200')
@@ -1265,7 +1276,7 @@ function printOfficialLRF(d) {
 }
 
 function printOfficialLRFGrid(d) {
-  d = { ...d, available_balance: formatBalance(d.available_balance) }
+  d = { ...lrfTwoNameData(d), available_balance: formatBalance(d.available_balance) }
   const esc = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

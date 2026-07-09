@@ -117,6 +117,7 @@ class LeaveRequestController extends Controller
             'department' => 'nullable|string|max:100',
             'department_label' => 'nullable|string|max:100',
             'direct_manager_name' => 'nullable|string|max:255',
+            'alternate_employee_name' => 'nullable|string|max:255',
             'employee_id' => 'nullable|exists:employees,id',
             'leave_type' => 'required_if:type,lrf|nullable|in:annual,casual,sick,early',
             'paid' => 'nullable|boolean',
@@ -186,6 +187,9 @@ class LeaveRequestController extends Controller
         }
         if (!Schema::hasColumn('leave_requests', 'direct_manager_name')) {
             unset($data['direct_manager_name']);
+        }
+        if (!Schema::hasColumn('leave_requests', 'alternate_employee_name')) {
+            unset($data['alternate_employee_name']);
         }
         $data['tracking_no'] = $this->generateTrackingNo($data['type'], $employee);
         $data['request_date'] = $data['request_date'] ?? now()->toDateString();
