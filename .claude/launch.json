@@ -5,7 +5,8 @@
       "name": "Frontend",
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", ".claude\\start-frontend.bat"],
-      "port": 5173
+      "port": 5175,
+      "autoPort": true
     },
     {
       "name": "Laravel API",

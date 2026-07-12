@@ -4,9 +4,10 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   Users, Calendar, Clock, ShieldCheck,
-  AlertTriangle, ChevronLeft, ChevronRight,
+  AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, Bell, FileText, Package, Settings,
   X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus, CalendarDays,
+  ClipboardList, Briefcase,
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
@@ -26,24 +27,51 @@ const fmtTime = (d) => {
 // Roles that have full HR module access (workforce, attendance, assets, etc.)
 const HR_FULL_ROLES_NAV = ['admin', 'depot_manager']
 
-// ── nav definition ────────────────────────────────────────────────
+// ── nav definition (grouped) ──────────────────────────────────────
 // hrOnly: true  → visible only to HR Full (admin / depot_manager / HR dept)
 // roles array   → visible to these specific roles
 // neither       → visible to all authenticated users
-const ALL_NAV = [
-  { label: 'Workforce',          path: '/human-resources',                icon: Users,          end: true,  hrOnly: true },
-  { label: 'Leave Requests',     path: '/human-resources/leave',          icon: FileText },
-  { label: 'Resignations',       path: '/human-resources/resignations',   icon: UserMinus },
-  { label: 'Master List',        path: '/human-resources/leave-master',   icon: FileSpreadsheet,            hrOnly: true },
-  { label: 'Weekly Leave Report', path: '/human-resources/weekly-leave-report', icon: CalendarDays,          hrOnly: true },
-  { label: 'Attendance',         path: '/human-resources/attendance',     icon: Clock,                      hrOnly: true },
-  { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,             hrOnly: true },
-  { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,                hrOnly: true },
-  { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle,              hrOnly: true },
-  { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,                    hrOnly: true },
-  { label: 'Org Chart',          path: '/human-resources/org-chart',      icon: GitBranch,                  hrOnly: true },
-  { label: 'Calendar',           path: '/human-resources/calendar',       icon: Calendar,       roles: ['admin','depot_manager','manager','hr'] },
-  { label: 'Settings',           path: '/human-resources/settings',       icon: Settings,                   hrOnly: true },
+const NAV_GROUPS = [
+  {
+    key: 'workforce', label: 'Workforce', icon: Users, hrOnly: true,
+    items: [
+      { label: 'Employee List', path: '/human-resources',           icon: Users,     end: true, hrOnly: true },
+      { label: 'Org Chart',     path: '/human-resources/org-chart', icon: GitBranch,            hrOnly: true },
+    ],
+  },
+  {
+    key: 'leaves', label: 'Leaves', icon: FileText,
+    items: [
+      { label: 'Leave Requests',     path: '/human-resources/leave',               icon: FileText },
+      { label: 'Overtime',           path: '/human-resources/overtime',             icon: Clock },
+      { label: 'Resignations',       path: '/human-resources/resignations',        icon: UserMinus },
+      { label: 'Master List',        path: '/human-resources/leave-master',        icon: FileSpreadsheet, hrOnly: true },
+      { label: 'Weekly Report',      path: '/human-resources/weekly-leave-report', icon: CalendarDays,    hrOnly: true },
+    ],
+  },
+  {
+    key: 'attendance', label: 'Attendance', icon: ClipboardList, hrOnly: true,
+    items: [
+      { label: 'Attendance',        path: '/human-resources/attendance',         icon: Clock,           hrOnly: true },
+      { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,    hrOnly: true },
+      { label: 'Internal Salary',   path: '/human-resources/internal-salary',   icon: FileSpreadsheet, hrOnly: true },
+      { label: 'Calendar',          path: '/human-resources/calendar',           icon: Calendar,        roles: ['admin','depot_manager','manager','hr'] },
+    ],
+  },
+  {
+    key: 'operations', label: 'Operations', icon: Briefcase, hrOnly: true,
+    items: [
+      { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,  hrOnly: true },
+      { label: 'Disciplinary',       path: '/human-resources/disciplinary',   icon: AlertTriangle, hrOnly: true },
+      { label: 'Assets & Clearance', path: '/human-resources/assets',         icon: Package,       hrOnly: true },
+    ],
+  },
+  {
+    key: 'settings', label: 'Settings', icon: Settings, hrOnly: true, solo: true,
+    items: [
+      { label: 'Settings', path: '/human-resources/settings', icon: Settings, hrOnly: true },
+    ],
+  },
 ]
 
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
@@ -96,23 +124,49 @@ export default function HRLayout() {
     }
     setOpen(false)
     if (n.data?.leave_request_id) {
-      navigate(`/human-resources/leave?req=${n.data.leave_request_id}`)
+      const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
+      const param = isReschedule ? 'resubmit' : 'req'
+      navigate(`/human-resources/leave?${param}=${n.data.leave_request_id}`)
     }
   }
 
   // ── filter nav by role ───────────────────────────────────────
   const role      = user?.role ?? 'staff'
   const isHRFull  = HR_FULL_ROLES_NAV.includes(role) || role === 'hr'
-  const navItems  = ALL_NAV.filter(item => {
+
+  const canSee = (item) => {
     if (item.hrOnly) return isHRFull
     if (item.roles)  return item.roles.includes(role)
-    return true   // no restriction → visible to all authenticated users
-  })
+    return true
+  }
 
-  const activeNav = navItems.find(n =>
+  const visibleGroups = NAV_GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(canSee),
+  })).filter(g => g.items.length > 0 && canSee(g))
+
+  const allItems = visibleGroups.flatMap(g => g.items)
+  const activeNav = allItems.find(n =>
     n.end ? location.pathname === n.path : location.pathname.startsWith(n.path)
   )
   const pageLabel = activeNav?.label ?? 'Human Resources'
+
+  const activeGroupKey = visibleGroups.find(g =>
+    g.items.some(n => n.end ? location.pathname === n.path : location.pathname.startsWith(n.path))
+  )?.key
+
+  const [openGroups, setOpenGroups] = useState(() => {
+    if (activeGroupKey) return { [activeGroupKey]: true }
+    return {}
+  })
+  useEffect(() => {
+    if (activeGroupKey) setOpenGroups(prev => {
+      if (prev[activeGroupKey]) return prev
+      return { ...prev, [activeGroupKey]: true }
+    })
+  }, [activeGroupKey])
+
+  const toggleGroup = (key) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }))
 
   const handleLogout = () => { dispatch(logout()); navigate('/login') }
 
@@ -150,22 +204,76 @@ export default function HRLayout() {
           {!collapsed && (
             <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest px-3 py-1.5">Modules</p>
           )}
-          {navItems.map(item => (
-            <NavLink
-              key={item.label}
-              to={item.path}
-              end={item.end}
-              title={collapsed ? item.label : undefined}
-              className={({ isActive }) =>
-                `flex items-center rounded-lg text-sm font-medium transition-all no-underline
-                 ${collapsed ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2.5'}
-                 ${isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-secondary hover:bg-neutral-50'}`
-              }
-            >
-              <item.icon className="w-[18px] h-[18px] shrink-0" />
-              {!collapsed && <span className="min-w-0 flex-1 break-words leading-tight">{item.label}</span>}
-            </NavLink>
-          ))}
+          {visibleGroups.map(group => {
+            const isOpen = !!openGroups[group.key]
+            const groupActive = group.key === activeGroupKey
+
+            if (group.solo) {
+              const item = group.items[0]
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  title={collapsed ? item.label : undefined}
+                  className={({ isActive }) =>
+                    `flex items-center rounded-lg text-sm font-medium transition-all no-underline
+                     ${collapsed ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2.5'}
+                     ${isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-secondary hover:bg-neutral-50'}`
+                  }
+                >
+                  <item.icon className="w-[18px] h-[18px] shrink-0" />
+                  {!collapsed && <span className="min-w-0 flex-1 break-words leading-tight">{item.label}</span>}
+                </NavLink>
+              )
+            }
+
+            if (collapsed) {
+              return group.items.map(item => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.end}
+                  title={item.label}
+                  className={({ isActive }) =>
+                    `flex items-center justify-center rounded-lg text-sm font-medium transition-all no-underline px-0 py-3
+                     ${isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-secondary hover:bg-neutral-50'}`
+                  }
+                >
+                  <item.icon className="w-[18px] h-[18px] shrink-0" />
+                </NavLink>
+              ))
+            }
+
+            return (
+              <div key={group.key} className="space-y-0.5">
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+                    ${groupActive ? 'text-primary' : 'text-secondary hover:bg-neutral-50'}`}
+                >
+                  <group.icon className="w-[18px] h-[18px] shrink-0" />
+                  <span className="min-w-0 flex-1 text-left break-words leading-tight">{group.label}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <div className={`overflow-hidden transition-all duration-200 ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                  {group.items.map(item => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2.5 pl-9 pr-3 py-2 rounded-lg text-[13px] font-medium transition-all no-underline
+                         ${isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-neutral-500 hover:bg-neutral-50 hover:text-secondary'}`
+                      }
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      <span className="min-w-0 flex-1 break-words leading-tight">{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </nav>
 
         {/* Bottom — logout */}

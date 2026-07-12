@@ -28,7 +28,9 @@ function toDateKey(date) {
 }
 
 function parseDateKey(value) {
-  const [y, m, d] = String(value).split('-').map(Number)
+  // Accept either 'YYYY-MM-DD' or full ISO 'YYYY-MM-DDTHH:MM:SS...Z'
+  const s = String(value).slice(0, 10)
+  const [y, m, d] = s.split('-').map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
 }
 

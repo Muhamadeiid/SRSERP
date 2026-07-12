@@ -81,7 +81,9 @@ export default function ProcurementLayout() {
     if (n.data?.prf_id) {
       navigate(`/procurement/${n.data.prf_id}`)
     } else if (n.data?.leave_request_id) {
-      navigate(`/human-resources/leave?req=${n.data.leave_request_id}`)
+      const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
+      const param = isReschedule ? 'resubmit' : 'req'
+      navigate(`/human-resources/leave?${param}=${n.data.leave_request_id}`)
     }
   }
 

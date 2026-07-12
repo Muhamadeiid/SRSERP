@@ -8,6 +8,7 @@ import { getPermissionMatrix, togglePermission, teamTransfer } from '../services
 import { listAssignmentRules, createAssignmentRule, updateAssignmentRule, deleteAssignmentRule, applyAssignmentRules } from '../services/assignmentRuleService'
 import { listProjects, createProject, updateProject, deleteProject } from '../services/projectService'
 import { listIssuingSources, createIssuingSource, updateIssuingSource, deleteIssuingSource } from '../services/issuingSourceService'
+import { listPublicHolidays, createPublicHoliday, deletePublicHoliday } from '../services/publicHolidayService'
 import { useLookups } from '../hooks/useLookups'
 
 const ATTENDANCE_POLICY_DEFAULTS = {
@@ -478,6 +479,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <PublicHolidaysPanel />
 
       </>}
 
@@ -2037,5 +2040,127 @@ function IssuingSourcesPanel() {
         </p>
       </div>
     </SectionShell>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Public Holidays — Egyptian public holidays for double-pay handling
+// ─────────────────────────────────────────────────────────────────────
+function PublicHolidaysPanel() {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [draft, setDraft] = useState({ date: '', end_date: '', name_en: '', name_ar: '' })
+
+  const load = () => {
+    setLoading(true)
+    listPublicHolidays()
+      .then(r => setItems(r.data ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const add = async (e) => {
+    e.preventDefault()
+    if (!draft.date || !draft.name_en) return
+    setBusy(true)
+    try {
+      const payload = { ...draft }
+      if (!payload.end_date) delete payload.end_date
+      await createPublicHoliday(payload)
+      setDraft({ date: '', end_date: '', name_en: '', name_ar: '' })
+      load()
+    } catch {} finally { setBusy(false) }
+  }
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this holiday?')) return
+    try { await deletePublicHoliday(id); load() } catch {}
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+      <div className="p-5 border-b border-neutral-50">
+        <h3 className="text-sm font-bold text-secondary-700">Public Holidays</h3>
+        <p className="text-[11px] text-neutral-400 mt-1">
+          Days marked here don't count as absences. Employees who clock in on a holiday get <span className="font-semibold text-rose-500">Double Pay</span>.
+        </p>
+      </div>
+
+      <form onSubmit={add} className="p-5 grid grid-cols-1 md:grid-cols-5 gap-3 border-b border-neutral-50 bg-neutral-50/40">
+        <div>
+          <label className="text-[10px] font-bold text-neutral-400 uppercase">From</label>
+          <input type="date" required value={draft.date}
+            onChange={e => setDraft({ ...draft, date: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-neutral-400 uppercase">To <span className="text-neutral-300 normal-case font-normal">(optional)</span></label>
+          <input type="date" value={draft.end_date} min={draft.date || undefined}
+            onChange={e => setDraft({ ...draft, end_date: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-neutral-400 uppercase">Name (English)</label>
+          <input type="text" required placeholder="Eid al-Fitr" value={draft.name_en}
+            onChange={e => setDraft({ ...draft, name_en: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-neutral-400 uppercase">Name (Arabic)</label>
+          <input type="text" placeholder="عيد الفطر" value={draft.name_ar}
+            onChange={e => setDraft({ ...draft, name_ar: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+        </div>
+        <div className="flex items-end">
+          <button type="submit" disabled={busy}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            Add
+          </button>
+        </div>
+      </form>
+
+      <div className="p-5">
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+        ) : items.length === 0 ? (
+          <p className="text-center text-xs text-neutral-400 py-6">No holidays configured yet.</p>
+        ) : (
+          <ul className="divide-y divide-neutral-50">
+            {items.map(h => {
+              const start = (h.date || '').slice(0, 10)
+              const end   = (h.end_date || '').slice(0, 10)
+              const rangeText = end && end !== start ? `${start} → ${end}` : start
+              const days = end && end !== start
+                ? Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+                : 1
+              return (
+                <li key={h.id} className="flex items-center justify-between py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="px-2.5 py-1 bg-rose-50 text-rose-600 text-[11px] font-bold rounded-lg font-mono whitespace-nowrap">
+                      {rangeText}
+                    </span>
+                    {days > 1 && (
+                      <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-500 text-[10px] font-bold rounded">
+                        {days} days
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-secondary-700 truncate">{h.name_en}</p>
+                      {h.name_ar && <p className="text-xs text-neutral-400 truncate">{h.name_ar}</p>}
+                    </div>
+                  </div>
+                  <button onClick={() => remove(h.id)} className="p-1.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }

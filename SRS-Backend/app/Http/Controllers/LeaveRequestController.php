@@ -348,8 +348,9 @@ class LeaveRequestController extends Controller
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $reason = $request->input('reason') ? ' - ' . $request->input('reason') : '';
+        $event = $leaveRequest->type === 'lrf' ? 'lrf_rescheduled' : 'otr_rescheduled';
         if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, 'lrf_rescheduled', "{$typeLabel} - Reschedule Required", "Your {$typeLabel} ({$leaveRequest->tracking_no}) needs to be rescheduled by {$user->name}{$reason}. Please submit a new request.", ['leave_request_id' => $leaveRequest->id]);
+            Notification::notifyUser($leaveRequest->user_id, $event, "{$typeLabel} - Reschedule Required", "Your {$typeLabel} ({$leaveRequest->tracking_no}) needs to be rescheduled by {$user->name}{$reason}. Please submit a new request.", ['leave_request_id' => $leaveRequest->id]);
         }
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh()]);

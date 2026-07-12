@@ -44,6 +44,94 @@ function SectionStat({ label, value, sub, subColor = 'text-neutral-400', icon: I
   )
 }
 
+// ── My Requests card — shown to non-privileged roles on the dashboard ──
+const REQ_STATUS_META = {
+  pending:          { label: 'Awaiting Manager', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  manager_approved: { label: 'Awaiting HR',      cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  hr_approved:      { label: 'Awaiting Depot',   cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  approved:         { label: 'Approved',         cls: 'bg-green-50 text-green-700 border-green-200' },
+  rejected:         { label: 'Rejected',         cls: 'bg-red-50 text-red-700 border-red-200' },
+  rescheduled:      { label: 'Rescheduled',      cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  cancelled:        { label: 'Cancelled',        cls: 'bg-neutral-50 text-neutral-500 border-neutral-200' },
+}
+function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
+  const items = (reqs || []).slice(0, 5)
+  const pendingCount    = reqs.filter(r => ['pending','manager_approved','hr_approved'].includes(r.status)).length
+  const approvedCount   = reqs.filter(r => r.status === 'approved').length
+  const rescheduledOpen = reqs.filter(r => r.status === 'rescheduled').length
+
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden border-l-4 border-l-blue-500">
+      <div className="px-5 py-4 border-b border-neutral-50 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-secondary-700">My Requests</p>
+            <p className="text-[11px] text-neutral-400 mt-0.5">Status of your submitted leave & overtime requests</p>
+          </div>
+        </div>
+        <button onClick={onNewRequest}
+          className="text-xs font-bold text-white bg-primary hover:bg-primary/90 px-3 py-2 rounded-lg whitespace-nowrap">
+          + New Request
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 divide-x divide-neutral-100 border-b border-neutral-50">
+        {[
+          ['Pending',     pendingCount,     'text-amber-600'],
+          ['Approved',    approvedCount,    'text-green-600'],
+          ['Rescheduled', rescheduledOpen,  'text-orange-600'],
+        ].map(([lbl, val, col]) => (
+          <div key={lbl} className="px-4 py-3 text-center">
+            <p className={`text-2xl font-extrabold ${col}`}>{loading ? '…' : val}</p>
+            <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-wider">{lbl}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="divide-y divide-neutral-50">
+        {loading && items.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-8 px-4">
+            <FileText className="w-6 h-6 mx-auto mb-2 text-neutral-300" />
+            <p className="text-xs text-neutral-400">No requests submitted yet</p>
+            <p className="text-[11px] text-neutral-300 mt-1">Click "+ New Request" to submit your first leave or overtime request</p>
+          </div>
+        ) : (
+          items.map(r => {
+            const meta = REQ_STATUS_META[r.status] ?? { label: r.status, cls: 'bg-neutral-50 text-neutral-500 border-neutral-200' }
+            const isLRF = r.type === 'lrf'
+            const dateInfo = isLRF
+              ? `${(r.start_date||'').slice(0,10)} → ${(r.end_date||'').slice(0,10)}`
+              : `${(r.ot_date||'').slice(0,10)} · ${r.start_time?.slice(0,5)}–${r.end_time?.slice(0,5)}`
+            return (
+              <button key={r.id} onClick={() => r.status === 'rescheduled' ? onResubmit(r.id) : onOpen(r.id)}
+                className="w-full px-5 py-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors text-left">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isLRF ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                  {isLRF ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-secondary-700 truncate">
+                    {isLRF ? `${(r.leave_type||'').replace('_',' ')} leave` : 'Overtime'}
+                    <span className="ml-2 text-[10px] font-normal text-neutral-400">{r.tracking_no || '—'}</span>
+                  </p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5 truncate">{dateInfo}</p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${meta.cls} shrink-0`}>{meta.label}</span>
+              </button>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Department section card ─────────────────────────────────────
 function DeptSection({ title, subtitle, icon: Icon, accentColor, headerBg, iconBg, onView, viewLabel = 'View Module', children }) {
   return (
@@ -101,6 +189,9 @@ export default function DashboardPage() {
         }).catch(() => {}),
         getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}),
       )
+    } else {
+      // All other roles (staff, manager, procurement, ehs) — see just their own submitted requests
+      tasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
     }
     if (canSeeProc) {
       tasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
@@ -216,6 +307,9 @@ export default function DashboardPage() {
           </span>
         </div>
       </div>
+
+      {/* ══ My Requests — visible to non-HR roles (staff, manager, procurement, ehs) ══ */}
+      {!isHRFull && <MyRequestsCard reqs={reqs} loading={loading} onOpen={(id) => navigate(`/human-resources/leave?req=${id}`)} onResubmit={(id) => navigate(`/human-resources/leave?resubmit=${id}`)} onNewRequest={() => navigate('/human-resources/leave')} />}
 
       {/* ══ HR Section ══════════════════════════════════════════════ */}
       {isHRFull && (
@@ -375,22 +469,40 @@ export default function DashboardPage() {
             title="Maintenance"
             subtitle="Corrective & preventive maintenance workflows"
             icon={Wrench}
-            accentColor="border-l-neutral-300"
-            headerBg="bg-neutral-50"
-            iconBg="bg-neutral-100 text-neutral-400"
+            accentColor={role === 'admin' ? 'border-l-orange-500' : 'border-l-neutral-300'}
+            headerBg={role === 'admin' ? 'bg-orange-50/40' : 'bg-neutral-50'}
+            iconBg={role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-neutral-100 text-neutral-400'}
+            onView={role === 'admin' ? () => navigate('/maintenance') : undefined}
+            viewLabel="Open Module"
           >
-            <div className="flex items-center gap-4 bg-neutral-50 rounded-xl p-4">
-              <Wrench className="w-10 h-10 text-neutral-300 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-neutral-500">Module Coming Soon</p>
-                <p className="text-[10px] text-neutral-400 mt-0.5 leading-relaxed">
-                  Corrective + preventive workflows, job cards, and equipment tracking.
-                </p>
+            {role === 'admin' ? (
+              <div className="flex items-center gap-4 bg-orange-50/60 rounded-xl p-4">
+                <Wrench className="w-10 h-10 text-orange-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-orange-700">Module Preview (Admin Only)</p>
+                  <p className="text-[10px] text-orange-600 mt-0.5 leading-relaxed">
+                    Corrective + preventive workflows, job cards, and equipment tracking.
+                  </p>
+                </div>
+                <button onClick={() => navigate('/maintenance')}
+                  className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold rounded-lg transition-colors shrink-0">
+                  Open <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
-              <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-full shrink-0">
-                Coming Soon
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-center gap-4 bg-neutral-50 rounded-xl p-4">
+                <Wrench className="w-10 h-10 text-neutral-300 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-neutral-500">Module Coming Soon</p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5 leading-relaxed">
+                    Corrective + preventive workflows, job cards, and equipment tracking.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-full shrink-0">
+                  Coming Soon
+                </span>
+              </div>
+            )}
           </DeptSection>
         </div>
       )}

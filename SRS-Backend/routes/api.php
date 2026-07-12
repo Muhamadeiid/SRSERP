@@ -22,6 +22,9 @@ use App\Http\Controllers\AssignmentRuleController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\IssuingSourceController;
 use App\Http\Controllers\DisciplinaryCaseController;
+use App\Http\Controllers\FleetCheckController;
+use App\Http\Controllers\WithdrawalController;
+use App\Http\Controllers\PublicHolidayController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -128,6 +131,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{id}',                   [AttendanceController::class, 'destroy']);
             Route::get('/export',                    [AttendanceController::class, 'exportExcel']);
             Route::get('/export-all',                [AttendanceController::class, 'exportAllExcel']);
+            Route::get('/internal-salary',           [AttendanceController::class, 'internalSalary']);
+            Route::get('/internal-salary/export',    [AttendanceController::class, 'internalSalaryExport']);
             Route::get('/logs',                      [AttendanceController::class, 'logs']);
         });
 
@@ -169,6 +174,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/settings/managers',                   [SettingsController::class, 'managers']);
         Route::get('/settings/manager/{userId}/employees', [SettingsController::class, 'managerEmployees']);
         Route::post('/settings/assign',                    [SettingsController::class, 'assignEmployee']);
+
+        // Public Holidays
+        Route::get('/public-holidays',       [PublicHolidayController::class, 'index']);
+        Route::post('/public-holidays',      [PublicHolidayController::class, 'store']);
+        Route::put('/public-holidays/{id}',  [PublicHolidayController::class, 'update']);
+        Route::delete('/public-holidays/{id}', [PublicHolidayController::class, 'destroy']);
 
     }); // end hr.only
 
@@ -216,5 +227,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/assignment-rules/{assignmentRule}',    [AssignmentRuleController::class, 'update']);
         Route::delete('/assignment-rules/{assignmentRule}', [AssignmentRuleController::class, 'destroy']);
         Route::post('/assignment-rules/apply',       [AssignmentRuleController::class, 'apply']);
+
+        // ── Maintenance — Equipment & Job Cards ──────────────────────────
+        Route::get('/equipment/stats',       [\App\Http\Controllers\EquipmentController::class, 'stats']);
+        Route::apiResource('equipment',      \App\Http\Controllers\EquipmentController::class);
+
+        Route::get('/job-cards/stats',       [\App\Http\Controllers\JobCardController::class, 'stats']);
+        Route::apiResource('job-cards',      \App\Http\Controllers\JobCardController::class);
+
+        // Fleet Checks
+        Route::get('/fleet-checks/stats',    [FleetCheckController::class, 'stats']);
+        Route::apiResource('fleet-checks',   FleetCheckController::class);
+
+        // Withdrawals
+        Route::get('/withdrawals/stats',     [WithdrawalController::class, 'stats']);
+        Route::apiResource('withdrawals',    WithdrawalController::class);
     });
 });

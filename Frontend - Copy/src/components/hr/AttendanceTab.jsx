@@ -3,6 +3,7 @@ import { attendanceService } from '../../services/Attendanceservice'
 import { getEmployees } from '../../services/employeeService'
 import { getLeaveBalance } from '../../services/leaveService'
 import { getSettings } from '../../services/settingsService'
+import { useLookups } from '../../hooks/useLookups'
 import {
   Search, Upload, Download, RefreshCw, Printer,
   Loader2, X, Pencil, Plus, CalendarDays
@@ -77,36 +78,49 @@ const weeklyOffLabel = (employee) => hasWeeklyOffDay(employee)
   ? DAYS[Number(employee.weekly_off_day)]
   : 'Not set'
 
-const otTimes = (rec, employee, policy = ATTENDANCE_POLICY_DEFAULTS) => {
-  if (!rec?.overtime_hours || rec.overtime_hours <= 0) return null
-  if (!rec.check_out) return null
+// OT is only counted when there's an approved OTR on that date.
+// Ignores attendance clock-out — a manager-approved OTR is required.
+const otTimes = (otr, policy = ATTENDANCE_POLICY_DEFAULTS) => {
+  if (!otr || !otr.start_time || !otr.end_time) return null
+  const startMin = toMin(otr.start_time)
+  const endMin   = toMin(otr.end_time)
+  if (endMin <= startMin) return null
 
-  const isIntervention = isInterventionEmployee(employee)
-  const outMin = toMin(rec.check_out)
-
-  let otStart
-  if (isIntervention) {
-    if (!rec.check_in) return null
-    otStart = toMin(rec.check_in) + (rec.expected_hours || policyNumber(policy, 'attendance_intervention_expected_hours')) * 60
-  } else {
-    otStart = policyTimeMin(policy, 'attendance_regular_ot_start_time')
-  }
-
-  if (outMin <= otStart) return null
-  const fmt      = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
+  const fmt        = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
   const nightStart = policyTimeMin(policy, 'attendance_night_ot_start_time')
-  const dayMins   = Math.max(0, Math.min(outMin, nightStart) - otStart)
-  const nightMins = Math.max(0, outMin - Math.max(otStart, nightStart))
-  // >= 30 min → full hour; < 30 min → 0
-  const dayRate   = Math.round(dayMins / 60)
-  const nightRate = Math.round(nightMins / 60)
+  const dayMins    = Math.max(0, Math.min(endMin, nightStart) - startMin)
+  const nightMins  = Math.max(0, endMin - Math.max(startMin, nightStart))
+  const dayRate    = Math.round(dayMins / 60)
+  const nightRate  = Math.round(nightMins / 60)
   return {
-    start: fmt(otStart),
-    end:   fmt(outMin),
+    start: fmt(startMin),
+    end:   fmt(endMin),
     dayRate,
     nightRate,
     total: dayRate + nightRate,
   }
+}
+
+// Match approved OTR for a specific employee & date
+function otrOnDate(otrs, employeeId, dateStr) {
+  if (!Array.isArray(otrs) || !employeeId) return null
+  return otrs.find(o => o.employee_id === employeeId && (o.ot_date?.slice(0,10) === dateStr)) ?? null
+}
+
+// Match public holiday for date — supports multi-day holidays via optional end_date
+function holidayOnDate(holidays, dateStr) {
+  if (!Array.isArray(holidays)) return null
+  return holidays.find(h => {
+    const s = h.date?.slice(0,10) ?? ''
+    const e = (h.end_date?.slice(0,10)) || s
+    return dateStr >= s && dateStr <= e
+  }) ?? null
+}
+
+// Parse a leave's early_from / early_to permission window (returns null if not set)
+function earlyPermissionWindow(leave) {
+  if (!leave?.early_from || !leave?.early_to) return null
+  return { from: leave.early_from, to: leave.early_to }
 }
 
 const todayStr = () => {
@@ -186,7 +200,7 @@ function leaveOnDate(leaves, employeeId, dateStr) {
   ) ?? null
 }
 
-function buildRows(startDate, endDate, records, employee, leaves = [], policy = ATTENDANCE_POLICY_DEFAULTS) {
+function buildRows(startDate, endDate, records, employee, leaves = [], otrs = [], holidays = [], policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!startDate || !endDate) return []
   const rows = []
   const cur  = new Date(startDate + 'T00:00:00')
@@ -200,8 +214,10 @@ function buildRows(startDate, endDate, records, employee, leaves = [], policy = 
       day: d, dayName: DAYS[dow], dateStr,
       isWeekend: isDayOff,        // reuse isWeekend flag for any day-off
       dayOffLabel: dayOffLabel(employee, dow, policy),
-      record: records.find(r => r.date?.slice(0,10) === dateStr) ?? null,
-      leave:  leaveOnDate(leaves, employee?.id, dateStr),
+      record:  records.find(r => r.date?.slice(0,10) === dateStr) ?? null,
+      leave:   leaveOnDate(leaves, employee?.id, dateStr),
+      otr:     otrOnDate(otrs, employee?.id, dateStr),
+      holiday: holidayOnDate(holidays, dateStr),
     })
     cur.setDate(cur.getDate() + 1)
   }
@@ -376,6 +392,8 @@ function UploadModal({ onClose, onSuccess }) {
 
 // ── edit / add manual record modal ─────────────────────────────────────────
 function EditModal({ row, employee, onClose, onSaved }) {
+  const { departments } = useLookups()
+  const deptLabel = (key) => (departments || []).find(d => d.key === key)?.label_en ?? key ?? ''
   const existing = row.record
   const [form, setForm] = useState({
     check_in:  existing?.check_in  ? String(existing.check_in).slice(0,5)  : '',
@@ -429,7 +447,7 @@ function EditModal({ row, employee, onClose, onSaved }) {
         <div className="space-y-3">
           <div className="px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
             <p className="text-xs font-bold text-primary">{employee.name}</p>
-            <p className="text-[10px] text-neutral-400">{employee.position} · {employee.department}</p>
+            <p className="text-[10px] text-neutral-400">{employee.position} · {deptLabel(employee.department)}</p>
           </div>
           {[['check_in','Check In'],['check_out','Check Out']].map(([k,l]) => (
             <div key={k}>
@@ -741,6 +759,14 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 // ── main component ─────────────────────────────────────────────────────────
 export default function AttendanceTab() {
 
+  // Lookup-backed labels for departments (falls back to raw key while loading)
+  const { departments } = useLookups()
+  const deptLabel = (key) => {
+    if (!key) return ''
+    const found = (departments || []).find(d => d.key === key)
+    return found?.label_en ?? found?.label_ar ?? key
+  }
+
   // ── View ─────────────────────────────────────────────────────────────────
   const [view, setView] = useState('overview')   // 'overview' | 'detail'
 
@@ -765,6 +791,8 @@ export default function AttendanceTab() {
   const [overviewEditRec, setOverviewEditRec] = useState(null)   // for overview inline edit
   const [leaves,          setLeaves]          = useState([])     // approved leaves overlapping range
   const [overviewLeaves,  setOverviewLeaves]  = useState([])     // approved leaves on overview date
+  const [otrs,            setOtrs]            = useState([])     // approved OTRs overlapping range
+  const [holidays,        setHolidays]        = useState([])     // public holidays overlapping range
   const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
 
   useEffect(() => {
@@ -832,18 +860,21 @@ export default function AttendanceTab() {
   const ovOT      = overviewRecs.filter(r => Number(r.overtime_hours) > 0).length
 
   // ── Detail data ───────────────────────────────────────────────────────────
-  const rows = buildRows(startDate, endDate, records, employee, leaves, attendancePolicy)
+  const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, attendancePolicy)
   const withRec     = rows.filter(r => r.record)
-  const totalOT     = withRec.reduce((s,r) => { const ot = otTimes(r.record, employee, attendancePolicy); return s + (ot?.total ?? 0) }, 0)
+  const totalOT     = rows.reduce((s,r) => { const ot = otTimes(r.otr, attendancePolicy); return s + (ot?.total ?? 0) }, 0)
   const totalHrs    = withRec.reduce((s,r) => s + Number(r.record.work_hours||0), 0)
-  const totalLatMin = withRec.reduce((s,r) => s + Number(r.record.late_minutes||0), 0)
-  // Absences on approved-leave days don't count as deductions
-  const totalDedMin = withRec.filter(r => r.record.status === 'absent' && !r.leave).length * policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes')
+  // A row is covered by an early-leave permission if the LRF has early_from/early_to.
+  // In that case the person's actual late/status is treated as "on permission" — not counted.
+  const isPermissionCovered = (r) => !!earlyPermissionWindow(r.leave)
+  const totalLatMin = withRec.reduce((s,r) => s + (isPermissionCovered(r) ? 0 : Number(r.record.late_minutes||0)), 0)
+  // Absences on approved-leave days OR public holidays don't count as deductions
+  const totalDedMin = withRec.filter(r => r.record.status === 'absent' && !r.leave && !r.holiday).length * policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes')
   const summary = {
-    workingDays: rows.filter(r => !r.isWeekend).length,
+    workingDays: rows.filter(r => !r.isWeekend && !r.holiday).length,
     present:     withRec.filter(r => r.record.status === 'present').length,
-    absent:      withRec.filter(r => r.record.status === 'absent' && !r.leave).length,
-    late:        withRec.filter(r => ['late','shortage'].includes(r.record.status)).length,
+    absent:      withRec.filter(r => r.record.status === 'absent' && !r.leave && !r.holiday).length,
+    late:        withRec.filter(r => ['late','shortage'].includes(r.record.status) && !isPermissionCovered(r)).length,
     onLeave:     rows.filter(r => r.leave && !r.isWeekend).length,
   }
 
@@ -856,7 +887,9 @@ export default function AttendanceTab() {
       })
       setRecords(res.success ? (res.data ?? []) : [])
       setLeaves(res.success ? (res.leaves ?? []) : [])
-    } catch { setRecords([]); setLeaves([]) }
+      setOtrs(res.success ? (res.otrs ?? []) : [])
+      setHolidays(res.success ? (res.holidays ?? []) : [])
+    } catch { setRecords([]); setLeaves([]); setOtrs([]); setHolidays([]) }
     finally { setLoading(false) }
   }
 
@@ -1173,7 +1206,7 @@ export default function AttendanceTab() {
               <div className="divide-y divide-neutral-100">
                 <SectionHeader>Employee Data</SectionHeader>
                 <InfoRow label="IBS No"           value={employee.ibs_code} />
-                <InfoRow label="Department"       value={employee.department} />
+                <InfoRow label="Department"       value={deptLabel(employee.department)} />
                 <InfoRow label="Title"            value={employee.position} />
                 <InfoRow label="Location"         value={employee.work_location} highlight={!!employee.work_location} />
                 <InfoRow label="Hiring Date"      value={employee.hiring_date ? fmtDate(employee.hiring_date) : null} />
@@ -1276,21 +1309,42 @@ export default function AttendanceTab() {
                       <tbody>
                         {rows.map((r, i) => {
                           const rec    = r.record
-                          const ot     = rec ? otTimes(rec, employee, attendancePolicy) : null
+                          const ot     = otTimes(r.otr, attendancePolicy)
                           const s      = rec?.status
                           const cfg    = STATUS_CFG[s]
-                          const dedMin = rec?.status === 'absent' && !r.leave ? policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes') : 0
-                          const onLeave = !!r.leave && !r.isWeekend
+                          const isHoliday = !!r.holiday
+                          // Absence on holiday or on approved leave doesn't deduct
+                          const dedMin = rec?.status === 'absent' && !r.leave && !isHoliday ? policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes') : 0
+                          // Full-day leave (annual/casual/sick) hides check-in/out; early leave keeps them
+                          // because the person actually worked part of the day under permission.
+                          const isEarly = r.leave?.leave_type === 'early'
+                          const onLeave = !!r.leave && !r.isWeekend && !isEarly
+                          // Double pay = hours worked on a holiday (from attendance work_hours)
+                          const doublePayHrs = isHoliday && rec?.work_hours > 0 ? Math.round(Number(rec.work_hours)) : 0
+                          // Early-leave permission note
+                          const permWindow = earlyPermissionWindow(r.leave)
+                          const noteParts = []
+                          if (rec?.notes) noteParts.push(rec.notes)
+                          if (permWindow) {
+                            // Strip seconds from time values ("08:00:00" → "08:00") and force LTR direction with LRM
+                            const from = String(permWindow.from).slice(0, 5)
+                            const to   = String(permWindow.to).slice(0, 5)
+                            noteParts.push(`إذن ‎${from}–${to}`)
+                          }
+                          if (isHoliday) noteParts.push(r.holiday.name_en || r.holiday.name_ar || 'Holiday')
+                          const noteText = noteParts.join(' · ')
                           return (
                             <tr key={r.dateStr}
                               className={`border-b border-neutral-100 transition-colors group ${
-                                r.isWeekend
-                                  ? 'bg-neutral-100 text-neutral-400'
-                                  : onLeave
-                                    ? 'bg-violet-50 hover:bg-violet-100'
-                                    : rec?.overtime_hours > 0
-                                      ? 'bg-amber-50 hover:bg-amber-100'
-                                      : i%2===0 ? 'bg-white hover:bg-primary/5' : 'bg-neutral-50/60 hover:bg-primary/5'
+                                isHoliday
+                                  ? 'bg-rose-50 hover:bg-rose-100'
+                                  : r.isWeekend
+                                    ? 'bg-neutral-100 text-neutral-400'
+                                    : onLeave
+                                      ? 'bg-violet-50 hover:bg-violet-100'
+                                      : ot && ot.total > 0
+                                        ? 'bg-amber-50 hover:bg-amber-100'
+                                        : i%2===0 ? 'bg-white hover:bg-primary/5' : 'bg-neutral-50/60 hover:bg-primary/5'
                               }`}>
                               <td className="px-2 py-2 text-center font-semibold text-neutral-500">{i+1}</td>
                               <td className="px-2 py-2 text-center font-mono font-semibold text-secondary-700 whitespace-nowrap">{fmtDate(r.dateStr)}</td>
@@ -1317,7 +1371,11 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center font-mono text-blue-600">{ot && ot.total > 0 ? fmt12(ot.end) : ''}</td>
                               <td className="px-2 py-2 text-center text-neutral-400">{ot ? ot.dayRate : '0'}</td>
                               <td className="px-2 py-2 text-center text-neutral-400">{ot ? ot.nightRate : '0'}</td>
-                              <td className="px-2 py-2 text-center text-neutral-400">0</td>
+                              <td className="px-2 py-2 text-center font-bold">
+                                {doublePayHrs > 0
+                                  ? <span className="text-rose-600">{doublePayHrs}</span>
+                                  : <span className="text-neutral-300">0</span>}
+                              </td>
                               <td className="px-2 py-2 text-center font-bold">
                                 {ot && ot.total > 0
                                   ? <span className="text-blue-600">{ot.total}</span>
@@ -1329,7 +1387,7 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center">
                                 {dedMin > 0 ? <span className="text-red-500 font-semibold">{dedMin}</span> : <span className="text-neutral-300">0</span>}
                               </td>
-                              <td className="px-2 py-2 text-center text-neutral-400 max-w-[80px] truncate">{rec?.notes ?? ''}</td>
+                              <td className="px-2 py-2 text-center text-neutral-500 max-w-[140px] truncate" title={noteText}>{noteText}</td>
                               <td className="px-1 py-2 text-center">
                                 {!r.isWeekend && (
                                   <button onClick={() => setEditRow(r)} title={rec ? 'Edit' : 'Add'}

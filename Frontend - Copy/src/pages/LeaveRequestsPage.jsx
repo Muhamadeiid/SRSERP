@@ -6,6 +6,7 @@ import {
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download
 } from 'lucide-react'
 import { getEmployees, getEmployee, searchEmployees, getDepotManager } from '../services/employeeService'
+import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
@@ -1119,11 +1120,33 @@ function PickerInput({
   )
 }
 
-function OfficialLRFForm({ onSubmit, saving }) {
-  const [form, setForm] = useState({ ...LRF_EMPTY })
+function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
+  const buildInitial = () => {
+    if (!prefill) return { ...LRF_EMPTY }
+    return {
+      ...LRF_EMPTY,
+      employee_id:         prefill.employee_id ?? null,
+      employee_name:       prefill.employee_name ?? '',
+      job_title:           prefill.job_title ?? '',
+      department:          prefill.department ?? '',
+      department_label:    prefill.department_label ?? '',
+      direct_manager_name: prefill.direct_manager_name ?? '',
+      alternate_employee_name: prefill.alternate_employee_name ?? '',
+      leave_type:          prefill.leave_type ?? 'annual',
+      paid:                prefill.paid ?? true,
+      start_date:          prefill.start_date ? String(prefill.start_date).slice(0, 10) : '',
+      end_date:            prefill.end_date   ? String(prefill.end_date).slice(0, 10)   : '',
+      early_from:          prefill.early_from ?? '',
+      early_to:            prefill.early_to ?? '',
+      purpose:             prefill.purpose ?? 'Personal matter',
+      request_date:        new Date().toISOString().slice(0, 10),
+    }
+  }
+  const [form, setForm] = useState(buildInitial)
   const [balances, setBalances] = useState(null)
   const [balLoading, setBalLoading] = useState(false)
   const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
+  const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const days = lrfDays(form)
 
@@ -1133,6 +1156,15 @@ function OfficialLRFForm({ onSubmit, saving }) {
         if (dm?.name) setDepotManagerName(twoName(dm.name))
       })
       .catch(() => {})
+    // Fetch balance for the pre-filled employee (skipped on empty form).
+    if (prefill?.employee_id) {
+      setBalLoading(true)
+      getLeaveBalance(prefill.employee_id)
+        .then(r => setBalances(r.data ?? {}))
+        .catch(() => setBalances({}))
+        .finally(() => setBalLoading(false))
+    }
+    if (prefill && onPrefillDone) onPrefillDone()
   }, [])
 
   const effectiveRemaining = (type) => {
@@ -1210,6 +1242,20 @@ function OfficialLRFForm({ onSubmit, saving }) {
 
   return (
     <form onSubmit={submit} className="bg-white border border-neutral-200 shadow-sm overflow-hidden" style={{ fontFamily: 'Arial, sans-serif' }}>
+      {showResubmitBanner && prefill && (
+        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+          <CalendarClock className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-amber-800">Resubmitting rescheduled request {prefill.tracking_no}</p>
+            {prefill.reschedule_reason && (
+              <p className="text-[11px] text-amber-700 mt-0.5">Reason: {prefill.reschedule_reason}</p>
+            )}
+            <p className="text-[11px] text-neutral-500 mt-0.5">Adjust the details below and submit as a new request.</p>
+          </div>
+          <button type="button" onClick={() => setShowResubmitBanner(false)}
+            className="p-1 text-amber-600 hover:bg-amber-100 rounded"><X className="w-4 h-4" /></button>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <div className="min-w-[760px] p-4">
           <table className="w-full border-collapse border-2 border-neutral-950">
@@ -1406,10 +1452,30 @@ const OTR_EMPTY = {
   overtime_results: '',
 }
 
-function OTRForm({ onSubmit, saving }) {
-  const [form, setForm] = useState({ ...OTR_EMPTY })
+function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
+  const buildInitial = () => {
+    if (!prefill) return { ...OTR_EMPTY }
+    return {
+      ...OTR_EMPTY,
+      employee_id:         prefill.employee_id ?? null,
+      employee_name:       prefill.employee_name ?? '',
+      job_title:           prefill.job_title ?? '',
+      department:          prefill.department ?? '',
+      department_label:    prefill.department_label ?? '',
+      direct_manager_name: prefill.direct_manager_name ?? '',
+      ot_date:             prefill.ot_date ? String(prefill.ot_date).slice(0, 10) : today(),
+      start_time:          prefill.start_time ? String(prefill.start_time).slice(0, 5) : '',
+      end_time:            prefill.end_time   ? String(prefill.end_time).slice(0, 5)   : '',
+      explanation:         prefill.explanation ?? '',
+      overtime_results:    prefill.overtime_results ?? '',
+    }
+  }
+  const [form, setForm] = useState(buildInitial)
+  const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const hours = diffHours(form.start_time, form.end_time)
+
+  useEffect(() => { if (prefill && onPrefillDone) onPrefillDone() }, [])
 
   const handleEmployeeSelect = (emp) => {
     setForm(f => ({
@@ -1436,6 +1502,20 @@ function OTRForm({ onSubmit, saving }) {
 
   return (
     <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden" style={{fontFamily:'Arial, sans-serif'}}>
+      {showResubmitBanner && prefill && (
+        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+          <CalendarClock className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-amber-800">Resubmitting rescheduled overtime request {prefill.tracking_no}</p>
+            {prefill.reschedule_reason && (
+              <p className="text-[11px] text-amber-700 mt-0.5">Reason: {prefill.reschedule_reason}</p>
+            )}
+            <p className="text-[11px] text-neutral-500 mt-0.5">Adjust the details below and submit as a new request.</p>
+          </div>
+          <button type="button" onClick={() => setShowResubmitBanner(false)}
+            className="p-1 text-amber-600 hover:bg-amber-100 rounded"><X className="w-4 h-4" /></button>
+        </div>
+      )}
       {/* ══ PAGE HEADER — matches PDF ══ */}
       <table className="w-full border-collapse border-2 border-neutral-800">
         <tbody>
@@ -1620,6 +1700,12 @@ function ApprovalProgress({ req }) {
 
 // ── request detail modal ──────────────────────────────────────
 function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
+  const { departments } = useLookups()
+  const resolveDept = (raw) => {
+    if (!raw) return ''
+    const found = (departments || []).find(d => d.key === raw)
+    return found?.label_en ?? found?.label_ar ?? raw
+  }
   const [trackingDraft, setTrackingDraft]   = useState(req?.tracking_no || '')
   const [editingTracking, setEditingTracking] = useState(false)
   const [savingTracking, setSavingTracking] = useState(false)
@@ -1728,7 +1814,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           {[
             ['Employee',   req.employee_name],
             ['Job Title',  req.job_title],
-            ['Department', req.department_label || req.department],
+            ['Department', req.department_label || resolveDept(req.department)],
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
             isLRF ? ['Period', `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
             isLRF ? ['Paid', req.paid ? 'Paid' : 'Unpaid'] : ['Explanation', req.explanation],
@@ -1872,7 +1958,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
 }
 
 // ── main page ─────────────────────────────────────────────────
-export default function LeaveRequestsPage() {
+export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const { user }      = useSelector(s => s.auth)
   const isDepotAdmin  = user?.role === 'admin' || user?.role === 'depot_manager'
   const isHrApprover  = user?.role === 'admin' || user?.role === 'hr'
@@ -1880,13 +1966,14 @@ export default function LeaveRequestsPage() {
   const location      = useLocation()
   const navigate      = useNavigate()
 
-  const [tab,         setTab]         = useState('lrf')
+  const [tab,         setTab]         = useState(initialTab)
   const [requests,    setRequests]    = useState([])
   const [loadingReqs, setLoadingReqs] = useState(true)
   const [saving,      setSaving]      = useState(false)
   const [submitted,   setSubmitted]   = useState(false)
   const [formKey,     setFormKey]     = useState(0)   // increment to reset form
   const [viewReq,     setViewReq]     = useState(null)
+  const [resubmitFrom, setResubmitFrom] = useState(null) // prefill data for LRF/OTR form after reschedule
   const [rejectModal,  setRejectModal]  = useState(null) // { id }
   const [rejectReason, setRejectReason] = useState('')
   const [cancelModal,  setCancelModal]  = useState(null) // { id }
@@ -1901,7 +1988,8 @@ export default function LeaveRequestsPage() {
   const HISTORY_PER_PAGE = 25
 
   // Pending actions: each role sees the stage it can move forward.
-  const pending = requests.filter(r =>
+  const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
+  const pending = typeFiltered.filter(r =>
     (r.status === 'pending' && (isDepotAdmin || user?.role === 'manager')) ||
     (r.status === 'manager_approved' && isHrApprover) ||
     (r.status === 'hr_approved' && isDepotAdmin)
@@ -1910,7 +1998,8 @@ export default function LeaveRequestsPage() {
   // Check if current user is the direct manager of a given request's employee
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
   const isDirectManagerOf = (req) => {
-    return req.employee?.directManager?.user_id === user?.id
+    const mgr = req.employee?.direct_manager || req.employee?.directManager
+    return mgr?.user_id === user?.id
   }
 
   // Single row renderer used by both Active and History sections
@@ -1967,25 +2056,36 @@ export default function LeaveRequestsPage() {
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
-  // Auto-open request modal if notification deep-link points to a specific request.
-  // Re-runs whenever URL search OR requests change (so it works even if user is already on the page).
+  // Auto-open request modal (?req=<id>) OR prefill form for resubmit (?resubmit=<id>)
+  // when notification deep-links point here.
   useEffect(() => {
     const params = new URLSearchParams(location.search)
-    const reqId = params.get('req')
-    if (!reqId) return
+    const reqId       = params.get('req')
+    const resubmitId  = params.get('resubmit')
+    const targetId    = reqId || resubmitId
+    if (!targetId) return
 
     if (requests.length) {
-      const found = requests.find(r => String(r.id) === String(reqId))
+      const found = requests.find(r => String(r.id) === String(targetId))
       if (found) {
-        setViewReq(found)
-        // Clean the URL so refresh / back-button won't re-trigger
+        if (resubmitId) {
+          // If we're on /leave but the request is an OTR (or vice versa), redirect to the correct page
+          const wantPath = found.type === 'otr' ? '/human-resources/overtime' : '/human-resources/leave'
+          if (location.pathname !== wantPath) {
+            navigate(`${wantPath}?resubmit=${found.id}`, { replace: true })
+            return
+          }
+          setResubmitFrom(found)
+          setFormKey(k => k + 1)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        } else {
+          setViewReq(found)
+        }
         navigate(location.pathname, { replace: true })
       } else {
-        // Request not in current list — refresh once to fetch it
         fetchRequests()
       }
     } else if (!loadingReqs) {
-      // Requests not loaded yet and not currently loading → trigger fetch
       fetchRequests()
     }
   }, [location.search, requests, loadingReqs])
@@ -2068,8 +2168,12 @@ export default function LeaveRequestsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-extrabold text-secondary-700">Leave & Overtime Requests</h1>
-          <p className="text-sm text-neutral-400 mt-0.5">نماذج طلب الإجازة وساعات العمل الإضافي</p>
+          <h1 className="text-xl font-extrabold text-secondary-700">
+            {showOnly === 'otr' ? 'Overtime Requests' : showOnly === 'lrf' ? 'Leave Requests' : 'Leave & Overtime Requests'}
+          </h1>
+          <p className="text-sm text-neutral-400 mt-0.5">
+            {showOnly === 'otr' ? 'نموذج العمل الإضافي' : showOnly === 'lrf' ? 'نماذج طلب الإجازة' : 'نماذج طلب الإجازة وساعات العمل الإضافي'}
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -2099,24 +2203,26 @@ export default function LeaveRequestsPage() {
         </div>
       )}
 
-      {/* Tab selector */}
-      <div className="flex gap-3">
-        {[['lrf', 'Leave Request (LRF)', 'نموذج طلب الإجازة'],
-          ['otr', 'Overtime Request (OTR)', 'نموذج العمل الإضافي']].map(([key, label, sub]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`flex flex-col items-start px-5 py-3 rounded-xl border transition-all text-left ${
-              tab === key ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-neutral-500 border-neutral-200 hover:border-primary/40 hover:text-primary'
-            }`}>
-            <span className="text-sm font-bold">{label}</span>
-            <span className={`text-[11px] mt-0.5 ${tab === key ? 'text-white/70' : 'text-neutral-400'}`}>{sub}</span>
-          </button>
-        ))}
-      </div>
+      {/* Tab selector — hidden when showing only one type */}
+      {!showOnly && (
+        <div className="flex gap-3">
+          {[['lrf', 'Leave Request (LRF)', 'نموذج طلب الإجازة'],
+            ['otr', 'Overtime Request (OTR)', 'نموذج العمل الإضافي']].map(([key, label, sub]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`flex flex-col items-start px-5 py-3 rounded-xl border transition-all text-left ${
+                tab === key ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-neutral-500 border-neutral-200 hover:border-primary/40 hover:text-primary'
+              }`}>
+              <span className="text-sm font-bold">{label}</span>
+              <span className={`text-[11px] mt-0.5 ${tab === key ? 'text-white/70' : 'text-neutral-400'}`}>{sub}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Form */}
       {tab === 'lrf'
-        ? <OfficialLRFForm key={`lrf-${formKey}`} onSubmit={handleSubmit} saving={saving} />
-        : <OTRForm key={`otr-${formKey}`} onSubmit={handleSubmit} saving={saving} />
+        ? <OfficialLRFForm key={`lrf-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'lrf' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
+        : <OTRForm key={`otr-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'otr' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
       }
 
       {/* Pending approvals — manager / depot_manager only */}
@@ -2214,14 +2320,15 @@ export default function LeaveRequestsPage() {
 
         {(() => {
           // Build the history pool: closed + completed (NOT in active set)
-          const historyPool = requests.filter(r =>
-            r.status === 'rejected' ||
-            r.status === 'cancelled' ||
-            r.status === 'rescheduled' ||
-            (r.type === 'lrf' && r.status === 'approved' && r.balance_deducted_at) ||
-            // Approved OTR is history once it is approved.
-            (r.type === 'otr' && r.status === 'approved')
-          )
+          const historyPool = requests.filter(r => {
+            if (showOnly === 'lrf' && r.type !== 'lrf') return false
+            if (showOnly === 'otr' && r.type === 'lrf') return false
+            return r.status === 'rejected' ||
+              r.status === 'cancelled' ||
+              r.status === 'rescheduled' ||
+              (r.type === 'lrf' && r.status === 'approved' && r.balance_deducted_at) ||
+              (r.type === 'otr' && r.status === 'approved')
+          })
 
           // Apply period filter
           let periodFiltered = historyPool
@@ -2247,23 +2354,26 @@ export default function LeaveRequestsPage() {
             <>
               {/* Filters bar */}
               <div className="px-6 py-3 border-b border-neutral-50 bg-neutral-50/50 flex flex-wrap items-center gap-2">
-                {/* Type pills */}
-                <div className="flex items-center gap-1 bg-white rounded-lg border border-neutral-200 p-0.5">
-                  {[
-                    ['all', 'All',      historyPool.length],
-                    ['lrf', 'Leave',    historyPool.filter(r => r.type === 'lrf').length],
-                    ['otr', 'Overtime', historyPool.filter(r => r.type === 'otr').length],
-                  ].map(([key, label, n]) => (
-                    <button key={key} onClick={() => { setHistoryType(key); setHistoryPage(1) }}
-                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                        historyType === key ? 'bg-primary text-white' : 'text-neutral-500 hover:bg-neutral-100'
-                      }`}>
-                      {label} <span className={`ml-1 ${historyType === key ? 'text-white/80' : 'text-neutral-300'}`}>({n})</span>
-                    </button>
-                  ))}
-                </div>
-
-                <span className="w-px h-5 bg-neutral-200 mx-1" />
+                {/* Type pills — hidden when showing single type */}
+                {!showOnly ? (
+                  <>
+                    <div className="flex items-center gap-1 bg-white rounded-lg border border-neutral-200 p-0.5">
+                      {[
+                        ['all', 'All',      historyPool.length],
+                        ['lrf', 'Leave',    historyPool.filter(r => r.type === 'lrf').length],
+                        ['otr', 'Overtime', historyPool.filter(r => r.type === 'otr').length],
+                      ].map(([key, label, n]) => (
+                        <button key={key} onClick={() => { setHistoryType(key); setHistoryPage(1) }}
+                          className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                            historyType === key ? 'bg-primary text-white' : 'text-neutral-500 hover:bg-neutral-100'
+                          }`}>
+                          {label} <span className={`ml-1 ${historyType === key ? 'text-white/80' : 'text-neutral-300'}`}>({n})</span>
+                        </button>
+                      ))}
+                    </div>
+                    <span className="w-px h-5 bg-neutral-200 mx-1" />
+                  </>
+                ) : null}
 
                 {/* Status pills */}
                 <div className="flex flex-wrap items-center gap-1.5">

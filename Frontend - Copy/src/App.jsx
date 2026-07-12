@@ -22,7 +22,13 @@ const IgiDetail         = lazy(() => import('./pages/IgiDetail'))
 const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
 const WeeklyLeaveReportPage = lazy(() => import('./pages/WeeklyLeaveReportPage'))
 const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
+const InternalSalaryPage = lazy(() => import('./pages/InternalSalaryPage'))
 const SaturdayRotationPage = lazy(() => import('./pages/SaturdayRotationPage'))
+const MaintenanceLayout    = lazy(() => import('./layout/MaintenanceLayout'))
+const MaintenanceDashboard = lazy(() => import('./pages/MaintenanceDashboard'))
+const MaintenanceTab       = lazy(() => import('./pages/MaintenanceTab'))
+const FleetChecksPage      = lazy(() => import('./pages/FleetChecksPage'))
+const WithdrawalsPage      = lazy(() => import('./pages/WithdrawalsPage'))
 
 // HR tab components — each mounted at its own route
 const WorkforceTab      = lazy(() => import('./components/hr/WorkforceTab'))
@@ -75,13 +81,27 @@ export default function App() {
           </ProtectedRoute>
         }>
           <Route path="/"            element={<DashboardPage />} />
-          <Route path="/maintenance" element={<ComingSoon title="Maintenance" />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
           <Route path="/users"       element={
             <ProtectedRoute roles={['admin']} redirect="/">
               <Users />
             </ProtectedRoute>
           } />
+        </Route>
+
+        {/* Maintenance Layout — Admin only (under development) */}
+        <Route path="/maintenance" element={
+          <ProtectedRoute roles={['admin']} redirect="/">
+            <MaintenanceLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<MaintenanceDashboard />} />
+          <Route path="cm" element={<MaintenanceTab key="cm" type="cm" label="Corrective Maintenance" departments={['cm','cm_intervention']} />} />
+          <Route path="pm" element={<MaintenanceTab key="pm" type="pm" label="Preventive Maintenance" departments={['pm']} />} />
+          <Route path="hm" element={<MaintenanceTab key="hm" type="hm" label="Heavy Maintenance" departments={['hm']} />} />
+          <Route path="fleet-checks" element={<FleetChecksPage />} />
+          <Route path="withdrawals"  element={<WithdrawalsPage />} />
+          <Route path="equipment"   element={<ComingSoon title="Equipment Register" />} />
         </Route>
 
         {/* Inventory Layout (Admin & Depot Manager only) */}
@@ -111,7 +131,8 @@ export default function App() {
           } />
 
           {/* Leave Requests & Calendar — all authenticated users */}
-          <Route path="leave"        element={<LeaveRequestsPage />} />
+          <Route path="leave"        element={<LeaveRequestsPage showOnly="lrf" />} />
+          <Route path="overtime"     element={<LeaveRequestsPage key="otr" initialTab="otr" showOnly="otr" />} />
           <Route path="leave-master" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <LeaveMasterList />
@@ -124,6 +145,11 @@ export default function App() {
           } />
           <Route path="calendar"     element={<CalendarPage />} />
           <Route path="resignations" element={<ResignationsPage />} />
+          <Route path="internal-salary" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <InternalSalaryPage />
+            </ProtectedRoute>
+          } />
 
           {/* HR Full only */}
           <Route path="attendance" element={

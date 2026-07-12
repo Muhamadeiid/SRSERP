@@ -131,13 +131,57 @@ class AttendanceController extends Controller
             $leaves = $leaveQuery->get([
                 'id', 'employee_id', 'employee_name', 'leave_type',
                 'start_date', 'end_date', 'days', 'paid', 'tracking_no',
+                'early_from', 'early_to',
             ]);
         }
 
+        // ── Pull approved OTRs overlapping the same date range ──
+        $otrs = collect();
+        if ($rangeStart || $rangeEnd) {
+            $start = $rangeStart ?: $rangeEnd;
+            $end   = $rangeEnd   ?: $rangeStart;
+
+            $otrQuery = LeaveRequest::query()
+                ->where('type', 'otr')
+                ->where('status', 'approved')
+                ->whereNotNull('employee_id')
+                ->whereDate('ot_date', '>=', $start)
+                ->whereDate('ot_date', '<=', $end);
+
+            if (!empty($filters['employee_id'])) {
+                $otrQuery->where('employee_id', $filters['employee_id']);
+            }
+
+            $otrs = $otrQuery->get([
+                'id', 'employee_id', 'employee_name',
+                'ot_date', 'start_time', 'end_time', 'hours', 'tracking_no',
+            ]);
+        }
+
+        // ── Public holidays overlapping the range ──
+        // A holiday range [date .. end_date ?? date] overlaps [start .. end] iff:
+        //   holiday.date <= end AND (end_date ?? date) >= start
+        $holidays = collect();
+        if ($rangeStart || $rangeEnd) {
+            $start = $rangeStart ?: $rangeEnd;
+            $end   = $rangeEnd   ?: $rangeStart;
+            $holidays = \App\Models\PublicHoliday::query()
+                ->whereDate('date', '<=', $end)
+                ->where(function ($q) use ($start) {
+                    $q->whereDate('end_date', '>=', $start)
+                      ->orWhere(function ($qq) use ($start) {
+                          $qq->whereNull('end_date')->whereDate('date', '>=', $start);
+                      });
+                })
+                ->get(['id', 'date', 'end_date', 'name_en', 'name_ar']);
+        }
+
         return response()->json([
-            'success' => true,
-            'data'    => $attendances,
-            'leaves'  => $leaves,
+            'success'  => true,
+            'data'     => $attendances,
+            'leaves'   => $leaves,
+            'otrs'     => $otrs,
+            'holidays' => $holidays,
         ], 200);
     }
 
@@ -1025,6 +1069,259 @@ class AttendanceController extends Controller
         $sumLastRow   = $sumHeaderRow + count($summaryDefs);
         $printLastRow = max($lastDataRow, $sumLastRow);
         $sheet->getPageSetup()->setPrintArea("A1:{$lastCol}{$printLastRow}");
+    }
+
+    /**
+     * Internal Salary Sheet — aggregated OT & deductions for all employees
+     *
+     * GET /api/attendance/internal-salary
+     */
+    public function internalSalary(Request $request)
+    {
+        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
+
+        $employees = Employee::where('status', 'on_site')
+            ->orderBy('department')->orderBy('name')
+            ->get();
+
+        $approvedOTRs = LeaveRequest::where('type', 'otr')
+            ->where('status', 'approved')
+            ->whereDate('ot_date', '>=', $startDate)
+            ->whereDate('ot_date', '<=', $endDate)
+            ->get();
+
+        $rows = [];
+
+        foreach ($employees as $employee) {
+            $attendances = $this->attendanceService->getAttendance([
+                'employee_id' => $employee->id,
+                'start_date'  => $startDate,
+                'end_date'    => $endDate,
+            ]);
+
+            $row = $this->calcSalaryRow($employee, $attendances, $startDate, $endDate, $approvedOTRs);
+            $rows[] = $row;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $rows,
+            'period'  => ['start' => $startDate, 'end' => $endDate],
+        ]);
+    }
+
+    /**
+     * Export Internal Salary Sheet as Excel
+     *
+     * GET /api/attendance/internal-salary/export
+     */
+    public function internalSalaryExport(Request $request): StreamedResponse
+    {
+        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
+
+        $employees = Employee::where('status', 'on_site')
+            ->orderBy('department')->orderBy('name')
+            ->get();
+
+        $approvedOTRs = LeaveRequest::where('type', 'otr')
+            ->where('status', 'approved')
+            ->whereDate('ot_date', '>=', $startDate)
+            ->whereDate('ot_date', '<=', $endDate)
+            ->get();
+
+        $rows = [];
+        foreach ($employees as $employee) {
+            $attendances = $this->attendanceService->getAttendance([
+                'employee_id' => $employee->id,
+                'start_date'  => $startDate,
+                'end_date'    => $endDate,
+            ]);
+            $rows[] = $this->calcSalaryRow($employee, $attendances, $startDate, $endDate, $approvedOTRs);
+        }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Internal Salary sheet');
+
+        $sheet->getPageSetup()
+              ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+              ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+
+        $C_HDR  = '4472C4';
+        $thin   = ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '000000']];
+
+        $headers = ['IBS No.', 'Emp. Name', 'Morning overtime (Hrs.)', 'Night overtime (Hrs.)',
+                     'Double Pay overtime (Hrs.)', 'Deduction (Hrs.)', 'Remarks'];
+
+        foreach ($headers as $ci => $hdr) {
+            $col = Coordinate::stringFromColumnIndex($ci + 1);
+            $sheet->setCellValue("{$col}2", $hdr);
+        }
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $C_HDR]],
+            'font'      => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'borders'   => ['allBorders' => $thin],
+        ]);
+        $sheet->getRowDimension(2)->setRowHeight(22);
+        $sheet->setAutoFilter("A2:{$lastCol}2");
+
+        foreach ($rows as $ri => $r) {
+            $row = $ri + 3;
+            $sheet->setCellValue("A{$row}", $r['ibs_code']);
+            $sheet->setCellValue("B{$row}", $r['name']);
+            $sheet->setCellValue("C{$row}", $r['morning_ot'] ?: '-');
+            $sheet->setCellValue("D{$row}", $r['night_ot'] ?: '-');
+            $sheet->setCellValue("E{$row}", $r['double_pay_ot'] ?: '-');
+            $sheet->setCellValue("F{$row}", $r['deduction_hours'] ?: '-');
+            $sheet->setCellValue("G{$row}", $r['remarks'] ?: '-');
+
+            $sheet->getStyle("A{$row}:{$lastCol}{$row}")->applyFromArray([
+                'font'      => ['name' => 'Arial', 'size' => 10],
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => $thin],
+            ]);
+            $sheet->getStyle("C{$row}:G{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+
+        $sheet->getColumnDimension('A')->setWidth(16);
+        $sheet->getColumnDimension('B')->setWidth(38);
+        $sheet->getColumnDimension('C')->setWidth(22);
+        $sheet->getColumnDimension('D')->setWidth(20);
+        $sheet->getColumnDimension('E')->setWidth(26);
+        $sheet->getColumnDimension('F')->setWidth(16);
+        $sheet->getColumnDimension('G')->setWidth(14);
+
+        $writer   = new Xlsx($spreadsheet);
+        $filename = "Internal_Salary_{$startDate}_{$endDate}.xlsx";
+
+        return response()->streamDownload(
+            fn() => $writer->save('php://output'),
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
+    }
+
+    private function calcSalaryRow(Employee $employee, $attendances, string $startDate, string $endDate, $approvedOTRs = null, $holidays = null, $approvedLeaves = null): array
+    {
+        $timeToMin = function($t): ?int {
+            if (!$t) return null;
+            $s = (string) $t;
+            if (strlen($s) > 8) $s = substr($s, -8);
+            return intval(substr($s,0,2))*60 + intval(substr($s,3,2));
+        };
+
+        $nightStartMin = 19 * 60;
+        $totalDayOT    = 0;
+        $totalNightOT  = 0;
+        $doublePayOT   = 0;
+
+        if ($approvedOTRs === null) {
+            $approvedOTRs = LeaveRequest::where('type', 'otr')
+                ->where('status', 'approved')
+                ->where('employee_id', $employee->id)
+                ->whereDate('ot_date', '>=', $startDate)
+                ->whereDate('ot_date', '<=', $endDate)
+                ->get();
+        }
+        if ($holidays === null) {
+            $holidayRecs = \App\Models\PublicHoliday::query()
+                ->whereDate('date', '<=', $endDate)
+                ->where(function ($q) use ($startDate) {
+                    $q->whereDate('end_date', '>=', $startDate)
+                      ->orWhere(function ($qq) use ($startDate) {
+                          $qq->whereNull('end_date')->whereDate('date', '>=', $startDate);
+                      });
+                })
+                ->get(['date', 'end_date']);
+            $holidays = [];
+            foreach ($holidayRecs as $h) {
+                $s = is_string($h->date) ? substr($h->date, 0, 10) : $h->date->format('Y-m-d');
+                $e = $h->end_date
+                    ? (is_string($h->end_date) ? substr($h->end_date, 0, 10) : $h->end_date->format('Y-m-d'))
+                    : $s;
+                $cur = \Carbon\Carbon::parse($s);
+                $lim = \Carbon\Carbon::parse($e);
+                while ($cur->lte($lim)) {
+                    $d = $cur->format('Y-m-d');
+                    if ($d >= $startDate && $d <= $endDate) {
+                        $holidays[] = $d;
+                    }
+                    $cur->addDay();
+                }
+            }
+        }
+        if ($approvedLeaves === null) {
+            $approvedLeaves = LeaveRequest::where('type', 'lrf')
+                ->where('status', 'approved')
+                ->where('employee_id', $employee->id)
+                ->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween('start_date', [$startDate, $endDate])
+                      ->orWhereBetween('end_date',  [$startDate, $endDate])
+                      ->orWhere(function($qq) use ($startDate, $endDate) {
+                          $qq->where('start_date', '<=', $startDate)
+                             ->where('end_date',   '>=', $endDate);
+                      });
+                })
+                ->get();
+        }
+
+        $empOTRs = $approvedOTRs->where('employee_id', $employee->id);
+
+        foreach ($empOTRs as $otr) {
+            $startM = $timeToMin($otr->start_time);
+            $endM   = $timeToMin($otr->end_time);
+            if ($startM === null || $endM === null || $endM <= $startM) continue;
+
+            $dayMins   = max(0, min($endM, $nightStartMin) - max($startM, 17 * 60));
+            $nightMins = max(0, $endM - max($startM, $nightStartMin));
+            if ($dayMins < 0) $dayMins = 0;
+
+            $totalDayOT   += (int) round($dayMins / 60);
+            $totalNightOT += (int) round($nightMins / 60);
+        }
+
+        // Double Pay: hours worked on public holidays
+        $holidaysSet = array_flip($holidays);
+        foreach ($attendances as $att) {
+            $d = is_string($att->date) ? substr($att->date, 0, 10) : ($att->date?->format('Y-m-d') ?? '');
+            if (isset($holidaysSet[$d]) && $att->work_hours > 0) {
+                $doublePayOT += (int) round($att->work_hours);
+            }
+        }
+
+        // Deductions: absences that aren't on holidays and aren't on approved leave
+        $onLeaveDates = [];
+        foreach ($approvedLeaves as $lv) {
+            $s = is_string($lv->start_date) ? substr($lv->start_date, 0, 10) : ($lv->start_date?->format('Y-m-d') ?? '');
+            $e = is_string($lv->end_date)   ? substr($lv->end_date,   0, 10) : ($lv->end_date?->format('Y-m-d')   ?? $s);
+            $cur = \Carbon\Carbon::parse($s);
+            $lim = \Carbon\Carbon::parse($e);
+            while ($cur->lte($lim)) { $onLeaveDates[$cur->format('Y-m-d')] = true; $cur->addDay(); }
+        }
+        $absentCount = 0;
+        foreach ($attendances->where('status', 'absent') as $att) {
+            $d = is_string($att->date) ? substr($att->date, 0, 10) : ($att->date?->format('Y-m-d') ?? '');
+            if (isset($holidaysSet[$d])) continue;
+            if (isset($onLeaveDates[$d])) continue;
+            $absentCount++;
+        }
+        $deductionHrs = $absentCount * 9;
+
+        return [
+            'id'              => $employee->id,
+            'ibs_code'        => $employee->ibs_code ?? '',
+            'name'            => $employee->name,
+            'department'      => $employee->department,
+            'morning_ot'      => $totalDayOT,
+            'night_ot'        => $totalNightOT,
+            'double_pay_ot'   => $doublePayOT,
+            'deduction_hours' => $deductionHrs,
+            'remarks'         => '',
+        ];
     }
 
     /**

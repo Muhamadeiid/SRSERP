@@ -38,6 +38,45 @@ async function loadLogoBytes() {
   } catch { return null }
 }
 
+// Convert a signature data URI (PNG or SVG) into { data: Uint8Array, type }
+// suitable for docx ImageRun. SVGs are rasterised to PNG via a canvas.
+async function signatureToImage(dataUri) {
+  if (!dataUri || typeof dataUri !== 'string') return null
+  try {
+    // Direct PNG/JPEG data URI — decode base64 into bytes
+    if (/^data:image\/(png|jpe?g);base64,/i.test(dataUri)) {
+      const type = /jpe?g/i.test(dataUri) ? 'jpg' : 'png'
+      const b64  = dataUri.split(',', 2)[1] || ''
+      const bin  = atob(b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      return { data: bytes, type }
+    }
+    // SVG or arbitrary image URL → rasterise via <canvas>
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image()
+      el.crossOrigin = 'anonymous'
+      el.onload  = () => resolve(el)
+      el.onerror = reject
+      el.src = dataUri
+    })
+    const w = 260, h = 60
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, w, h)
+    ctx.drawImage(img, 0, 0, w, h)
+    const pngDataUri = canvas.toDataURL('image/png')
+    const b64 = pngDataUri.split(',', 2)[1] || ''
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return { data: bytes, type: 'png' }
+  } catch {
+    return null
+  }
+}
+
 function earlyDays(from, to) {
   const start = normalizeTime(from)
   const end = normalizeTime(to)
@@ -320,17 +359,40 @@ export async function generateLRF(d) {
     depot:     depotManagerNameFor(d),
   }
 
-  const sigRows = (en, ar, name, mode = 'normal') => {
+  // Resolve each signature slot to a docx image (PNG bytes). Runs in parallel.
+  const [empSig, altSig, mgrSig, hrSig, depotSig] = await Promise.all([
+    signatureToImage(d.employee?.e_signature),
+    signatureToImage(d.alternate_employee?.e_signature),
+    signatureToImage(managerIsDepot ? null : d.manager_signature),
+    signatureToImage(d.hr_signature),
+    signatureToImage(d.depot_signature),
+  ])
+  const sigImages = { employee: empSig, alternate: altSig, direct: mgrSig, hr: hrSig, depot: depotSig }
+
+  const sigRows = (en, ar, name, image, mode = 'normal') => {
     const compact = mode === 'compact'
     const emptyHeight = compact ? 620 : 840
     const nameHeight = compact ? 390 : 470
+    const sigW = compact ? 140 : 180
+    const sigH = compact ? 32  : 44
+
+    const sigParagraph = image
+      ? new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 0, before: 0 },
+          children: [new ImageRun({
+            data: image.data, type: image.type,
+            transformation: { width: sigW, height: sigH },
+          })],
+        })
+      : para('', { size: 18 })
 
     return [
     new TableRow({
       height: { value: emptyHeight, rule: HeightRule.ATLEAST },
       children: [
         cell(labelPara(en, ar), { width: LBL_W, rowspan: 2, vAlign: VerticalAlign.TOP }),
-        cell([para('', { size: 18 })], { colspan: 8 }),
+        cell([sigParagraph], { colspan: 8, vAlign: VerticalAlign.CENTER }),
       ],
     }),
     new TableRow({
@@ -354,11 +416,11 @@ export async function generateLRF(d) {
     simpleRow('Annual Leave start Date:',   'تاريخ بداية الأجازه', fmtDate(d.start_date)),
     simpleRow('Annual Leave End Date:',     'تاريخ انتهاء الأجازه', fmtDate(d.end_date)),
     simpleRow('The purpose:',               'الغرض', d.purpose),
-    ...sigRows('Employee Name / signature:',              'إسم الموظف / توقيعه',           sigNames.employee, 'compact'),
-    ...sigRows('Alternate Employee name / signature:',    'إسم الموظف البديل / توقيعه',    sigNames.alternate),
-    ...sigRows('Direct manager Name / signature',         'المدير المباشر / التوقيع',       sigNames.direct),
-    ...sigRows('Human Resource',                          'موظف الموارد البشريه',           sigNames.hr),
-    ...sigRows('Depot Manager Signature',                 'توقيع مدير الموقع',              sigNames.depot),
+    ...sigRows('Employee Name / signature:',              'إسم الموظف / توقيعه',           sigNames.employee,  sigImages.employee,  'compact'),
+    ...sigRows('Alternate Employee name / signature:',    'إسم الموظف البديل / توقيعه',    sigNames.alternate, sigImages.alternate),
+    ...sigRows('Direct manager Name / signature',         'المدير المباشر / التوقيع',       sigNames.direct,    sigImages.direct),
+    ...sigRows('Human Resource',                          'موظف الموارد البشريه',           sigNames.hr,        sigImages.hr),
+    ...sigRows('Depot Manager Signature',                 'توقيع مدير الموقع',              sigNames.depot,     sigImages.depot),
   ]
 
   const mainTable = new Table({
