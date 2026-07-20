@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
@@ -8,10 +9,11 @@ import {
 import { getEmployees, getEmployee, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
 import {
-  getLeaveRequests, createLeaveRequest,
+  getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
   getLeaveBalance, updateLeaveTrackingNo,
 } from '../services/leaveService'
+import { getSettings } from '../services/settingsService'
 
 // ── constants ─────────────────────────────────────────────────
 const HR_OFFICER = 'Hazem Khaled'
@@ -39,14 +41,75 @@ const deptLabel = (emp) => {
   return DEPT_LABEL[value] ?? value
 }
 
-async function generateRequestWord(req) {
+async function generateRequestWord(req, options) {
   if (req.type === 'lrf') {
     const { generateLRF } = await import('../utils/generateLRF')
-    return generateLRF(req)
+    return generateLRF(req, options)
   }
 
   const { generateOTR } = await import('../utils/generateOTR')
-  return generateOTR(req)
+  return generateOTR(req, options)
+}
+
+async function fetchRequestDetails(req) {
+  if (!req?.id) return req
+  const response = await getLeaveRequest(req.id)
+  return response?.data ?? req
+}
+
+async function downloadRequestWord(req) {
+  return generateRequestWord(await fetchRequestDetails(req))
+}
+
+async function printRequestWord(req) {
+  const printWindow = window.open('', '_blank', 'width=900,height=1200')
+  if (!printWindow) {
+    alert('Please allow pop-ups to print this request.')
+    return
+  }
+
+  printWindow.document.write('<!doctype html><html><head><title>Preparing print...</title></head><body style="font-family:Arial,sans-serif;padding:24px">Preparing the form...</body></html>')
+  printWindow.document.close()
+
+  try {
+    const [fullRequest, { renderAsync: renderWordDocument }] = await Promise.all([
+      fetchRequestDetails(req),
+      import('docx-preview'),
+    ])
+    const blob = await generateRequestWord(fullRequest, { download: false })
+
+    printWindow.document.title = req.tracking_no || (req.type === 'lrf' ? 'Leave Request' : 'Overtime Request')
+    printWindow.document.body.innerHTML = '<div id="word-print-root"></div>'
+    const style = printWindow.document.createElement('style')
+    style.textContent = `
+      @page { size: A4 portrait; margin: 0; }
+      html, body { margin: 0; padding: 0; background: #fff; }
+      .docx-wrapper { background: #fff !important; padding: 0 !important; }
+      .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }
+      @media print { .docx-wrapper { padding: 0 !important; } }
+    `
+    printWindow.document.head.appendChild(style)
+
+    await renderWordDocument(
+      blob,
+      printWindow.document.getElementById('word-print-root'),
+      printWindow.document.head,
+      {
+        inWrapper: true,
+        hideWrapperOnPrint: true,
+        breakPages: true,
+        renderHeaders: true,
+        renderFooters: true,
+        useBase64URL: true,
+      },
+    )
+
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 500)
+  } catch (error) {
+    printWindow.close()
+    alert(error?.message || 'Unable to prepare the form for printing.')
+  }
 }
 
 const INP = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all'
@@ -110,7 +173,33 @@ const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digi
 const genLRFNo  = () => `LRF-GZ-????`
 const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
-const OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
+const DEFAULT_OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
+const DEFAULT_LEAVE_PURPOSE_OPTIONS = ['Sick | مرضي', 'Personal matter | أمر شخصي']
+const parseConfiguredOptions = (value, fallback) => {
+  if (!value) return fallback
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      const options = parsed.map(v => String(v).trim()).filter(Boolean)
+      return options.length ? options : fallback
+    }
+  } catch { /* settings are normally saved one option per line */ }
+  const options = String(value).split(/\r?\n/).map(v => v.trim()).filter(Boolean)
+  return options.length ? options : fallback
+}
+const splitPurposeOption = (option) => {
+  const [value, ...arabic] = String(option).split('|')
+  return { value: value.trim(), ar: arabic.join('|').trim() }
+}
+function useConfiguredOptions(key, fallback) {
+  const [options, setOptions] = useState(fallback)
+  useEffect(() => {
+    getSettings()
+      .then(r => setOptions(parseConfiguredOptions(r.data?.[key], fallback)))
+      .catch(() => setOptions(fallback))
+  }, [key, fallback])
+  return options
+}
 const today     = () => new Date().toISOString().slice(0, 10)
 const pad2      = n => String(n).padStart(2, '0')
 const dateString = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
@@ -462,6 +551,11 @@ function printLRF(d) {
 // ── print: OTR ─────────────────────────────────────────────────
 function printOTR(d) {
   const fmt = dt => dt ? new Date(dt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : ''
+  const fmtApproval = dt => {
+    if (!dt) return ''
+    const date = new Date(dt)
+    return Number.isNaN(date.getTime()) ? dt : `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+  }
   const logo = window.location.origin + '/logo.svg'
 
   const s_lb  = 'border:1px solid #000;padding:4px 7px;vertical-align:middle;background:#f9f9f9;'
@@ -470,20 +564,16 @@ function printOTR(d) {
   const s_ar  = 'font-size:7pt;direction:rtl;text-align:right;display:block;color:#333;margin-top:1px;'
 
   const empSig  = d.employee?.e_signature ? '<img src="' + d.employee.e_signature + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
-  const manSig  = d.manager_signature  ? '<img src="' + d.manager_signature  + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
+  const managerIsDepot = d.manager_approver?.role === 'depot_manager'
+    || (d.manager_approver?.id && d.approver?.id && d.manager_approver.id === d.approver.id)
+  const manSig  = !managerIsDepot && d.manager_signature ? '<img src="' + d.manager_signature + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
   const hrSig   = d.hr_signature       ? '<img src="' + d.hr_signature       + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
   const depSig  = d.depot_signature    ? '<img src="' + d.depot_signature    + '" style="max-height:24px;max-width:110px;object-fit:contain;margin-top:3px;display:block;"/>' : ''
-  const manDate = d.manager_approved_at ? fmt(d.manager_approved_at) : ''
-  const hrDate  = d.hr_approved_at      ? fmt(d.hr_approved_at)      : ''
-  const appDate = d.approved_at         ? fmt(d.approved_at)         : ''
+  const manDate = !managerIsDepot && d.manager_approved_at ? fmtApproval(d.manager_approved_at) : ''
+  const hrDate  = d.hr_approved_at ? fmtApproval(d.hr_approved_at) : ''
+  const appDate = d.approved_at ? fmtApproval(d.approved_at) : ''
   const expl    = (d.explanation || '').replace(/\n/g, '<br/>')
-  const resultOptionsHtml = OTR_RESULT_OPTIONS.map(option => {
-    const checked = d.overtime_results === option ? 'X' : '&nbsp;'
-    return '<span style="display:inline-flex;align-items:center;gap:6px;margin:0 16px;font-weight:700;">'
-      + '<span style="display:inline-flex;width:13px;height:13px;border:1px solid #000;align-items:center;justify-content:center;font-size:8pt;line-height:1;">' + checked + '</span>'
-      + option
-      + '</span>'
-  }).join('')
+  const resultOptionsHtml = d.overtime_results || ''
 
   const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>OTR - ' + (d.tracking_no||'') + '</title>'
     + '<style>'
@@ -1147,6 +1237,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const [balLoading, setBalLoading] = useState(false)
   const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
+  const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const days = lrfDays(form)
 
@@ -1179,8 +1270,6 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         : effectiveRemaining(form.leave_type))
     : null
   const casualRem2  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
-  const casualUsed2 = (balances && casualRem2 !== null) ? (parseFloat(balances.casual ?? 7) - casualRem2) : 0
-
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
     setForm(f => ({
@@ -1291,11 +1380,11 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               </div>
             </td></tr>
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
-            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(availableBalance)}{casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
+            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(availableBalance)}{['annual', 'casual'].includes(form.leave_type) && casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>
             <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} /></td></tr>
-            <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2"><div className="flex gap-6">{[['Sick', 'مرضي'], ['Personal matter', 'أمر شخصي']].map(([value, ar]) => <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span><span className="text-neutral-500" dir="rtl">{ar}</span></button>)}</div></td></tr>
+            <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2"><div className="flex flex-wrap gap-6">{leavePurposeOptions.map(option => { const { value, ar } = splitPurposeOption(option); return <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span>{ar && <span className="text-neutral-500" dir="rtl">{ar}</span>}</button> })}</div></td></tr>
             {sigRows('Employee Name / signature:', 'إسم الموظف / توقيعه', form.employee_name)}
             {sigRows('Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', '', 'alternate_employee_name')}
             {sigRows('Direct manager Name / signature', 'المدير المباشر / التوقيع', form.direct_manager_name)}
@@ -1472,6 +1561,7 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
   }
   const [form, setForm] = useState(buildInitial)
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
+  const overtimeResultOptions = useConfiguredOptions('otr_result_options', DEFAULT_OTR_RESULT_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const hours = diffHours(form.start_time, form.end_time)
 
@@ -1604,7 +1694,7 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
           </div>
           <div className="px-4 py-3">
             <div className="flex flex-wrap gap-2 mb-3">
-              {OTR_RESULT_OPTIONS.map(option => (
+              {overtimeResultOptions.map(option => (
                 <button
                   key={option}
                   type="button"
@@ -1624,14 +1714,14 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
         </div>
 
         {/* Signatures */}
-        {[
+        {[ 
           ['Direct Manager Signature', 'توقيع مدير المباشر', ''],
-          ['HR Signature', 'توقيع الموارد البشرية', HR_OFFICER],
-          ['Depot Manager Signature', 'توقيع مدير الموقع', DEPOT_MGR],
+          ['HR Signature', 'توقيع الموارد البشرية', ''],
+          ['Depot Manager Signature', 'توقيع مدير الموقع', ''],
         ].map(([en, ar, val]) => (
           <div key={en} className="grid grid-cols-[200px_1fr_100px_150px] divide-x divide-neutral-100">
             <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">{en}</p><p className="text-[10px] text-neutral-400">{ar}</p></div>
-            <div className="px-4 py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{en === 'Direct Manager Signature' ? (form.direct_manager_name || val) : val}</p></div>
+            <div className="px-4 py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{val}</p></div>
             <div className="px-4 py-3 bg-neutral-50 flex items-center"><p className="text-xs font-bold text-secondary-700">Date</p></div>
             <div className="px-4 py-4" />
           </div>
@@ -1721,6 +1811,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canHrApprove = userRole === 'admin' || userRole === 'hr'
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
+  const signatureParties = req.signature_parties || req.signatureParties || {}
+  const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
+  const hrSignatureParty = signatureParties.hr || null
+  const depotSignatureParty = signatureParties.depot_manager || signatureParties.depotManager || null
 
   const saveTracking = async () => {
     const value = trackingDraft.trim()
@@ -1748,20 +1842,20 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   }
   const handlePrintClick = () => {
     if (!confirmMissing('Print')) return
-    return isLRF ? printOfficialLRFGrid(req) : printOTR(req)
+    return printRequestWord(req)
   }
   const handleDownloadWord = () => {
     if (!confirmMissing('Download')) return
-    return generateRequestWord(req)
+    return downloadRequestWord(req)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 w-screen h-screen z-[100] flex items-center justify-center p-4 isolate">
+      <div className="fixed inset-0 w-screen h-screen bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col isolate">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-white shrink-0 z-30">
           <div className="min-w-0 flex-1 mr-3">
             <p className="text-sm font-bold text-secondary-700">{isLRF ? 'Leave Request (LRF)' : 'Overtime Request (OTR)'}</p>
 
@@ -1804,6 +1898,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+
         {/* Approval progress */}
         <div className="px-6 pt-4">
           <ApprovalProgress req={req} />
@@ -1835,9 +1931,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           <div className="px-6 pb-4 border-t border-neutral-100">
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-3 pt-3">Signatures</p>
             <div className="flex gap-4 flex-wrap">
-              <SigStamp label="Direct Manager" name={req.manager_approver?.name} date={req.manager_approved_at} sig={req.manager_signature} />
-              <SigStamp label="HR Officer"     name={req.hr_approver?.name}       date={req.hr_approved_at}      sig={req.hr_signature}      />
-              <SigStamp label="Depot Manager"  name={req.approver?.name}          date={req.approved_at}         sig={req.depot_signature}   />
+              <SigStamp label="Direct Manager" name={directSignatureParty?.name || req.manager_approver?.name} date={req.manager_approved_at} sig={directSignatureParty?.e_signature || req.manager_signature} />
+              <SigStamp label="HR Officer"     name={hrSignatureParty?.name || req.hr_approver?.name}           date={req.hr_approved_at}      sig={hrSignatureParty?.e_signature || req.hr_signature} />
+              <SigStamp label="Depot Manager"  name={depotSignatureParty?.name || req.approver?.name}           date={req.approved_at}         sig={depotSignatureParty?.e_signature || req.depot_signature} />
             </div>
           </div>
         )}
@@ -1952,8 +2048,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         </div>
 
+        </div>
+
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1986,6 +2085,15 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyPeriod, setHistoryPeriod] = useState('current_month')   // current_month | last_30 | last_90 | last_year | all
   const [historyPage,   setHistoryPage]   = useState(1)
   const HISTORY_PER_PAGE = 25
+
+  const openRequest = useCallback((request) => {
+    setViewReq(request)
+    fetchRequestDetails(request)
+      .then(fullRequest => {
+        setViewReq(current => current?.id === fullRequest?.id ? fullRequest : current)
+      })
+      .catch(() => {})
+  }, [])
 
   // Pending actions: each role sees the stage it can move forward.
   const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
@@ -2023,10 +2131,16 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <StatusBadge status={r.status} />
-        <button onClick={() => setViewReq(r)} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
+        <button
+          onClick={() => openRequest(r)}
+          aria-label={`View ${r.tracking_no || r.id}`}
+          title="View request"
+          className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
+          <Eye className="w-4 h-4" />
+        </button>
         {r.status === 'approved' && (
           <button
-            onClick={() => generateRequestWord(r)}
+            onClick={() => downloadRequestWord(r)}
             className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">
             <Download className="w-4 h-4" />
           </button>
@@ -2044,15 +2158,16 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const fetchRequests = useCallback(async () => {
     setLoadingReqs(true)
     try {
+      const type = showOnly === 'lrf' ? 'lrf' : showOnly === 'otr' ? 'otr' : undefined
       const [activeRes, historyRes] = await Promise.all([
-        getLeaveRequests({ scope: 'active' }),
-        getLeaveRequests({ scope: 'history', ...historyRange(historyPeriod) }),
+        getLeaveRequests({ scope: 'active', type }),
+        getLeaveRequests({ scope: 'history', type, ...historyRange(historyPeriod) }),
       ])
       const merged = [...(activeRes.data ?? []), ...(historyRes.data ?? [])]
       setRequests(Array.from(new Map(merged.map(r => [r.id, r])).values()))
     } catch (_) {}
     finally { setLoadingReqs(false) }
-  }, [historyPeriod])
+  }, [historyPeriod, showOnly])
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
@@ -2079,7 +2194,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           setFormKey(k => k + 1)
           window.scrollTo({ top: 0, behavior: 'smooth' })
         } else {
-          setViewReq(found)
+          openRequest(found)
         }
         navigate(location.pathname, { replace: true })
       } else {
@@ -2088,7 +2203,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     } else if (!loadingReqs) {
       fetchRequests()
     }
-  }, [location.search, requests, loadingReqs])
+  }, [location.search, location.pathname, requests, loadingReqs, fetchRequests, navigate, openRequest])
 
   const handleSubmit = async (data) => {
     setSaving(true)
@@ -2253,7 +2368,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setViewReq(r)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
+                  <button onClick={() => openRequest(r)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => setRescheduleModal({ id: r.id })}
                     className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all">Reschedule</button>
                   <button onClick={() => setRejectModal({ id: r.id })}
@@ -2286,7 +2401,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {/* ═══ Active Requests — always visible (small count) ═══ */}
       {(() => {
-        const active = requests.filter(r =>
+        const active = typeFiltered.filter(r =>
           ['pending', 'manager_approved', 'hr_approved'].includes(r.status) ||
           (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
         )
@@ -2296,7 +2411,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between bg-blue-50/30">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                <h2 className="text-sm font-bold text-secondary-700">Active Requests</h2>
+                <h2 className="text-sm font-bold text-secondary-700">
+                  {showOnly === 'otr' ? 'Active Overtime Requests' : showOnly === 'lrf' ? 'Active Leave Requests' : 'Active Requests'}
+                </h2>
                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{active.length}</span>
               </div>
               <p className="text-[11px] text-neutral-400">In-progress or upcoming</p>
@@ -2312,7 +2429,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-secondary-700">Requests History</h2>
+            <h2 className="text-sm font-bold text-secondary-700">
+              {showOnly === 'otr' ? 'Overtime History' : showOnly === 'lrf' ? 'Leave History' : 'Requests History'}
+            </h2>
             <p className="text-xs text-neutral-400 mt-0.5">Closed, approved & past requests</p>
           </div>
           {loadingReqs && <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />}
@@ -2320,9 +2439,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
         {(() => {
           // Build the history pool: closed + completed (NOT in active set)
-          const historyPool = requests.filter(r => {
-            if (showOnly === 'lrf' && r.type !== 'lrf') return false
-            if (showOnly === 'otr' && r.type === 'lrf') return false
+          const historyPool = typeFiltered.filter(r => {
             return r.status === 'rejected' ||
               r.status === 'cancelled' ||
               r.status === 'rescheduled' ||

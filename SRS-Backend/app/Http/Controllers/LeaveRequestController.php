@@ -11,6 +11,7 @@ use App\Services\LeaveDeductionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 
 class LeaveRequestController extends Controller
@@ -21,23 +22,29 @@ class LeaveRequestController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $this->deductions->processDue();
+        // The page requests active and history in parallel. Process due balances
+        // at most once per minute instead of scanning the same rows twice.
+        if (Cache::add('leave-deductions-processed', true, now()->addMinute())) {
+            $this->deductions->processDue();
+        }
 
         $user = auth()->user();
         $query = LeaveRequest::with([
-            'approver:id,name,e_signature,role',
-            'managerApprover:id,name,e_signature,role',
-            'hrApprover:id,name,e_signature,role',
-            'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
-            'employee.directManager:id,name,position,user_id,e_signature',
-            'employee.userManager:id,name,e_signature',
+            // List pages only need identity/approval metadata. Signature images
+            // are loaded by show() when a request is opened or printed.
+            'approver:id,name,role',
+            'managerApprover:id,name,role',
+            'hrApprover:id,name,role',
+            'employee:id,name,direct_manager_id,user_id,user_manager_id',
+            'employee.directManager:id,name,position,user_id',
+            'employee.userManager:id,name',
         ]);
 
         if (in_array($user->role, ['admin', 'depot_manager', 'hr'])) {
             // Full visibility.
         } elseif ($user->role === 'manager') {
-            $myEmp = Employee::where('user_id', $user->id)->first();
-            $empIds = $myEmp ? Employee::where('direct_manager_id', $myEmp->id)->pluck('id') : collect();
+            $myEmp = Employee::active()->where('user_id', $user->id)->first();
+            $empIds = $myEmp ? Employee::active()->where('direct_manager_id', $myEmp->id)->pluck('id') : collect();
             $query->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('employee_id', $empIds));
         } else {
             $query->where('user_id', $user->id);
@@ -165,7 +172,7 @@ class LeaveRequestController extends Controller
         $data = $v->validated();
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
-        $employee = !empty($data['employee_id']) ? Employee::find($data['employee_id']) : null;
+        $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
         if (
             $data['type'] === 'lrf'
             && $employee
@@ -180,7 +187,7 @@ class LeaveRequestController extends Controller
             ], 422);
         }
         if (empty($data['direct_manager_name']) && $employee?->direct_manager_id) {
-            $manager = Employee::with('user:id,role')->find($employee->direct_manager_id);
+            $manager = Employee::active()->with('user:id,role')->find($employee->direct_manager_id);
             if ($manager?->user?->role !== 'depot_manager') {
                 $data['direct_manager_name'] = $manager?->name;
             }
@@ -208,15 +215,53 @@ class LeaveRequestController extends Controller
             'hrApprover:id,name,e_signature,role',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id,e_signature',
-            'employee.userManager:id,name,e_signature',
+            'employee.directManager.user:id,name,role,e_signature',
+            'employee.userManager:id,name,role,e_signature',
         ]);
 
         if ($leave->employee && $leave->employee->userManager) {
             $managerUser = $leave->employee->userManager;
-            $managerUser->setAttribute('employee_record', Employee::where('user_id', $managerUser->id)
+            $managerUser->setAttribute('employee_record', Employee::active()->where('user_id', $managerUser->id)
                 ->select('id', 'name', 'position', 'department')
                 ->first());
         }
+
+        // Word/print always use the people currently assigned in the database,
+        // not an admin account that may have clicked an approval on their behalf.
+        $directManagerEmployee = $leave->employee?->directManager;
+        $directManagerUser = $leave->employee?->userManager ?: $directManagerEmployee?->user;
+        $hrOfficer = User::where('role', 'hr')->where('is_active', true)
+            ->first(['id', 'name', 'role', 'e_signature']);
+        $depotManager = User::where('role', 'depot_manager')->where('is_active', true)
+            ->first(['id', 'name', 'role', 'e_signature']);
+        $hrEmployee = $hrOfficer
+            ? Employee::active()->where('user_id', $hrOfficer->id)->first(['id', 'name', 'e_signature'])
+            : null;
+        $depotEmployee = $depotManager
+            ? Employee::active()->where('user_id', $depotManager->id)->first(['id', 'name', 'e_signature'])
+            : null;
+        $leave->setAttribute('signature_parties', [
+            'direct_manager' => ($directManagerEmployee || $directManagerUser) ? [
+                'id' => $directManagerEmployee?->id ?? $directManagerUser?->id,
+                'name' => $leave->direct_manager_name ?: ($directManagerEmployee?->name ?? $directManagerUser?->name),
+                'role' => $directManagerUser?->role,
+                'e_signature' => $directManagerEmployee?->e_signature ?: $directManagerUser?->e_signature,
+            ] : null,
+            'hr' => $hrOfficer ? [
+                'id' => $hrOfficer->id,
+                'name' => $hrEmployee?->name ?: $hrOfficer->name,
+                'role' => $hrOfficer->role,
+                // Signatures uploaded from Workforce belong to the employee
+                // record and are the authoritative source for HR forms.
+                'e_signature' => $hrEmployee?->e_signature ?: $hrOfficer->e_signature,
+            ] : null,
+            'depot_manager' => $depotManager ? [
+                'id' => $depotManager->id,
+                'name' => $depotEmployee?->name ?: $depotManager->name,
+                'role' => $depotManager->role,
+                'e_signature' => $depotEmployee?->e_signature ?: $depotManager->e_signature,
+            ] : null,
+        ]);
 
         return response()->json(['success' => true, 'data' => $leave]);
     }
@@ -475,7 +520,7 @@ class LeaveRequestController extends Controller
             $hasDirectManager = true;
             Notification::notifyUser($employee->user_manager_id, 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. Awaiting your approval.", ['leave_request_id' => $leave->id]);
         } elseif ($employee?->direct_manager_id) {
-            $managerEmp = Employee::find($employee->direct_manager_id);
+            $managerEmp = Employee::active()->find($employee->direct_manager_id);
             if ($managerEmp?->user_id) {
                 $hasDirectManager = true;
                 Notification::notifyUser($managerEmp->user_id, 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. Awaiting your approval.", ['leave_request_id' => $leave->id]);
@@ -513,7 +558,7 @@ class LeaveRequestController extends Controller
         }
 
         if ($employee->direct_manager_id) {
-            $managerEmp = Employee::find($employee->direct_manager_id);
+            $managerEmp = Employee::active()->find($employee->direct_manager_id);
             return $managerEmp && $managerEmp->user_id === $userId;
         }
 

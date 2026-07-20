@@ -13,6 +13,7 @@
     "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.13.6",
     "docx": "^9.6.1",
+    "docx-preview": "^0.4.0",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "lucide-react": "^0.577.0",

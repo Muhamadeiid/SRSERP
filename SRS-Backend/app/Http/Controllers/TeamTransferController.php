@@ -35,13 +35,13 @@ class TeamTransferController extends Controller
             $affected = 0;
 
             if (in_array($data['mode'], ['direct', 'both'])) {
-                $q = Employee::where('direct_manager_id', $data['from_id']);
+                $q = Employee::active()->where('direct_manager_id', $data['from_id']);
                 if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
                 $affected += $q->update(['direct_manager_id' => $data['to_id']]);
             }
 
             if (in_array($data['mode'], ['user', 'both'])) {
-                $q = Employee::where('user_manager_id', $data['from_id']);
+                $q = Employee::active()->where('user_manager_id', $data['from_id']);
                 if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
                 $affected += $q->update(['user_manager_id' => $data['to_id']]);
             }

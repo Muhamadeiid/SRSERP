@@ -238,6 +238,8 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
               <Row label="Hiring Date" value={fmtD(emp.hiring_date)} />
               <Row label="Contract Start" value={fmtD(emp.contract_start)} />
               <Row label="Contract End" value={fmtD(emp.contract_end)} />
+              <Row label="Resignation Date" value={fmtD(emp.resignation_date)} />
+              <Row label="Last Working Date" value={fmtD(emp.last_working_date)} />
             </div>
           </section>
 
@@ -468,12 +470,14 @@ export default function WorkforceTab() {
 
   const [locFilter,  setLocFilter]  = useState("all");
   const [deptFilter, setDeptFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [view, setView] = useState("active"); // "active" | "ex"
 
   const fileRef = useRef(null);
   const searchTimer = useRef(null);
+  const optionsLoaded = useRef(false);
 
   const [searchParams] = useSearchParams();
   const [formOpen, setFormOpen] = useState(false);
@@ -534,9 +538,9 @@ export default function WorkforceTab() {
 
   const fetchStats = useCallback(async () => {
     try {
-      setStats(await getEmployeeStats());
+      setStats(await getEmployeeStats({ view }));
     } catch { /* stats unavailable */ }
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     fetchStats();
@@ -618,8 +622,11 @@ export default function WorkforceTab() {
     }
   };
 
-  // Fetch all employees for the direct manager dropdown
+  // Manager/user options are large and only needed when editing or bulk assigning.
+  // Do not block the Workforce list on data the user may never open.
   useEffect(() => {
+    if ((!formOpen && !bulkMode) || optionsLoaded.current) return;
+    optionsLoaded.current = true;
     const token = localStorage.getItem('srs_token');
     const base  = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api';
     const hdrs  = { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -628,20 +635,25 @@ export default function WorkforceTab() {
     fetch(`${base}/employees?per_page=500`, { headers: hdrs })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => setManagers(data.data?.data ?? data.data ?? []))
-      .catch(() => setManagers([]));
+      .catch(() => { setManagers([]); optionsLoaded.current = false; });
 
     // Users list for "System User Account" link dropdown
     fetch(`${base}/users`, { headers: hdrs })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => setUsers(Array.isArray(data) ? data : (data.data ?? [])))
-      .catch(() => setUsers([]));
-  }, []);
+      .catch(() => { setUsers([]); optionsLoaded.current = false; });
+  }, [formOpen, bulkMode]);
 
   const handleSearch = (v) => {
+    setSearchInput(v);
     clearTimeout(searchTimer.current);
-    setSearch(v);
-    searchTimer.current = setTimeout(() => setPage(1), 400);
+    searchTimer.current = setTimeout(() => {
+      setSearch(v.trim());
+      setPage(1);
+    }, 300);
   };
+
+  useEffect(() => () => clearTimeout(searchTimer.current), []);
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
@@ -669,6 +681,7 @@ export default function WorkforceTab() {
     setExporting(true);
     try {
       const blob = await exportEmployees({
+        view,
         location:   locFilter  !== "all" ? locFilter  : undefined,
         department: deptFilter || undefined,
       });
@@ -716,7 +729,7 @@ export default function WorkforceTab() {
         ].map(t => (
           <button
             key={t.key}
-            onClick={() => { setView(t.key); setPage(1); }}
+            onClick={() => { setView(t.key); setLocFilter('all'); setPage(1); }}
             className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
               view === t.key
                 ? 'bg-white text-secondary-700 shadow-sm'
@@ -728,27 +741,29 @@ export default function WorkforceTab() {
         ))}
       </div>
 
-      {/* Location filter pills */}
-      <div className="flex flex-wrap gap-2">
-        {locCards.map(({ key, label, value }) => (
-          <button
-            key={key}
-            onClick={() => { setLocFilter(key); setPage(1); }}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              locFilter === key
-                ? 'bg-secondary text-white border-secondary shadow-sm'
-                : 'bg-white text-neutral-500 border-neutral-200 hover:border-secondary/40 hover:text-secondary'
-            }`}
-          >
-            {label}
-            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${
-              locFilter === key ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
-            }`}>
-              {value}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Location filter is only relevant to active employees. */}
+      {view === 'active' && (
+        <div className="flex flex-wrap gap-2">
+          {locCards.map(({ key, label, value }) => (
+            <button
+              key={key}
+              onClick={() => { setLocFilter(key); setPage(1); }}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                locFilter === key
+                  ? 'bg-secondary text-white border-secondary shadow-sm'
+                  : 'bg-white text-neutral-500 border-neutral-200 hover:border-secondary/40 hover:text-secondary'
+              }`}
+            >
+              {label}
+              <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${
+                locFilter === key ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
+              }`}>
+                {value}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {[
@@ -807,7 +822,7 @@ export default function WorkforceTab() {
         <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-lg px-3 h-9 flex-1 min-w-[180px] max-w-sm">
           <Search className="w-4 h-4 text-neutral-400 shrink-0" />
           <input
-            value={search}
+            value={searchInput}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder="Search name, IBS, position, national ID…"
             className="bg-transparent text-sm placeholder:text-neutral-400 outline-none w-full"
@@ -970,18 +985,13 @@ export default function WorkforceTab() {
                     />
                   </th>
                 )}
-                {[
-                  "#",
-                  "Employee",
-                  "Position",
-                  "Department",
-                  "Location",
-                  "Hired",
-                  "Category",
-                  "Docs",
-                  "Status",
-                  "",
-                ].map((h) => (
+                {(view === 'ex' ? [
+                  "#", "Employee", "Position", "Department", "Resignation Date",
+                  "Last Working Date", "Category", "Docs", "Status", "",
+                ] : [
+                  "#", "Employee", "Position", "Department", "Location",
+                  "Hired", "Category", "Docs", "Status", "",
+                ]).map((h) => (
                   <th
                     key={h}
                     className="text-left text-[11px] font-semibold text-neutral-400 uppercase tracking-widest px-4 py-3.5 whitespace-nowrap"
@@ -1086,18 +1096,31 @@ export default function WorkforceTab() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span
-                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${lc}`}
-                          >
-                            {emp.work_location}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs text-neutral-500 whitespace-nowrap">
-                            {fmtD(emp.hiring_date)}
-                          </p>
-                        </td>
+                        {view === 'ex' ? (
+                          <>
+                            <td className="px-4 py-3 text-xs text-neutral-500 whitespace-nowrap">
+                              {fmtD(emp.resignation_date)}
+                            </td>
+                            <td className="px-4 py-3 text-xs font-semibold text-secondary-700 whitespace-nowrap">
+                              {fmtD(emp.last_working_date)}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span
+                                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${lc}`}
+                              >
+                                {emp.work_location}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-xs text-neutral-500 whitespace-nowrap">
+                                {fmtD(emp.hiring_date)}
+                              </p>
+                            </td>
+                          </>
+                        )}
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span
                             className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border ${emp.category === "White Collar" ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-neutral-100 text-neutral-600 border-neutral-200"}`}
@@ -1241,7 +1264,7 @@ const EMPTY = {
   // Schedule
   saturday_group: '', weekly_off_day: '',
   // Personal
-  hiring_date: '', national_id: '', birth_date: '', phone: '', another_phone: '',
+  hiring_date: '', resignation_date: '', last_working_date: '', national_id: '', birth_date: '', phone: '', another_phone: '',
   // Education
   education_type: '', education_school: '', education_major: '', education_year: '',
   // Classification
@@ -1305,7 +1328,10 @@ function buildInitialForm(emp) {
     work_location: emp.work_location ?? '', city: emp.city ?? '', address: emp.address ?? '',
     saturday_group: emp.saturday_group ?? '',
     weekly_off_day: emp.weekly_off_day ?? '',
-    hiring_date: dateStr(emp.hiring_date), national_id: emp.national_id ?? '',
+    hiring_date: dateStr(emp.hiring_date),
+    resignation_date: dateStr(emp.resignation_date),
+    last_working_date: dateStr(emp.last_working_date),
+    national_id: emp.national_id ?? '',
     birth_date: dateStr(emp.birth_date), phone: emp.phone ?? '', another_phone: emp.another_phone ?? '',
     education_type: emp.education_type ?? '', education_school: emp.education_school ?? '',
     education_major: emp.education_major ?? '', education_year: emp.education_year ?? '',
@@ -1481,6 +1507,16 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
                   <div>
                     <label className={LBL}>Hiring Date</label>
                     <input type="date" value={form.hiring_date} onChange={e => set('hiring_date', e.target.value)} className={INP} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={LBL}>Resignation Date</label>
+                    <input type="date" value={form.resignation_date} onChange={e => set('resignation_date', e.target.value)} className={INP} />
+                  </div>
+                  <div>
+                    <label className={LBL}>Last Working Date</label>
+                    <input type="date" value={form.last_working_date} onChange={e => set('last_working_date', e.target.value)} className={INP} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">

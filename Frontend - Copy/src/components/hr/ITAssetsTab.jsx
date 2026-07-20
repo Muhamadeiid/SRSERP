@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { itAssetService } from '../../services/assetService'
+import { assignItAssetToEmployee } from '../../services/issuingSourceService'
 import {
-  Search, Plus, X, Pencil, Loader2, RefreshCw, Trash2, Monitor,
+  Search, Plus, X, Pencil, Loader2, RefreshCw, Trash2, Monitor, UserPlus,
 } from 'lucide-react'
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -11,6 +12,8 @@ const ITEMS = [
   'Flash Drive', 'Cable', 'Headset', 'Webcam', 'Server', 'Other',
 ]
 const FREQUENCIES = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Semi-Annual', 'Annual', 'As Needed']
+const CONDITIONS = ['Good', 'Damaged', 'Lost']
+const STATUSES = ['Available', 'Assigned', 'Damaged', 'Lost', 'Maintenance']
 
 const COLS = [
   { key: 'item',                  label: 'Item',            w: 'w-24'  },
@@ -41,7 +44,7 @@ function ITAssetForm({ initial, onClose, onSaved }) {
     item: '', asset_no: '', name: '', qty: 1, serial_number: '',
     purpose: '', location: '', registration_date: '',
     account_registration: '', user_name: '', managing_staff: '',
-    maintenance_frequency: '', activity: '', notes: '',
+    maintenance_frequency: '', activity: '', condition: 'Good', status: 'Available', notes: '',
   }
   const [form, setForm] = useState(
     isEdit
@@ -139,6 +142,21 @@ function ITAssetForm({ initial, onClose, onSaved }) {
             <F label="Activity">{inp('activity', 'e.g. Use in Office')}</F>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Condition">
+              <select value={form.condition} onChange={set('condition')}
+                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
+                {CONDITIONS.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </F>
+            <F label="Status">
+              <select value={form.status} onChange={set('status')}
+                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
+                {STATUSES.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </F>
+          </div>
+
           {/* Notes */}
           <F label="Notes">
             <textarea value={form.notes} onChange={set('notes')} rows={2} placeholder="Optional notes…"
@@ -160,15 +178,75 @@ function ITAssetForm({ initial, onClose, onSaved }) {
   )
 }
 
+function AssignModal({ asset, EmployeePicker, onClose, onSaved }) {
+  const [employee, setEmployee] = useState(null)
+  const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const save = async () => {
+    if (!employee) return setErr('Please select an employee')
+    setBusy(true); setErr('')
+    try {
+      await assignItAssetToEmployee(asset.id, {
+        employee_id: employee.id,
+        received_date: receivedDate,
+        condition: 'Good',
+      })
+      onSaved()
+    } catch (e) {
+      setErr(e.response?.data?.message || e.message || 'Assignment failed')
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-bold text-secondary-700">Assign IT Asset</p>
+            <p className="text-xs text-neutral-400 mt-0.5">{asset.item} · {asset.asset_no || asset.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1">Employee *</label>
+            <EmployeePicker value={employee} onChange={setEmployee} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 mb-1">Received Date</label>
+            <input type="date" value={receivedDate} onChange={e => setReceivedDate(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60" />
+          </div>
+        </div>
+        {err && <p className="mt-3 text-xs text-red-500 font-medium">{err}</p>}
+        <div className="flex gap-2 mt-5">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl bg-neutral-100 text-neutral-600 text-sm font-medium">Cancel</button>
+          <button onClick={save} disabled={busy}
+            className="flex-1 py-2 rounded-xl bg-primary text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />}Assign
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function ITAssetsTab({ hideHeader = false }) {
+export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
   const [records,    setRecords]    = useState([])
+  const [stats,      setStats]      = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [pagination, setPagination] = useState(null)
   const [search,     setSearch]     = useState('')
   const [filterItem, setFilterItem] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCondition, setFilterCondition] = useState('all')
   const [showForm,   setShowForm]   = useState(false)
   const [editRec,    setEditRec]    = useState(null)
+  const [assignRec,  setAssignRec]  = useState(null)
   const searchTimer = useRef()
 
   const load = useCallback(async (params = {}) => {
@@ -177,15 +255,24 @@ export default function ITAssetsTab({ hideHeader = false }) {
       const res = await itAssetService.list({
         search:   params.search   ?? search,
         item:     params.item     ?? filterItem,
+        status:   params.status   ?? filterStatus,
+        condition: params.condition ?? filterCondition,
         per_page: 50,
       })
       setRecords(res.data ?? [])
       setPagination(res.pagination ?? null)
     } catch { setRecords([]) }
     finally { setLoading(false) }
-  }, [search, filterItem])
+  }, [search, filterItem, filterStatus, filterCondition])
 
-  useEffect(() => { load() }, [filterItem])
+  const loadStats = async () => {
+    try { setStats(await itAssetService.stats()) } catch {}
+  }
+
+  const refresh = () => { load(); loadStats() }
+
+  useEffect(() => { load() }, [filterItem, filterStatus, filterCondition])
+  useEffect(() => { loadStats() }, [])
 
   useEffect(() => {
     clearTimeout(searchTimer.current)
@@ -195,7 +282,7 @@ export default function ITAssetsTab({ hideHeader = false }) {
 
   const del = async id => {
     if (!window.confirm('Delete this IT asset record?')) return
-    try { await itAssetService.remove(id); load() } catch {}
+    try { await itAssetService.remove(id); refresh() } catch {}
   }
 
   const openEdit = rec => { setEditRec(rec); setShowForm(true) }
@@ -205,7 +292,7 @@ export default function ITAssetsTab({ hideHeader = false }) {
 
       {/* Header */}
       <div className="flex items-center justify-end flex-wrap gap-2">
-        <button onClick={() => load()} disabled={loading}
+        <button onClick={refresh} disabled={loading}
           className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
         </button>
@@ -215,18 +302,52 @@ export default function ITAssetsTab({ hideHeader = false }) {
         </button>
       </div>
 
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+          {[
+            { key: 'all', label: 'All IT Assets', value: stats.total, color: 'text-secondary-700' },
+            { key: 'good', label: 'Good', value: stats.good, color: 'text-emerald-600' },
+            { key: 'Available', label: 'Available', value: stats.available, color: 'text-green-600' },
+            { key: 'Assigned', label: 'Assigned', value: stats.assigned, color: 'text-blue-600' },
+            { key: 'Damaged', label: 'Damaged', value: stats.damaged, color: 'text-orange-600' },
+          ].map(card => {
+            const selected = card.key === 'good'
+              ? filterCondition === 'Good' && filterStatus === 'all'
+              : card.key === 'all'
+                ? filterStatus === 'all' && filterCondition === 'all'
+                : filterStatus === card.key
+            return (
+              <button key={card.key} onClick={() => {
+                if (card.key === 'good') { setFilterStatus('all'); setFilterCondition('Good') }
+                else { setFilterStatus(card.key); setFilterCondition('all') }
+              }}
+                className={`rounded-2xl border shadow-sm p-4 text-center transition-all ${selected ? 'bg-primary/5 border-primary ring-1 ring-primary/20' : 'bg-white border-neutral-200 hover:border-primary/40'}`}>
+                <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
+                <p className="text-xs text-neutral-500 mt-0.5 font-medium">{card.label}</p>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 pointer-events-none" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search assets…"
-            className="pl-9 pr-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 w-56" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Employee, asset, code or serial…"
+            className="pl-9 pr-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 w-72" />
         </div>
         <select value={filterItem} onChange={e => setFilterItem(e.target.value)}
           className="px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
           <option value="">All Items</option>
           {ITEMS.map(i => <option key={i} value={i}>{i}</option>)}
         </select>
+        {(filterStatus !== 'all' || filterCondition !== 'all') && (
+          <button onClick={() => { setFilterStatus('all'); setFilterCondition('all') }}
+            className="px-3 py-2 text-xs font-semibold text-neutral-500 bg-neutral-100 rounded-xl hover:bg-neutral-200">
+            Clear filter
+          </button>
+        )}
         <p className="ml-auto text-xs text-neutral-400">
           {pagination?.total ?? records.length} record{(pagination?.total ?? records.length) !== 1 ? 's' : ''}
         </p>
@@ -246,7 +367,7 @@ export default function ITAssetsTab({ hideHeader = false }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="text-xs border-collapse" style={{minWidth:'1100px',width:'100%'}}>
+            <table className="text-xs border-collapse" style={{minWidth:'1250px',width:'100%'}}>
               <thead>
                 <tr className="bg-neutral-800 text-white">
                   <th className="px-2 py-2.5 text-[10px] font-bold text-center border-r border-neutral-700 w-8">#</th>
@@ -263,7 +384,9 @@ export default function ITAssetsTab({ hideHeader = false }) {
                   <th className="px-2 py-2.5 text-[10px] font-bold text-left border-r border-neutral-700 w-[7%]">Staff</th>
                   <th className="px-2 py-2.5 text-[10px] font-bold text-left border-r border-neutral-700 w-[7%]">Frequency</th>
                   <th className="px-2 py-2.5 text-[10px] font-bold text-left border-r border-neutral-700 w-[6%]">Activity</th>
-                  <th className="px-2 py-2.5 text-[10px] font-bold text-center border-l border-neutral-700 w-12">Act.</th>
+                  <th className="px-2 py-2.5 text-[10px] font-bold text-left border-r border-neutral-700 w-[6%]">Condition</th>
+                  <th className="px-2 py-2.5 text-[10px] font-bold text-left border-r border-neutral-700 w-[7%]">Status</th>
+                  <th className="px-2 py-2.5 text-[10px] font-bold text-center border-l border-neutral-700 w-16">Act.</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,10 +420,12 @@ export default function ITAssetsTab({ hideHeader = false }) {
                     {/* Account reg */}
                     <td className="px-2 py-2 font-mono text-neutral-500 truncate" title={rec.account_registration}>{rec.account_registration || '—'}</td>
                     {/* User */}
-                    <td className="px-2 py-2 text-neutral-700 truncate" title={rec.user_name || 'Available'}>
+                    <td className="px-2 py-2 text-neutral-700 truncate" title={rec.user_name || rec.status || 'Available'}>
                       {rec.user_name
                         ? rec.user_name
-                        : <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold">Available</span>}
+                        : (rec.status ?? 'Available') === 'Available'
+                          ? <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold">Available</span>
+                          : <span className="text-neutral-400">—</span>}
                     </td>
                     {/* Managing staff */}
                     <td className="px-2 py-2 text-neutral-700 truncate" title={rec.managing_staff}>{rec.managing_staff || '—'}</td>
@@ -312,10 +437,24 @@ export default function ITAssetsTab({ hideHeader = false }) {
                     </td>
                     {/* Activity */}
                     <td className="px-2 py-2 text-neutral-600 truncate" title={rec.activity}>{rec.activity || '—'}</td>
+                    <td className="px-2 py-2 font-semibold text-neutral-700">{rec.condition || 'Good'}</td>
+                    <td className="px-2 py-2">
+                      <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${
+                        rec.status === 'Assigned' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                        rec.status === 'Available' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                        'bg-red-50 border-red-200 text-red-700'
+                      }`}>{rec.status || (rec.user_name ? 'Assigned' : 'Available')}</span>
+                    </td>
 
                     {/* Actions */}
                     <td className="px-2 py-2 text-center border-l border-neutral-100">
                       <div className="flex items-center justify-center gap-0.5">
+                        {EmployeePicker && (rec.status ?? 'Available') === 'Available' && (rec.condition ?? 'Good') === 'Good' && (
+                          <button onClick={() => setAssignRec(rec)} title="Assign to employee"
+                            className="p-1 rounded-lg hover:bg-emerald-50 text-neutral-400 hover:text-emerald-600 transition-colors">
+                            <UserPlus className="w-3 h-3" />
+                          </button>
+                        )}
                         <button onClick={() => openEdit(rec)} title="Edit"
                           className="p-1 rounded-lg hover:bg-primary/10 text-neutral-400 hover:text-primary transition-colors">
                           <Pencil className="w-3 h-3" />
@@ -339,7 +478,15 @@ export default function ITAssetsTab({ hideHeader = false }) {
         <ITAssetForm
           initial={editRec}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load() }}
+          onSaved={() => { setShowForm(false); refresh() }}
+        />
+      )}
+      {assignRec && EmployeePicker && (
+        <AssignModal
+          asset={assignRec}
+          EmployeePicker={EmployeePicker}
+          onClose={() => setAssignRec(null)}
+          onSaved={() => { setAssignRec(null); refresh() }}
         />
       )}
     </div>

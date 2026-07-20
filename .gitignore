@@ -80,3 +80,7 @@ lrf_preview.png
 ERD.html
 *.local
 scratchpad_*.tsv
+current-screen.png
+
+# ───── Codex / Claude work directories ─────────────────────────────
+.codex-work/

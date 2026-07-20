@@ -74,6 +74,31 @@ const NAV_GROUPS = [
   },
 ]
 
+// Start fetching a page chunk while the user is hovering/focusing its link,
+// so the actual navigation does not wait for the JavaScript file.
+const ROUTE_PREFETCHERS = {
+  '/human-resources': () => import('../components/hr/WorkforceTab'),
+  '/human-resources/org-chart': () => import('../components/hr/OrgChartTab'),
+  '/human-resources/leave': () => import('../pages/LeaveRequestsPage'),
+  '/human-resources/overtime': () => import('../pages/LeaveRequestsPage'),
+  '/human-resources/resignations': () => import('../pages/ResignationsPage'),
+  '/human-resources/leave-master': () => import('../pages/LeaveMasterList'),
+  '/human-resources/weekly-leave-report': () => import('../pages/WeeklyLeaveReportPage'),
+  '/human-resources/attendance': () => import('../components/hr/AttendanceTab'),
+  '/human-resources/saturday-rotation': () => import('../pages/SaturdayRotationPage'),
+  '/human-resources/internal-salary': () => import('../pages/InternalSalaryPage'),
+  '/human-resources/calendar': () => import('../pages/CalendarPage'),
+  '/human-resources/certifications': () => import('../components/hr/CertificationsTab'),
+  '/human-resources/disciplinary': () => import('../components/hr/DisciplinaryTab'),
+  '/human-resources/assets': () => import('../components/hr/AssetsTab'),
+  '/human-resources/settings': () => import('../pages/SettingsPage'),
+}
+
+const prefetchRoute = (path) => {
+  const loader = ROUTE_PREFETCHERS[path]
+  if (loader) loader().catch(() => undefined)
+}
+
 const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
 export default function HRLayout() {
@@ -126,7 +151,8 @@ export default function HRLayout() {
     if (n.data?.leave_request_id) {
       const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
       const param = isReschedule ? 'resubmit' : 'req'
-      navigate(`/human-resources/leave?${param}=${n.data.leave_request_id}`)
+      const requestPath = n.event?.startsWith('otr_') ? '/human-resources/overtime' : '/human-resources/leave'
+      navigate(`${requestPath}?${param}=${n.data.leave_request_id}`)
     }
   }
 
@@ -214,6 +240,8 @@ export default function HRLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  onMouseEnter={() => prefetchRoute(item.path)}
+                  onFocus={() => prefetchRoute(item.path)}
                   title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     `flex items-center rounded-lg text-sm font-medium transition-all no-underline
@@ -233,6 +261,8 @@ export default function HRLayout() {
                   key={item.path}
                   to={item.path}
                   end={item.end}
+                  onMouseEnter={() => prefetchRoute(item.path)}
+                  onFocus={() => prefetchRoute(item.path)}
                   title={item.label}
                   className={({ isActive }) =>
                     `flex items-center justify-center rounded-lg text-sm font-medium transition-all no-underline px-0 py-3
@@ -261,6 +291,8 @@ export default function HRLayout() {
                       key={item.path}
                       to={item.path}
                       end={item.end}
+                      onMouseEnter={() => prefetchRoute(item.path)}
+                      onFocus={() => prefetchRoute(item.path)}
                       className={({ isActive }) =>
                         `flex items-center gap-2.5 pl-9 pr-3 py-2 rounded-lg text-[13px] font-medium transition-all no-underline
                          ${isActive ? 'bg-primary/10 text-primary font-semibold' : 'text-neutral-500 hover:bg-neutral-50 hover:text-secondary'}`

@@ -64,15 +64,23 @@ class AttendanceController extends Controller
         $result = $this->attendanceService->importBiometricFile($filePath);
 
         if ($result['success']) {
+            $data = [
+                'imported'  => $result['imported'],
+                'processed' => $result['processed'],
+                'file_records' => $result['file_records'] ?? $result['imported'],
+                'employees_count' => $result['employees_count'] ?? 0,
+                'punch_codes_count' => $result['punch_codes_count'] ?? 0,
+                'dates'     => $result['dates'] ?? [],
+                'errors'    => $result['errors'] ?? [],
+            ];
+
             return response()->json([
                 'success' => true,
                 'message' => 'Biometric file processed successfully',
-                'data' => [
-                    'imported'  => $result['imported'],
-                    'processed' => $result['processed'],
-                    'dates'     => $result['dates'] ?? [],
-                    'errors'    => $result['errors'] ?? [],
-                ],
+                // Keep metrics at both levels so old and new frontend builds read
+                // the same non-zero result during a rolling/local update.
+                ...$data,
+                'data' => $data,
             ], 200);
         }
 
@@ -698,7 +706,7 @@ class AttendanceController extends Controller
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
 
-        $employees   = Employee::orderBy('name')->get();
+        $employees   = Employee::active()->orderBy('name')->get();
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0); // remove default blank sheet
 
@@ -1081,7 +1089,7 @@ class AttendanceController extends Controller
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
 
-        $employees = Employee::where('status', 'on_site')
+        $employees = Employee::active()->where('status', 'on_site')
             ->orderBy('department')->orderBy('name')
             ->get();
 
@@ -1121,7 +1129,7 @@ class AttendanceController extends Controller
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
 
-        $employees = Employee::where('status', 'on_site')
+        $employees = Employee::active()->where('status', 'on_site')
             ->orderBy('department')->orderBy('name')
             ->get();
 

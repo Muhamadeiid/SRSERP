@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeAssetController extends Controller
 {
@@ -27,6 +28,9 @@ class EmployeeAssetController extends Controller
 
         if ($request->filled('status') && $request->status !== 'all')
             $q->where('status', $request->status);
+
+        if ($request->filled('condition') && $request->condition !== 'all')
+            $q->where('condition', $request->condition);
 
         if ($request->filled('search')) {
             $term = $request->search;
@@ -72,6 +76,14 @@ class EmployeeAssetController extends Controller
         $data = $validator->validated();
 
         if (!empty($data['it_asset_id'])) {
+            $itAsset = ITAsset::find($data['it_asset_id']);
+            if (!$itAsset || $itAsset->status !== 'Available' || $itAsset->condition !== 'Good') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This IT asset is not available for assignment',
+                ], 422);
+            }
+
             $activeHolder = EmployeeAsset::where('it_asset_id', $data['it_asset_id'])
                 ->where('status', 'Active')
                 ->with('employee:id,name')
@@ -90,17 +102,22 @@ class EmployeeAssetController extends Controller
         $source = \App\Models\IssuingSource::find($data['issuing_source_id']);
         $data['issuing_department'] = $source ? $source->label_en : 'Other';
 
-        $asset = EmployeeAsset::create([
-            ...$data,
-            'status'     => 'Active',
-            'created_by' => auth()->id(),
-        ]);
-
-        if (!empty($data['it_asset_id'])) {
-            ITAsset::whereKey($data['it_asset_id'])->update([
-                'user_name' => Employee::whereKey($data['employee_id'])->value('name'),
+        $asset = DB::transaction(function () use ($data) {
+            $asset = EmployeeAsset::create([
+                ...$data,
+                'status'     => 'Active',
+                'created_by' => auth()->id(),
             ]);
-        }
+
+            if (!empty($data['it_asset_id'])) {
+                ITAsset::whereKey($data['it_asset_id'])->update([
+                    'user_name' => Employee::whereKey($data['employee_id'])->value('name'),
+                    'status'    => 'Assigned',
+                ]);
+            }
+
+            return $asset;
+        });
 
         return response()->json([
             'success' => true,
@@ -119,6 +136,7 @@ class EmployeeAssetController extends Controller
     public function update(Request $request, EmployeeAsset $asset): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'issuing_source_id'  => 'sometimes|required|exists:issuing_sources,id',
             'issuing_department' => 'sometimes|in:EHS,Corrective Maintenance,Preventive Maintenance,Inventory,IT,HR,Other',
             'asset_name'         => 'sometimes|string|max:255',
             'asset_code'         => 'nullable|string|max:100',
@@ -133,7 +151,12 @@ class EmployeeAssetController extends Controller
         if ($validator->fails())
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
-        $asset->update($validator->validated());
+        $data = $validator->validated();
+        if (isset($data['issuing_source_id'])) {
+            $source = \App\Models\IssuingSource::find($data['issuing_source_id']);
+            $data['issuing_department'] = $source?->label_en ?? $asset->issuing_department;
+        }
+        $asset->update($data);
         if ($asset->status === 'Returned') {
             $this->releaseLinkedItAsset($asset);
         }
@@ -148,7 +171,12 @@ class EmployeeAssetController extends Controller
     // ── DELETE /api/assets/{id} ────────────────────────────────
     public function destroy(EmployeeAsset $asset): JsonResponse
     {
-        $asset->delete();
+        DB::transaction(function () use ($asset) {
+            if ($asset->status === 'Active') {
+                $this->releaseLinkedItAsset($asset);
+            }
+            $asset->delete();
+        });
         return response()->json(['success' => true, 'message' => 'Asset deleted']);
     }
 
@@ -156,13 +184,21 @@ class EmployeeAssetController extends Controller
     // Mark a single asset as returned
     public function markReturned(Request $request, EmployeeAsset $asset): JsonResponse
     {
-        $asset->update([
-            'status'      => 'Returned',
-            'return_date' => $request->input('return_date', today()->toDateString()),
-            'condition'   => $request->input('condition', $asset->condition),
+        $data = $request->validate([
+            'return_date' => ['nullable', 'date', 'after_or_equal:' . $asset->received_date->toDateString()],
+            'condition'   => 'nullable|in:Good,Damaged,Lost',
         ]);
 
-        $this->releaseLinkedItAsset($asset);
+        DB::transaction(function () use ($asset, $data) {
+            $asset->update([
+                'status'              => 'Returned',
+                'return_date'         => $data['return_date'] ?? today()->toDateString(),
+                'condition'           => $data['condition'] ?? $asset->condition,
+                'received_by_user_id' => auth()->id(),
+            ]);
+
+            $this->releaseLinkedItAsset($asset);
+        });
 
         return response()->json([
             'success' => true,
@@ -178,7 +214,11 @@ class EmployeeAssetController extends Controller
         $employee = Employee::findOrFail($employeeId);
 
         $allAssets = EmployeeAsset::forEmployee($employeeId)
-                        ->with('creator:id,name')
+                        ->with([
+                            'creator:id,name',
+                            'issuingSource:id,key,label_en,label_ar',
+                            'itAsset:id,item,asset_no,name,serial_number',
+                        ])
                         ->orderBy('issuing_department')
                         ->orderBy('received_date')
                         ->get();
@@ -198,7 +238,10 @@ class EmployeeAssetController extends Controller
         return response()->json([
             'success'  => true,
             'data'     => [
-                'employee'      => $employee->only(['id','name','ibs_code','department','position','status']),
+                'employee'      => $employee->only([
+                    'id', 'name', 'arabic_name', 'ibs_code', 'punch_code',
+                    'department', 'position', 'work_location', 'project_budget', 'status',
+                ]),
                 'generated_at'  => now()->toDateTimeString(),
                 'active_count'  => $active->count(),
                 'returned_count'=> $returned->count(),
@@ -215,6 +258,9 @@ class EmployeeAssetController extends Controller
             'total'         => EmployeeAsset::count(),
             'active'        => EmployeeAsset::where('status', 'Active')->count(),
             'returned'      => EmployeeAsset::where('status', 'Returned')->count(),
+            'good'          => EmployeeAsset::where('condition', 'Good')->count(),
+            'damaged'       => EmployeeAsset::where('condition', 'Damaged')->count(),
+            'lost'          => EmployeeAsset::where('condition', 'Lost')->count(),
             'by_department' => EmployeeAsset::selectRaw('issuing_department, count(*) as count, sum(status="Active") as active')
                                 ->groupBy('issuing_department')
                                 ->get(),
@@ -233,7 +279,20 @@ class EmployeeAssetController extends Controller
             ->exists();
 
         if (!$hasAnotherActiveHolder) {
-            ITAsset::whereKey($asset->it_asset_id)->update(['user_name' => null]);
+            $condition = in_array($asset->condition, ['Good', 'Damaged', 'Lost'], true)
+                ? $asset->condition
+                : 'Good';
+            $status = match ($condition) {
+                'Damaged' => 'Damaged',
+                'Lost'    => 'Lost',
+                default   => 'Available',
+            };
+
+            ITAsset::whereKey($asset->it_asset_id)->update([
+                'user_name' => null,
+                'condition' => $condition,
+                'status'    => $status,
+            ]);
         }
     }
 }

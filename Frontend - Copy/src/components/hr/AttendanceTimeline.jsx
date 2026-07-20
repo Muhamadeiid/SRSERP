@@ -141,6 +141,8 @@ export default function AttendanceTimeline({ attendances, loading, onRefresh }) 
               const statusCfg = STATUS_CONFIG[attendance.status] || STATUS_CONFIG.absent
               const workHours = parseFloat(attendance.work_hours || 0)
               const expectedHours = parseFloat(attendance.expected_hours || 8)
+              const checkInParts = String(attendance.check_in || '').split(':').map(Number)
+              const lateAfterEight = checkInParts.length >= 2 && (checkInParts[0] * 60 + checkInParts[1]) > 8 * 60
               
               // Calculate bar width (percentage of expected hours)
               const barWidth = Math.min((workHours / expectedHours) * 100, 100)
@@ -170,8 +172,8 @@ export default function AttendanceTimeline({ attendances, loading, onRefresh }) 
                   {/* Check In */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                      <span className="text-sm font-mono text-secondary-700">
+                      <div className={`w-1.5 h-1.5 rounded-full ${lateAfterEight ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                      <span className={`text-sm font-mono font-semibold ${lateAfterEight ? 'text-red-600' : 'text-green-700'}`}>
                         {formatTime(attendance.check_in)}
                       </span>
                     </div>
@@ -180,8 +182,8 @@ export default function AttendanceTimeline({ attendances, loading, onRefresh }) 
                   {/* Check Out */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                      <span className="text-sm font-mono text-secondary-700">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                      <span className="text-sm font-mono font-semibold text-blue-700">
                         {formatTime(attendance.check_out)}
                       </span>
                     </div>

@@ -14,29 +14,74 @@ function base64ToBytes(b64) {
   return bytes
 }
 
+// Put the signature on a clean canvas while preserving its original aspect
+// ratio. Wide handwritten signatures use the available cell width instead of
+// being squeezed into a square.
+async function signatureToCleanImage(value) {
+  if (!value) return null
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = reject
+      el.src = value
+    })
+    const sourceRatio = Math.max(0.25, Math.min(8, img.width / img.height))
+    const canvasWidth = 600
+    const canvasHeight = Math.max(100, Math.round(canvasWidth / sourceRatio))
+    const canvas = document.createElement('canvas')
+    canvas.width = canvasWidth
+    canvas.height = canvasHeight
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+    ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight)
+
+    // Fill the usable signature cell area (after its left/right padding) while
+    // still keeping the handwritten signature's natural proportions.
+    const maxWidth = 160
+    const maxHeight = 48
+    let width = maxWidth
+    let height = width / sourceRatio
+    if (height > maxHeight) {
+      height = maxHeight
+      width = height * sourceRatio
+    }
+    return {
+      data: base64ToBytes(canvas.toDataURL('image/png')),
+      type: 'png',
+      width: Math.round(width),
+      height: Math.round(height),
+    }
+  } catch {
+    return null
+  }
+}
+
+async function loadLogoBytes() {
+  try {
+    const res = await fetch('/logo.png')
+    if (!res.ok) return null
+    return new Uint8Array(await res.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
 // ── constants ──────────────────────────────────────────────────────────────
 const PAGE_W   = 11906
 const PAGE_H   = 16838
-const MARGIN   = 720
-const CONTENT_W = PAGE_W - MARGIN * 2   // 10466
+const MARGIN   = 500
+const CONTENT_W = PAGE_W - MARGIN * 2
 
 const BORDER = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
+const FORM_BORDER = { style: BorderStyle.SINGLE, size: 8, color: '000000' }
 const ALL_BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const NO_BORDERS  = {
   top:    { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
   bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
   left:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
   right:  { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-}
-
-async function loadLogoBytes() {
-  try {
-    const res = await fetch('/asset-return-logo.png')
-    if (!res.ok) return null
-    return new Uint8Array(await res.arrayBuffer())
-  } catch {
-    return null
-  }
 }
 
 function normalizeOTRData(raw) {
@@ -74,6 +119,7 @@ function normalizeOTRData(raw) {
 
 async function enrichOTRData(raw) {
   const data = normalizeOTRData(raw)
+  const signatureParties = raw?.signature_parties || raw?.signatureParties || {}
 
   let employee = raw?.employee || raw?.employee_data || null
   if (!employee && raw?.employee_id) {
@@ -98,56 +144,40 @@ async function enrichOTRData(raw) {
   const hrEmployee = firstByPosition((position) => position.includes('hr'))
   const depotEmployee = firstByPosition((position) => position.includes('depot manager'))
   const workforceEmployee = employees.find((emp) => emp?.id === (employee?.id || raw?.employee_id)) || employee
-  const directManager = workforceEmployee?.direct_manager || workforceEmployee?.directManager || employees.find((emp) => emp?.id === workforceEmployee?.direct_manager_id) || null
+  const directManager = signatureParties?.direct_manager || signatureParties?.directManager || workforceEmployee?.direct_manager || workforceEmployee?.directManager || employees.find((emp) => emp?.id === workforceEmployee?.direct_manager_id) || null
+  const hrParty = signatureParties?.hr || null
+  const depotParty = signatureParties?.depot_manager || signatureParties?.depotManager || null
+  const managerApprover = raw?.manager_approver || raw?.managerApprover || null
+  const depotApprover = raw?.approver || null
+  const managerIsDepot = directManager?.role === 'depot_manager'
+    || directManager?.user?.role === 'depot_manager'
 
   return {
     ...data,
-    direct_manager_name: data.direct_manager_name || directManager?.name || '',
-    manager_signature: ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
-      ? (data.manager_signature || raw?.manager_approver?.e_signature || raw?.managerApprover?.e_signature || directManager?.e_signature || null)
+    manager_is_depot_manager: Boolean(managerIsDepot),
+    direct_manager_name: managerIsDepot ? '' : (data.direct_manager_name || directManager?.name || managerApprover?.name || ''),
+    manager_signature: !managerIsDepot && ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
+      ? (directManager?.e_signature || data.manager_signature || raw?.manager_approver?.e_signature || raw?.managerApprover?.e_signature || null)
       : null,
-    hr_name: hrEmployee?.name || data.hr_name,
+    hr_name: hrParty?.name || data.hr_name || hrEmployee?.name || '',
     hr_signature: ['hr_approved', 'approved'].includes(data.status)
-      ? (data.hr_signature || hrEmployee?.e_signature || null)
+      ? (hrParty?.e_signature || data.hr_signature || hrEmployee?.e_signature || null)
       : null,
-    depot_manager_name: depotEmployee?.name || data.depot_manager_name,
+    depot_manager_name: depotParty?.name || data.depot_manager_name || depotEmployee?.name || '',
     depot_signature: data.status === 'approved'
-      ? (data.depot_signature || depotEmployee?.e_signature || null)
+      ? (depotParty?.e_signature || data.depot_signature || depotEmployee?.e_signature || null)
       : null,
   }
-}
-
-function statusLabel(status) {
-  const labels = {
-    pending: 'Pending',
-    manager_approved: 'Manager Approved',
-    hr_approved: 'HR Approved',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    cancelled: 'Cancelled',
-    rescheduled: 'Rescheduled',
-  }
-  return labels[status] || status || ''
 }
 
 const OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
 
-function checkboxPara(label, checked) {
-  return new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 0, before: 0 },
-    children: [
-      new TextRun({ text: checked ? '☒ ' : '☐ ', size: 20, font: 'Arial' }),
-      new TextRun({ text: label, bold: true, size: 18, font: 'Arial' }),
-    ],
-  })
-}
-
 function overtimeResultParagraphs(value) {
-  if (OTR_RESULT_OPTIONS.includes(value)) {
-    return OTR_RESULT_OPTIONS.map(option => checkboxPara(option, value === option))
-  }
-  return [para(value || '', { size: 18, align: AlignmentType.CENTER })]
+  return [para(value || '', {
+    size: 18,
+    bold: OTR_RESULT_OPTIONS.includes(value),
+    align: AlignmentType.CENTER,
+  })]
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -222,59 +252,63 @@ function cell(paragraphs, opts = {}) {
 }
 
 // ── main export ────────────────────────────────────────────────────────────
-export async function generateOTR(d) {
+export async function generateOTR(d, { download = true } = {}) {
   const data = await enrichOTRData(d)
   const logoBytes = await loadLogoBytes()
 
-  // ── Header table: 2 cols [1800, 8666] ──────────────────────────────────
+  // Exact Leave Request header geometry: bottom rule only + logo/title divider.
+  const HDR_ONLY_BOTTOM = {
+    top: NO_BORDERS.top,
+    bottom: FORM_BORDER,
+    left: NO_BORDERS.left,
+    right: NO_BORDERS.right,
+  }
+  const HDR_LOGO_CELL = {
+    top: NO_BORDERS.top,
+    bottom: FORM_BORDER,
+    left: NO_BORDERS.left,
+    right: FORM_BORDER,
+  }
   const headerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
-    columnWidths: [1800, 8666],
+    columnWidths: [2400, CONTENT_W - 2400],
     layout: TableLayoutType.FIXED,
+    borders: {
+      top: NO_BORDERS.top,
+      bottom: FORM_BORDER,
+      left: NO_BORDERS.left,
+      right: NO_BORDERS.right,
+      insideHorizontal: FORM_BORDER,
+      insideVertical: FORM_BORDER,
+    },
     rows: [
       new TableRow({
+        height: { value: 1100, rule: HeightRule.ATLEAST },
         children: [
-          // Logo cell
           cell(
             logoBytes
               ? [new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 0, before: 0 },
-                  children: [new ImageRun({ data: logoBytes, transformation: { width: 108, height: 34 } })],
+                  children: [new ImageRun({ data: logoBytes, type: 'png', transformation: { width: 145, height: 50 } })],
                 })]
-              : [
-                  para('Rotem SRS', { bold: true, size: 22, align: AlignmentType.CENTER }),
-                  para('EGYPT',     { bold: true, size: 18, align: AlignmentType.CENTER, color: 'CC0000' }),
-                ],
-            {
-              width: 1800,
-              vAlign: VerticalAlign.CENTER,
-              borders: {
-                top: BORDER, bottom: BORDER, left: BORDER,
-                right: BORDER,
-              },
-            }
+              : [para('Rotem SRS Egypt', { bold: true, size: 20, align: AlignmentType.CENTER })],
+            { width: 2400, vAlign: VerticalAlign.CENTER, borders: HDR_LOGO_CELL }
           ),
-          // Title cell
           cell(
             [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40, before: 0 },
-                children: [
-                  new TextRun({ text: 'Overtime Request Form', bold: true, size: 32, font: 'Arial' }),
-                ],
+                children: [new TextRun({ text: 'Overtime Request Form', bold: true, size: 30, font: 'Arial' })],
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-        
                 spacing: { after: 0, before: 0 },
-                children: [
-                  new TextRun({ text: 'إذن عمل ساعات إضافيه', bold: true, size: 24, font: 'Arial', rightToLeft: true }),
-                ],
+                children: [new TextRun({ text: 'إذن عمل ساعات إضافيه', bold: true, size: 24, font: 'Arial', rightToLeft: true })],
               }),
             ],
-            { width: 8666, vAlign: VerticalAlign.CENTER }
+            { width: CONTENT_W - 2400, vAlign: VerticalAlign.CENTER, borders: HDR_ONLY_BOTTOM }
           ),
         ],
       }),
@@ -301,10 +335,17 @@ export async function generateOTR(d) {
     ],
   })
 
-  // ── Main table: 4 cols — From/To wider so time values fit ──────────────
-  const C = [3100, 3100, 2766, 1500]  // summing to 10466
+  // The source form uses a 16-unit grid so each row can merge cells differently.
+  const gridUnit = Math.floor(CONTENT_W / 16)
+  const GRID = [...Array(15).fill(gridUnit), CONTENT_W - gridUnit * 15]
+  const spanWidth = units => units === 16 ? CONTENT_W : Math.round((CONTENT_W * units) / 16)
 
-  // Row 1: section header (colspan 4, green bg)
+  const spacerRow = () => new TableRow({
+    height: { value: 220, rule: HeightRule.EXACT },
+    children: [cell([para('', { size: 2 })], { width: CONTENT_W, colspan: 16 })],
+  })
+
+  // Row 1: source-form cream section header
   const row1 = new TableRow({
     children: [
       cell(
@@ -321,7 +362,7 @@ export async function generateOTR(d) {
             children: [new TextRun({ text: 'طلب ساعات اضافيه', bold: true, size: 20, font: 'Arial', rightToLeft: true })],
           }),
         ],
-        { width: CONTENT_W, colspan: 4, shading: 'D6ECDA', vAlign: VerticalAlign.CENTER }
+        { width: CONTENT_W, colspan: 16, shading: 'FFF2CC', vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
@@ -329,25 +370,25 @@ export async function generateOTR(d) {
   // Row 2: Employee Name | value | Date | value
   const row2 = new TableRow({
     children: [
-      cell(biPara('Employee Name', 'إسم الموظف'),        { width: C[0] }),
-      cell([para(data.employee_name || '', { size: 20 })],  { width: C[1] }),
-      cell(biPara('Date', 'التاريخ'),                    { width: C[2] }),
-      cell([para(fmtDate(data.ot_date), { size: 20 })],     { width: C[3] }),
+      cell(biPara('Employee Name', 'إسم الموظف'), { width: spanWidth(3), colspan: 3, shading: 'E2F0D9' }),
+      cell([para(data.employee_name || '', { size: 20 })], { width: spanWidth(5), colspan: 5 }),
+      cell(biPara('Date', 'التاريخ'), { width: spanWidth(3), colspan: 3, shading: 'E2F0D9' }),
+      cell([para(fmtDate(data.ot_date), { size: 20 })], { width: spanWidth(5), colspan: 5 }),
     ],
   })
 
   // Row 3: Title | value | Department | value
   const row3 = new TableRow({
     children: [
-      cell(biPara('Title', 'المسمى الوظيفي'),                          { width: C[0] }),
-      cell([para(data.job_title || '', { size: 20 })],                 { width: C[1] }),
-      cell(biPara('Department', 'الإداره'),                            { width: C[2] }),
-      cell([para(data.department_label || data.department || '', { size: 20 })], { width: C[3] }),
+      cell(biPara('Title', 'المسمى الوظيفي'), { width: spanWidth(3), colspan: 3, shading: 'E2F0D9' }),
+      cell([para(data.job_title || '', { size: 20 })], { width: spanWidth(5), colspan: 5 }),
+      cell(biPara('Department', 'الإداره'), { width: spanWidth(3), colspan: 3, shading: 'E2F0D9' }),
+      cell([para(data.department_label || data.department || '', { size: 20 })], { width: spanWidth(5), colspan: 5 }),
     ],
   })
 
-  // Row 4: timing row — label on top + value below in each cell
-  const timingCell = (enText, arText, value) => cell(
+  // Row 4: source grid is 5/16, 3/16, 5/16, 3/16.
+  const timingCell = (enText, arText, value, units, shaded = false) => cell(
     [
       new Paragraph({
         alignment: AlignmentType.LEFT,
@@ -362,90 +403,20 @@ export async function generateOTR(d) {
       }),
       ...(value !== undefined ? [para(value, { bold: true, size: 20 })] : []),
     ],
-    { vAlign: VerticalAlign.TOP }
+    {
+      width: spanWidth(units),
+      colspan: units,
+      shading: shaded ? 'E2F0D9' : undefined,
+      vAlign: VerticalAlign.TOP,
+    }
   )
 
   const row4 = new TableRow({
     children: [
-      new TableCell({
-        width: { size: C[0], type: WidthType.DXA },
-        verticalAlign: VerticalAlign.TOP,
-        borders: ALL_BORDERS,
-        margins: { top: 60, bottom: 60, left: 100, right: 100 },
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 30, before: 0 },
-            children: [new TextRun({ text: 'Overtime needed from', bold: true, size: 17, font: 'Arial' })],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-    
-            spacing: { after: 40, before: 0 },
-            children: [new TextRun({ text: 'العمل الإضافي من :', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
-          }),
-          para(data.start_time || '', { bold: true, size: 20 }),
-        ],
-      }),
-      new TableCell({
-        width: { size: C[1], type: WidthType.DXA },
-        verticalAlign: VerticalAlign.TOP,
-        borders: ALL_BORDERS,
-        margins: { top: 60, bottom: 60, left: 100, right: 100 },
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 30, before: 0 },
-            children: [new TextRun({ text: 'To', bold: true, size: 17, font: 'Arial' })],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-    
-            spacing: { after: 40, before: 0 },
-            children: [new TextRun({ text: 'إلي', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
-          }),
-          para(data.end_time || '', { bold: true, size: 20 }),
-        ],
-      }),
-      new TableCell({
-        width: { size: C[2], type: WidthType.DXA },
-        verticalAlign: VerticalAlign.TOP,
-        borders: ALL_BORDERS,
-        margins: { top: 60, bottom: 60, left: 100, right: 100 },
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 30, before: 0 },
-            children: [new TextRun({ text: 'Total overtime not to exceed', bold: true, size: 17, font: 'Arial' })],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-    
-            spacing: { after: 0, before: 0 },
-            children: [new TextRun({ text: 'إجمالي ساعات العمل لا يتخطي', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
-          }),
-        ],
-      }),
-      new TableCell({
-        width: { size: C[3], type: WidthType.DXA },
-        verticalAlign: VerticalAlign.TOP,
-        borders: ALL_BORDERS,
-        margins: { top: 60, bottom: 60, left: 100, right: 100 },
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 30, before: 0 },
-            children: [new TextRun({ text: 'Hours', bold: true, size: 17, font: 'Arial' })],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-    
-            spacing: { after: 40, before: 0 },
-            children: [new TextRun({ text: 'ساعه', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
-          }),
-          para(data.hours != null ? String(data.hours) : '', { bold: true, size: 20 }),
-        ],
-      }),
+      timingCell('Overtime needed from', 'العمل الإضافي من :', data.start_time || '', 5, true),
+      timingCell('To', 'إلي', data.end_time || '', 3),
+      timingCell('Total overtime not to exceed', 'إجمالي ساعات العمل لا يتخطي', undefined, 5, true),
+      timingCell('Hours', 'ساعه', data.hours != null ? String(data.hours) : '', 3),
     ],
   })
 
@@ -466,18 +437,18 @@ export async function generateOTR(d) {
             children: [new TextRun({ text: 'تفسير سبب إحتياج العمل لساعات إضافيه', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
           }),
         ],
-        { width: CONTENT_W, colspan: 4, vAlign: VerticalAlign.CENTER }
+        { width: CONTENT_W, colspan: 16, shading: 'E2F0D9', vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
 
-  // Row 6: explanation value (tall ~75px = ~1350 DXA)
+  // Keep both free-text boxes the same height while fitting the whole form on one page.
   const row6 = new TableRow({
-    height: { value: 1800, rule: HeightRule.ATLEAST },
+    height: { value: 1860, rule: HeightRule.ATLEAST },
     children: [
       cell(
         [para(data.explanation || '', { size: 18, align: AlignmentType.CENTER })],
-        { width: CONTENT_W, colspan: 4, vAlign: VerticalAlign.CENTER }
+        { width: CONTENT_W, colspan: 16, vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
@@ -499,103 +470,94 @@ export async function generateOTR(d) {
             children: [new TextRun({ text: 'نتائج العمل لساعات إضافيه', bold: true, size: 16, font: 'Arial', rightToLeft: true })],
           }),
         ],
-        { width: CONTENT_W, colspan: 4, vAlign: VerticalAlign.CENTER }
+        { width: CONTENT_W, colspan: 16, shading: 'E2F0D9', vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
 
   // Row 8: results body (tall)
   const row8 = new TableRow({
-    height: { value: 1800, rule: HeightRule.ATLEAST },
+    height: { value: 1860, rule: HeightRule.ATLEAST },
     children: [
       cell(
         overtimeResultParagraphs(data.overtime_results || ''),
-        { width: CONTENT_W, colspan: 4, vAlign: VerticalAlign.CENTER }
+        { width: CONTENT_W, colspan: 16, vAlign: VerticalAlign.CENTER }
       ),
     ],
   })
 
-  // Signature row: label cell (colspan 2) | signature image cell | date cell
-  const sigRow = (enLabel, arLabel, sigBase64, dateValue, signerName = '', heightVal = 1000) => {
-    const sigChildren = []
-    if (sigBase64) {
+  const [managerSignatureImage, hrSignatureImage, depotSignatureImage] = await Promise.all([
+    signatureToCleanImage(data.manager_is_depot_manager ? null : data.manager_signature),
+    signatureToCleanImage(data.hr_signature),
+    signatureToCleanImage(data.depot_signature),
+  ])
+
+  // Four separate cells exactly as the approved signature-table layout.
+  // Names are deliberately omitted: the E-Signature is the identity mark.
+  const sigRow = (enLabel, arLabel, signatureImage, dateValue) => {
+    const labelChildren = [
+      new Paragraph({ spacing: { after: 0, before: 0 }, children: [new TextRun({ text: enLabel, bold: true, size: 18, font: 'Arial' })] }),
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        spacing: { after: 0, before: 0 },
+        children: [new TextRun({ text: arLabel, bold: true, size: 16, font: 'Arial', rightToLeft: true })],
+      }),
+    ]
+    const signatureChildren = []
+
+    if (signatureImage) {
       try {
-        sigChildren.push(new Paragraph({
+        signatureChildren.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
           spacing: { after: 0, before: 0 },
-          children: [new ImageRun({ data: base64ToBytes(sigBase64), transformation: { width: 120, height: 50 } })],
+          children: [new ImageRun({
+            data: signatureImage.data,
+            type: signatureImage.type,
+            transformation: { width: signatureImage.width, height: signatureImage.height },
+          })],
         }))
-        if (signerName) {
-          sigChildren.push(para(signerName, { size: 16, italics: true, color: '666666' }))
-        }
       } catch (_) {
-        sigChildren.push(para(signerName || '', { size: 18, italics: Boolean(signerName), color: signerName ? '666666' : '000000' }))
+        // Leave the slot blank when a legacy signature image is malformed.
       }
-    } else {
-      sigChildren.push(para(signerName || '', { size: 18, italics: Boolean(signerName), color: signerName ? '666666' : '000000' }))
     }
+    if (!signatureChildren.length) signatureChildren.push(para('', { size: 2 }))
 
     return new TableRow({
-      height: { value: heightVal, rule: HeightRule.ATLEAST },
+      height: { value: 680, rule: HeightRule.ATLEAST },
       children: [
-        new TableCell({
-          width: { size: C[0], type: WidthType.DXA },
-          verticalAlign: VerticalAlign.TOP,
-          borders: ALL_BORDERS,
-          shading: { type: ShadingType.CLEAR, fill: 'FFFFFF', color: 'auto' },
-          margins: { top: 60, bottom: 60, left: 100, right: 100 },
-          children: [
-            new Paragraph({
-              spacing: { after: 20, before: 0 },
-              children: [new TextRun({ text: enLabel, bold: true, size: 18, font: 'Arial' })],
-            }),
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              spacing: { after: 60, before: 0 },
-              children: [new TextRun({ text: arLabel, bold: true, size: 16, font: 'Arial', rightToLeft: true })],
-            }),
-          ],
-        }),
-        new TableCell({
-          width: { size: C[1], type: WidthType.DXA },
-          verticalAlign: VerticalAlign.TOP,
-          borders: ALL_BORDERS,
-          margins: { top: 60, bottom: 60, left: 100, right: 100 },
-          children: sigChildren.length ? sigChildren : [para('')],
-        }),
-        new TableCell({
-          width: { size: C[2], type: WidthType.DXA },
-          verticalAlign: VerticalAlign.TOP,
-          borders: ALL_BORDERS,
-          shading: { type: ShadingType.CLEAR, fill: 'E2F0D9', color: 'auto' },
-          margins: { top: 60, bottom: 60, left: 100, right: 100 },
-          children: biPara('Date', 'التاريخ'),
-        }),
-        new TableCell({
-          width: { size: C[3], type: WidthType.DXA },
-          verticalAlign: VerticalAlign.TOP,
-          borders: ALL_BORDERS,
-          margins: { top: 60, bottom: 60, left: 100, right: 100 },
-          children: [para(dateValue || '', { size: 18 })],
-        }),
+        cell(labelChildren, { width: spanWidth(4), colspan: 4, shading: 'E2F0D9', vAlign: VerticalAlign.CENTER }),
+        cell(signatureChildren, { width: spanWidth(4), colspan: 4, vAlign: VerticalAlign.CENTER }),
+        cell(biPara('Date', 'التاريخ'), { width: spanWidth(4), colspan: 4, shading: 'E2F0D9' }),
+        cell([para(dateValue || '', { size: 18 })], { width: spanWidth(4), colspan: 4 }),
       ],
     })
   }
 
-  const row9  = sigRow('Direct Manager Signature', 'توقيع مدير المباشر', data.manager_signature ?? null, data.manager_approved_at ? fmtDate(data.manager_approved_at) : '', data.direct_manager_name || '')
-  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', data.hr_signature ?? null, data.hr_approved_at ? fmtDate(data.hr_approved_at) : '', data.hr_name || '')
-  const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', data.depot_signature ?? null, data.approved_at ? fmtDate(data.approved_at) : '', data.depot_manager_name || '')
+  const row9  = sigRow(
+    'Direct Manager Signature',
+    'توقيع مدير المباشر',
+    managerSignatureImage,
+    !data.manager_is_depot_manager && data.manager_approved_at ? fmtApprovalDate(data.manager_approved_at) : ''
+  )
+  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', hrSignatureImage, data.hr_approved_at ? fmtApprovalDate(data.hr_approved_at) : '')
+  const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', depotSignatureImage, data.approved_at ? fmtApprovalDate(data.approved_at) : '')
 
   const mainTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
-    columnWidths: C,
+    columnWidths: GRID,
     layout: TableLayoutType.FIXED,
-    rows: [row1, row2, row3, row4, row5, row6, row7, row8, row9, row10, row11],
+    rows: [
+      row1,
+      row2, spacerRow(),
+      row3, spacerRow(),
+      row4, spacerRow(),
+      row5, row6,
+      row7, row8,
+      row9, row10, row11,
+    ],
   })
 
   // ── Footer paragraph ────────────────────────────────────────────────────
-  const footerLeft  = 'Document No: SRS-HR-P02-F03  |  Rev.: 02  |  Rev. Date: 04-May-2025'
-  const footerRight = 'Page 1 of 1'
-
   const footerTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
     columnWidths: [CONTENT_W - 1500, 1500],
@@ -606,31 +568,37 @@ export async function generateOTR(d) {
           new TableCell({
             width: { size: CONTENT_W - 1500, type: WidthType.DXA },
             borders: {
-              top: BORDER,
+              top: FORM_BORDER,
               bottom: NO_BORDERS.bottom,
               left: NO_BORDERS.left,
               right: NO_BORDERS.right,
             },
-            margins: { top: 60, bottom: 0, left: 0, right: 0 },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
             children: [
               new Paragraph({
-                children: [new TextRun({ text: footerLeft, bold: true, size: 14, font: 'Arial' })],
+                children: [
+                  new TextRun({ text: 'Document No: ', bold: true, size: 16, font: 'Arial' }),
+                  new TextRun({ text: 'SRS-HR-P02-F03', bold: true, size: 16, font: 'Arial', color: 'CC0000' }),
+                  new TextRun({ text: '  |  ', bold: true, size: 16, font: 'Arial' }),
+                  new TextRun({ text: 'Rev.: 02', bold: true, size: 16, font: 'Arial', color: 'CC0000' }),
+                  new TextRun({ text: '  |  Rev. Date: 04-May-2025', bold: true, size: 16, font: 'Arial' }),
+                ],
               }),
             ],
           }),
           new TableCell({
             width: { size: 1500, type: WidthType.DXA },
             borders: {
-              top: BORDER,
+              top: FORM_BORDER,
               bottom: NO_BORDERS.bottom,
               left: NO_BORDERS.left,
               right: NO_BORDERS.right,
             },
-            margins: { top: 60, bottom: 0, left: 0, right: 0 },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
             children: [
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: footerRight, bold: true, size: 14, font: 'Arial' })],
+                children: [new TextRun({ text: 'Page 1 of 1', bold: true, size: 16, font: 'Arial' })],
               }),
             ],
           }),
@@ -639,12 +607,12 @@ export async function generateOTR(d) {
     ],
   })
 
-  const header = new Header({
-    children: [headerTable],
-  })
-
   const footer = new Footer({
     children: [footerTable],
+  })
+
+  const header = new Header({
+    children: [headerTable],
   })
 
   // ── Document assembly ────────────────────────────────────────────────────
@@ -654,7 +622,7 @@ export async function generateOTR(d) {
         properties: {
           page: {
             size: { width: PAGE_W, height: PAGE_H },
-            margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN, header: 720, footer: 720 },
+            margin: { top: 1650, right: MARGIN, bottom: 900, left: MARGIN, header: 300, footer: 760 },
           },
         },
         headers: { default: header },
@@ -667,6 +635,19 @@ export async function generateOTR(d) {
     ],
   })
 
-  const blob = await Packer.toBlob(doc)
-  saveAs(blob, `OTR-${data.tracking_no || 'export'}.docx`)
+  const packedBlob = await Packer.toBlob(doc)
+  const blob = new Blob([packedBlob], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  const trackingNo = String(data.tracking_no || 'export').trim()
+  const fileName = /^OTR-/i.test(trackingNo) ? trackingNo : `OTR-${trackingNo}`
+  if (download) saveAs(blob, `${fileName}.docx`)
+  return blob
+}
+
+function fmtApprovalDate(d) {
+  if (!d) return ''
+  const dt = new Date(d)
+  if (isNaN(dt)) return d
+  return `${dt.getDate()}/${dt.getMonth() + 1}/${dt.getFullYear()}`
 }

@@ -26,6 +26,7 @@ export const itAssetService = {
     ).toString()
     return req(`/it-assets${qs ? '?' + qs : ''}`)
   },
+  stats:  ()           => req('/it-assets/stats'),
   create: (data)       => req('/it-assets',      { method: 'POST',   body: JSON.stringify(data) }),
   update: (id, data)   => req(`/it-assets/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
   remove: (id)         => req(`/it-assets/${id}`, { method: 'DELETE' }),

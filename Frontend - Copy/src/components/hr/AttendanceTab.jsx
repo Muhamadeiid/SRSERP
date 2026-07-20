@@ -67,6 +67,10 @@ const attendancePolicyTime = (policy, key) => {
   return value.length === 5 ? `${value}:00` : value
 }
 const policyTimeMin = (policy, key) => toMin(attendancePolicyTime(policy, key))
+const isLateCheckIn = (time, policy = ATTENDANCE_POLICY_DEFAULTS) => {
+  const checkInMinutes = toMin(time)
+  return checkInMinutes != null && checkInMinutes > policyTimeMin(policy, 'attendance_regular_start_time')
+}
 const isInterventionEmployee = (employee) => {
   const department = String(employee?.department ?? '').toLowerCase()
   const label = String(employee?.department_label ?? '').toLowerCase()
@@ -305,6 +309,7 @@ function EmployeeSearch({ onSelect }) {
 function UploadModal({ onClose, onSuccess }) {
   const [tab, setTab]   = useState('biometric')
   const [file, setFile] = useState(null)
+  const [filePreview, setFilePreview] = useState({ records: 0, punchCodes: 0 })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg]   = useState(null)
 
@@ -316,20 +321,25 @@ function UploadModal({ onClose, onSuccess }) {
         ? await attendanceService.uploadBiometric(file)
         : await attendanceService.uploadExcel(file)
 
-      const d        = res?.data ?? {}
-      const imported = d.imported ?? d.processed ?? 0
-      const matched  = d.processed ?? 0
+      const candidates = [res?.data, res]
+      const d = candidates.find(value => value && typeof value === 'object' &&
+        ['imported', 'processed', 'file_records', 'employees_count'].some(key => Object.prototype.hasOwnProperty.call(value, key))) || {}
+      const imported = Number(d.imported ?? 0)
+      const fileRecords = Number(d.file_records ?? (filePreview.records || imported))
+      const employeesCount = Number(d.employees_count ?? d.matched_employees ?? d.punch_codes_count ?? filePreview.punchCodes ?? 0)
+      const matched  = Number(d.processed ?? d.attendance_records ?? employeesCount)
       const dates    = d.dates ?? []
       const errs     = d.errors ?? []
 
       // Build a detailed result message
       let text, warn = false
       if (tab === 'biometric') {
-        if (matched === 0 && imported > 0) {
-          text = `${imported} punch records imported — but 0 employees matched. Make sure employees have correct Punch Codes set.`
+        if (employeesCount === 0 && fileRecords > 0) {
+          text = `${fileRecords} punch records read — but 0 employees matched. Make sure employees have correct Punch Codes set.`
           warn = true
         } else {
-          text = `${imported} punch records imported → ${matched} employee record${matched !== 1 ? 's' : ''} updated`
+          text = `${employeesCount} employee${employeesCount !== 1 ? 's' : ''} matched · ${matched} attendance record${matched !== 1 ? 's' : ''} updated · ${fileRecords} punches read`
+          if (imported !== fileRecords) text += ` (${imported} new)`
           if (dates.length) text += ` (${dates.join(', ')})`
         }
       } else {
@@ -370,7 +380,24 @@ function UploadModal({ onClose, onSuccess }) {
         )}
         <label className="block border-2 border-dashed border-neutral-200 rounded-xl p-6 text-center cursor-pointer hover:border-primary/40 transition-colors">
           <input type="file" accept={tab==='biometric'?'.dat,.txt':'.xlsx,.xls,.csv'} className="sr-only"
-            onChange={e => { setFile(e.target.files[0]); setMsg(null) }} />
+            onChange={async e => {
+              const selected = e.target.files[0]
+              setFile(selected); setMsg(null); setFilePreview({ records: 0, punchCodes: 0 })
+              if (tab === 'biometric' && selected) {
+                try {
+                  const lines = (await selected.text()).split(/\r?\n/)
+                  const codes = new Set()
+                  let records = 0
+                  lines.forEach(line => {
+                    const parts = line.trim().split(/\s+/)
+                    if (parts.length < 6 || !/^\d+$/.test(parts[0])) return
+                    records += 1
+                    codes.add(String(Number(parts[0])))
+                  })
+                  setFilePreview({ records, punchCodes: codes.size })
+                } catch { /* The server result remains authoritative. */ }
+              }
+            }} />
           {file
             ? <p className="text-sm font-semibold text-secondary-700">{file.name}</p>
             : <><Upload className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
@@ -1090,13 +1117,15 @@ export default function AttendanceTab() {
                           {/* Location */}
                           <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{emp?.work_location ?? '—'}</td>
                           {/* Check In */}
-                          <td className="px-3 py-2.5 font-mono font-semibold text-green-600 whitespace-nowrap">
+                          <td className={`px-3 py-2.5 font-mono font-semibold whitespace-nowrap ${
+                            isLateCheckIn(rec.check_in, attendancePolicy) ? 'text-red-600' : 'text-green-600'
+                          }`}>
                             {rec.check_in
                               ? fmt12(rec.check_in)
                               : <span className="text-neutral-300">—</span>}
                           </td>
                           {/* Check Out */}
-                          <td className="px-3 py-2.5 font-mono font-semibold text-red-500 whitespace-nowrap">
+                          <td className="px-3 py-2.5 font-mono font-semibold text-blue-600 whitespace-nowrap">
                             {rec.check_out
                               ? fmt12(rec.check_out)
                               : <span className="text-neutral-300">—</span>}
@@ -1352,12 +1381,12 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center font-mono">
                                 {onLeave
                                   ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-[10px] font-bold rounded-full uppercase">On Leave</span>
-                                  : rec?.check_in ? <span className="text-green-600 font-semibold">{fmt12(rec.check_in)}</span> : ''}
+                                  : rec?.check_in ? <span className={`${isLateCheckIn(rec.check_in, attendancePolicy) ? 'text-red-600' : 'text-green-600'} font-semibold`}>{fmt12(rec.check_in)}</span> : ''}
                               </td>
                               <td className="px-2 py-2 text-center font-mono">
                                 {onLeave
                                   ? <span className="text-violet-600 text-[10px] font-semibold capitalize">{(r.leave.leave_type||'').replace('_',' ')}</span>
-                                  : rec?.check_out ? <span className="text-red-500 font-semibold">{fmt12(rec.check_out)}</span> : ''}
+                                  : rec?.check_out ? <span className="text-blue-600 font-semibold">{fmt12(rec.check_out)}</span> : ''}
                               </td>
                               <td className="px-2 py-2 text-center font-bold font-mono">
                                 {onLeave

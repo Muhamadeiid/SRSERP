@@ -24,10 +24,12 @@ export default function Login() {
     e.preventDefault()
     dispatch(loginStart())
     try {
-      const data = await login(email, password)
+      const data = await login(email.trim().toLowerCase(), password)
       dispatch(loginSuccess(data))
     } catch (err) {
-      dispatch(loginFailure(err.response?.data?.message || 'Invalid credentials'))
+      const message = err.response?.data?.message
+        || (err.request ? 'Cannot connect to the server. Please refresh and try again.' : err.message)
+      dispatch(loginFailure(message))
     }
   }
 
@@ -67,6 +69,9 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="you@srs.com"
                 required
                 className="w-full px-3 py-2.5 text-sm bg-white border border-[#e2e4ea] rounded-lg text-[#1a1f36] placeholder-[#c0c4d0] outline-none focus:border-[#1e2d5a] focus:ring-2 focus:ring-[#1e2d5a]/10 transition-all"
@@ -82,6 +87,9 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="••••••••"
                 required
                 className="w-full px-3 py-2.5 text-sm bg-white border border-[#e2e4ea] rounded-lg text-[#1a1f36] placeholder-[#c0c4d0] outline-none focus:border-[#1e2d5a] focus:ring-2 focus:ring-[#1e2d5a]/10 transition-all"

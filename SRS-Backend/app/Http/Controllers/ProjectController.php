@@ -18,7 +18,7 @@ class ProjectController extends Controller
         $projects = Project::orderBy('sort')->orderBy('id')->get();
 
         $counts = [];
-        Employee::select('project_budget', 'work_location')->chunk(500, function ($employees) use (&$counts) {
+        Employee::active()->select('project_budget', 'work_location')->chunk(500, function ($employees) use (&$counts) {
             foreach ($employees as $employee) {
                 $code = Project::codeFor($employee->project_budget, $employee->work_location);
                 $counts[$code] = ($counts[$code] ?? 0) + 1;
@@ -56,12 +56,12 @@ class ProjectController extends Controller
     public function destroy(Project $project)
     {
         $prefixCount = $project->match_prefix
-            ? Employee::where('project_budget', 'like', $project->match_prefix.'%')->count()
+            ? Employee::active()->where('project_budget', 'like', $project->match_prefix.'%')->count()
             : 0;
 
         $locationCount = 0;
         foreach (Project::splitLocations($project->match_locations) as $location) {
-            $locationCount += Employee::where('work_location', $location)->count();
+            $locationCount += Employee::active()->where('work_location', $location)->count();
         }
 
         $usedCount = $prefixCount + $locationCount;

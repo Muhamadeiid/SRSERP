@@ -30,6 +30,14 @@ class ITAssetController extends Controller
             $q->where('item', $request->item);
         }
 
+        if ($request->filled('status') && $request->status !== 'all') {
+            $q->where('status', $request->status);
+        }
+
+        if ($request->filled('condition') && $request->condition !== 'all') {
+            $q->where('condition', $request->condition);
+        }
+
         $perPage = (int) $request->get('per_page', 50);
         $result  = $q->paginate($perPage);
 
@@ -42,6 +50,23 @@ class ITAssetController extends Controller
                 'current_page' => $result->currentPage(),
                 'last_page'    => $result->lastPage(),
             ],
+        ]);
+    }
+
+    public function stats(): JsonResponse
+    {
+        $counts = ITAsset::selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return response()->json([
+            'total'       => (int) $counts->sum(),
+            'available'   => (int) ($counts['Available'] ?? 0),
+            'assigned'    => (int) ($counts['Assigned'] ?? 0),
+            'damaged'     => (int) ($counts['Damaged'] ?? 0),
+            'lost'        => (int) ($counts['Lost'] ?? 0),
+            'maintenance' => (int) ($counts['Maintenance'] ?? 0),
+            'good'        => ITAsset::where('condition', 'Good')->count(),
         ]);
     }
 
@@ -62,14 +87,21 @@ class ITAssetController extends Controller
             'managing_staff'        => 'nullable|string|max:255',
             'maintenance_frequency' => 'nullable|string|max:100',
             'activity'              => 'nullable|string|max:255',
+            'condition'             => 'nullable|in:Good,Damaged,Lost',
+            'status'                => 'nullable|in:Available,Assigned,Damaged,Lost,Maintenance',
             'notes'                 => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails())
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
+        $validated = $validator->validated();
+        if (!empty($validated['user_name']) && empty($validated['status'])) {
+            $validated['status'] = 'Assigned';
+        }
+
         $asset = ITAsset::create([
-            ...$validator->validated(),
+            ...$validated,
             'qty'        => $request->input('qty', 1),
             'created_by' => auth()->id(),
         ]);
@@ -94,13 +126,33 @@ class ITAssetController extends Controller
             'managing_staff'        => 'nullable|string|max:255',
             'maintenance_frequency' => 'nullable|string|max:100',
             'activity'              => 'nullable|string|max:255',
+            'condition'             => 'nullable|in:Good,Damaged,Lost',
+            'status'                => 'nullable|in:Available,Assigned,Damaged,Lost,Maintenance',
             'notes'                 => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails())
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
 
-        $itAsset->update($validator->validated());
+        $data = $validator->validated();
+        $activeHolder = $itAsset->employeeAssets()
+            ->where('status', 'Active')
+            ->with('employee:id,name')
+            ->first();
+
+        if ($activeHolder) {
+            $data['status'] = 'Assigned';
+            $data['condition'] = 'Good';
+            $data['user_name'] = $activeHolder->employee?->name;
+        } else {
+            $condition = $data['condition'] ?? $itAsset->condition;
+            if ($condition === 'Damaged') $data['status'] = 'Damaged';
+            if ($condition === 'Lost') $data['status'] = 'Lost';
+            if (($data['status'] ?? null) === 'Available') $data['condition'] = 'Good';
+            if (($data['status'] ?? null) === 'Assigned') $data['status'] = 'Available';
+        }
+
+        $itAsset->update($data);
 
         return response()->json(['success' => true, 'data' => $itAsset->fresh()]);
     }
@@ -108,6 +160,12 @@ class ITAssetController extends Controller
     // DELETE /api/it-assets/{id}
     public function destroy(ITAsset $itAsset): JsonResponse
     {
+        if ($itAsset->employeeAssets()->where('status', 'Active')->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Return this asset before deleting it',
+            ], 422);
+        }
         $itAsset->delete();
         return response()->json(['success' => true]);
     }
@@ -127,6 +185,13 @@ class ITAssetController extends Controller
             'condition'         => 'nullable|in:Good,Damaged,Lost',
             'notes'             => 'nullable|string|max:1000',
         ]);
+
+        if ($itAsset->status !== 'Available' || $itAsset->condition !== 'Good') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This IT asset is not available for assignment',
+            ], 422);
+        }
 
         $activeHolder = \App\Models\EmployeeAsset::where('it_asset_id', $itAsset->id)
             ->where('status', 'Active')
@@ -163,7 +228,7 @@ class ITAssetController extends Controller
         // dashboard reflects who's using the item today.
         $emp = \App\Models\Employee::find($data['employee_id']);
         if ($emp) {
-            $itAsset->update(['user_name' => $emp->name]);
+            $itAsset->update(['user_name' => $emp->name, 'status' => 'Assigned']);
         }
 
         return response()->json([

@@ -15,7 +15,9 @@ import {
   VerticalAlign,
   WidthType,
 } from 'docx'
-import { saveAs } from 'file-saver'
+import FileSaver from 'file-saver'
+
+const saveAs = FileSaver.saveAs || FileSaver
 
 const PAGE_W = 12240
 const PAGE_H = 15840
@@ -96,6 +98,18 @@ function makeBlankLine(length = 34) {
   return '_'.repeat(length)
 }
 
+function formatDepartment(value) {
+  const labels = {
+    cm: 'CM',
+    hm: 'HM',
+    pm: 'PM',
+    warranty: 'Warranty',
+    cm_intervention: 'CM (Intervention)',
+    admin: 'Admin',
+  }
+  return labels[value] || value || ''
+}
+
 function flattenAssets(clearanceData) {
   return (clearanceData?.by_department || [])
     .flatMap((group) => group.assets || [])
@@ -123,8 +137,10 @@ async function loadLogo() {
 function employeeTable(employee) {
   const rows = [
     ['Employee name', 'اسم الموظف', employee?.name || ''],
-    ['Job tittle', 'المسمى الوظيفي', employee?.position || employee?.job_title || ''],
-    ['Department', 'الادارة', employee?.department || ''],
+    ['IBS Code', 'كود الموظف', employee?.ibs_code || ''],
+    ['Job title', 'المسمى الوظيفي', employee?.position || employee?.job_title || ''],
+    ['Department', 'الادارة', formatDepartment(employee?.department)],
+    ['Work Location', 'موقع العمل', employee?.work_location || ''],
   ]
 
   return new Table({
@@ -151,8 +167,11 @@ function assetTable(assets) {
           cell(paragraph(text(String(index + 1))), { width: 611 }),
           cell(paragraph(text(asset.asset_name || asset.asset_description || '')), { width: 3258 }),
           cell(paragraph(text(asset.asset_code || '')), { width: 1832 }),
-          cell(paragraph(text(asset.serial_number || asset.asset_serial_no || asset.asset_code || '')), { width: 2647 }),
-          cell(paragraph(text(asset.notes || asset.condition || '')), { width: 1832 }),
+          cell(paragraph(text(asset.it_asset?.serial_number || asset.serial_number || asset.asset_serial_no || '')), { width: 2647 }),
+          cell(paragraph(text([
+            asset.condition,
+            asset.notes,
+          ].filter(Boolean).join(' - '))), { width: 1832 }),
         ],
       }))
     : Array.from({ length: EMPTY_ASSET_ROWS }, () => new TableRow({
@@ -249,10 +268,11 @@ function footerTable() {
   })
 }
 
-export async function generateAssetReturnReport({ employee, clearanceData }) {
+export async function buildAssetReturnReport({ employee, clearanceData, logoBytes: suppliedLogoBytes = null }) {
   const normalizedClearance = normalizeClearance(clearanceData)
+  const reportEmployee = normalizedClearance.employee || employee || {}
   const activeAssets = flattenAssets(normalizedClearance)
-  const logoBytes = await loadLogo()
+  const logoBytes = suppliedLogoBytes || await loadLogo()
   const today = formatDate(new Date())
 
   const header = new Header({
@@ -274,7 +294,7 @@ export async function generateAssetReturnReport({ employee, clearanceData }) {
             children: [
               cell(
                 logoBytes
-                  ? paragraph(new ImageRun({ data: logoBytes, transformation: { width: 108, height: 34 } }), { align: AlignmentType.LEFT })
+                  ? paragraph(new ImageRun({ data: logoBytes, type: 'png', transformation: { width: 108, height: 34 } }), { align: AlignmentType.LEFT })
                   : paragraph(text('Rotem SRS', { bold: true })),
                 {
                   width: 2496,
@@ -325,17 +345,17 @@ export async function generateAssetReturnReport({ employee, clearanceData }) {
             { size: 19, rtl: true }
           ), { rtl: true, align: AlignmentType.RIGHT, spacing: { before: 0, after: 140 } }),
           paragraph(text('■ Employee Details:', { bold: true, size: 24 }), { spacing: { before: 0, after: 60 } }),
-          employeeTable(employee),
+          employeeTable(reportEmployee),
           paragraph(text(''), { spacing: { before: 120, after: 0 } }),
           paragraph(text('■ Asset Details:', { bold: true, size: 24 }), { spacing: { before: 0, after: 60 } }),
           paragraph([
             text('I, ', { size: 19 }),
-            text(employee?.name || makeBlankLine(20), { size: 19 }),
+            text(reportEmployee?.name || makeBlankLine(20), { size: 19 }),
             text(' hereby acknowledge that I have handed over the below mentioned assets to Material Controller "Referred to Receiver". I understand that this asset belongs to Rotem SRS Egypt and was under my possession. I hereby assure that I had taken care of the assets of the company to the best possible extend.', { size: 19 }),
           ], { spacing: { before: 0, after: 60 } }),
           paragraph([
             text('أقرأنا ', { size: 19, rtl: true }),
-            text(employee?.name || makeBlankLine(20), { size: 19, rtl: true }),
+            text(reportEmployee?.name || makeBlankLine(20), { size: 19, rtl: true }),
             text(' بموجب هذا بأنني قمت بتسليم الأصول المذكورة أدناه إلى مراقب المواد "المحال إلى المستلم". أفهم أن هذه الأصول تخص روتم إس آر إس إيجيبت وكانت تحت حوزتي. أوكد بموجب هذا أنني اعتنيت بأصول الشركة إلى أقصى حد ممكن..', { size: 19, rtl: true }),
           ], { rtl: true, align: AlignmentType.RIGHT, spacing: { before: 0, after: 90 } }),
           assetTable(activeAssets),
@@ -348,5 +368,14 @@ export async function generateAssetReturnReport({ employee, clearanceData }) {
   })
 
   const blob = await Packer.toBlob(doc)
-  saveAs(blob, `Asset_Return_${sanitizeFileName(employee?.name)}.docx`)
+  return {
+    blob,
+    fileName: `Asset_Return_${sanitizeFileName(reportEmployee?.name)}.docx`,
+    activeAssetCount: activeAssets.length,
+  }
+}
+
+export async function generateAssetReturnReport({ employee, clearanceData }) {
+  const report = await buildAssetReturnReport({ employee, clearanceData })
+  saveAs(report.blob, report.fileName)
 }

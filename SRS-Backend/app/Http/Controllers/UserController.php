@@ -14,7 +14,7 @@ class UserController extends Controller
         $users = User::with('manager:id,name')->get();
 
         // Attach the linked employee record (name, position) for each user
-        $empByUserId = Employee::whereIn('user_id', $users->pluck('id'))
+        $empByUserId = Employee::active()->whereIn('user_id', $users->pluck('id'))
             ->select('id', 'name', 'position', 'department', 'user_id')
             ->get()
             ->keyBy('user_id');
@@ -94,7 +94,7 @@ class UserController extends Controller
                   ->orWhere('role', 'depot_manager');
             })
             ->where('is_active', true)
-            ->withCount(['assignedEmployees'])
+            ->withCount(['assignedEmployees' => fn ($q) => $q->active()])
             ->orderByRaw("FIELD(role, 'depot_manager', 'manager', 'hr', 'admin')")
             ->get(['id', 'name', 'email', 'role', 'department', 'is_team_manager']);
 
@@ -110,7 +110,15 @@ class UserController extends Controller
     {
         $dm = User::where('role', 'depot_manager')
             ->where('is_active', true)
-            ->first(['id', 'name', 'email']);
+            ->first(['id', 'name', 'email', 'role', 'e_signature']);
+
+        if ($dm) {
+            $employee = Employee::active()->where('user_id', $dm->id)->first(['name', 'e_signature']);
+            if ($employee) {
+                $dm->setAttribute('name', $employee->name ?: $dm->name);
+                $dm->setAttribute('e_signature', $employee->e_signature ?: $dm->e_signature);
+            }
+        }
 
         return response()->json($dm);
     }
@@ -124,7 +132,15 @@ class UserController extends Controller
     {
         $hr = User::where('role', 'hr')
             ->where('is_active', true)
-            ->first(['id', 'name', 'email', 'role']);
+            ->first(['id', 'name', 'email', 'role', 'e_signature']);
+
+        if ($hr) {
+            $employee = Employee::active()->where('user_id', $hr->id)->first(['name', 'e_signature']);
+            if ($employee) {
+                $hr->setAttribute('name', $employee->name ?: $hr->name);
+                $hr->setAttribute('e_signature', $employee->e_signature ?: $hr->e_signature);
+            }
+        }
 
         return response()->json($hr);
     }
@@ -135,7 +151,7 @@ class UserController extends Controller
      */
     public function assignedEmployees(User $user)
     {
-        $employees = Employee::where('user_manager_id', $user->id)
+        $employees = Employee::active()->where('user_manager_id', $user->id)
             ->orderBy('name')
             ->get(['id', 'name', 'ibs_code', 'position', 'department', 'user_manager_id']);
 
@@ -157,11 +173,11 @@ class UserController extends Controller
         Employee::where('user_id', $user->id)->update(['user_id' => null]);
 
         if ($data['employee_id']) {
-            Employee::where('id', $data['employee_id'])->update(['user_id' => $user->id]);
+            Employee::active()->where('id', $data['employee_id'])->update(['user_id' => $user->id]);
         }
 
         $linked = $data['employee_id']
-            ? Employee::where('id', $data['employee_id'])->select('id', 'name', 'position', 'department')->first()
+            ? Employee::active()->where('id', $data['employee_id'])->select('id', 'name', 'position', 'department')->first()
             : null;
 
         return response()->json(['success' => true, 'linked_employee' => $linked]);
@@ -179,7 +195,7 @@ class UserController extends Controller
             'assign'      => 'required|boolean',
         ]);
 
-        Employee::where('id', $data['employee_id'])
+        Employee::active()->where('id', $data['employee_id'])
             ->update(['user_manager_id' => $data['assign'] ? $user->id : null]);
 
         return response()->json(['success' => true]);

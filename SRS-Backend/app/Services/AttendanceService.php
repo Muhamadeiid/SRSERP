@@ -22,6 +22,8 @@ class AttendanceService
         $imported = 0;
         $errors   = [];
         $dates    = [];
+        $fileRecords = 0;
+        $filePunchCodes = [];
 
         try {
             $content = file_get_contents($filePath);
@@ -62,6 +64,9 @@ class AttendanceService
                         continue;
                     }
 
+                    $fileRecords++;
+                    $filePunchCodes[$punchCode] = true;
+
                     // Always track dates from the file (even duplicates) so we can
                     // force-reprocess them if no new rows were inserted.
                     $dates[] = $ts->toDateString();
@@ -88,11 +93,13 @@ class AttendanceService
             $uniqueDates = array_values(array_unique($dates));
 
             // If all records were duplicates (file already uploaded before),
-            // reset processed=false for those dates so they get re-processed
-            // with the latest logic (e.g. after a bug fix).
+            // re-process only the people contained in this file. Resetting every
+            // employee on the same dates made the result count misleading and
+            // needlessly slowed down duplicate uploads.
             if ($imported === 0 && !empty($uniqueDates)) {
                 DB::table('attendance_logs')
                     ->whereIn(DB::raw('DATE(timestamp)'), $uniqueDates)
+                    ->whereIn('punch_code', array_keys($filePunchCodes))
                     ->update(['processed' => false, 'updated_at' => now()]);
             }
 
@@ -103,10 +110,21 @@ class AttendanceService
             $processed = $processResult['processed'];
             $errors = array_merge($errors, $processResult['warnings']);
 
+            $employeeByPunchCode = $this->employeePunchCodeMap();
+            $matchedEmployeeIds = [];
+            foreach (array_keys($filePunchCodes) as $code) {
+                if (isset($employeeByPunchCode[$code])) {
+                    $matchedEmployeeIds[$employeeByPunchCode[$code]->id] = true;
+                }
+            }
+
             return [
                 'success'   => true,
                 'imported'  => $imported,
                 'processed' => $processed,
+                'file_records' => $fileRecords,
+                'employees_count' => count($matchedEmployeeIds),
+                'punch_codes_count' => count($filePunchCodes),
                 'dates'     => $uniqueDates,
                 'errors'    => $errors,
             ];
@@ -259,7 +277,7 @@ class AttendanceService
         $seen = [];
         $duplicates = [];
 
-        Employee::whereNotNull('punch_code')
+        Employee::active()->whereNotNull('punch_code')
             ->get(['id', 'punch_code'])
             ->each(function (Employee $employee) use (&$map, &$seen, &$duplicates) {
                 $raw = trim((string) $employee->punch_code);
@@ -401,7 +419,7 @@ class AttendanceService
                 }
 
                 // Find employee
-                $employee = Employee::where('ibs_code', trim($ibsCode))->first();
+                $employee = Employee::active()->where('ibs_code', trim($ibsCode))->first();
                 if (!$employee) {
                     $errors[] = "Row " . ($i + 1) . ": Employee '{$ibsCode}' not found";
                     $skipped++;
@@ -460,7 +478,7 @@ class AttendanceService
             $checkIn  = Carbon::parse($data['date'] . ' ' . $data['check_in']);
             $checkOut = Carbon::parse($data['date'] . ' ' . $data['check_out']);
 
-            $employee       = Employee::findOrFail($data['employee_id']);
+            $employee       = Employee::active()->findOrFail($data['employee_id']);
             $expectedHours  = $this->getExpectedHours($employee);
             $isIntervention = $employee->isIntervention();
 
@@ -488,7 +506,12 @@ class AttendanceService
      */
     public function getAttendance(array $filters = [])
     {
-        $query = Attendance::with(['employee', 'creator']);
+        // Attendance tables only display a small employee summary. Avoid loading
+        // the full HR record (documents, contacts and signature image) per row.
+        $query = Attendance::with([
+            'employee:id,name,arabic_name,ibs_code,punch_code,position,department,work_location,category,saturday_group,weekly_off_day',
+            'creator:id,name',
+        ]);
 
         // Filter by employee
         if (!empty($filters['employee_id'])) {

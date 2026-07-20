@@ -6,6 +6,29 @@
 // src/services/employeeService.js
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
+const readCache = new Map()
+const inFlightReads = new Map()
+
+function invalidateEmployeeReads() {
+  readCache.clear()
+  inFlightReads.clear()
+}
+
+function cachedRequest(path, ttlMs = 15000) {
+  const cacheKey = `${localStorage.getItem('srs_token') || 'anonymous'}:${path}`
+  const cached = readCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value)
+  if (inFlightReads.has(cacheKey)) return inFlightReads.get(cacheKey)
+
+  const promise = request(path)
+    .then(value => {
+      readCache.set(cacheKey, { value, expiresAt: Date.now() + ttlMs })
+      return value
+    })
+    .finally(() => inFlightReads.delete(cacheKey))
+  inFlightReads.set(cacheKey, promise)
+  return promise
+}
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
@@ -46,20 +69,23 @@ export function getEmployees(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined))
   ).toString()
-  return request(`/employees${qs ? '?' + qs : ''}`)
+  return cachedRequest(`/employees${qs ? '?' + qs : ''}`, 15000)
 }
 
 /** Autocomplete search — accessible to all roles */
 export function searchEmployees(search) {
-  return request(`/employees/autocomplete?search=${encodeURIComponent(search)}`)
+  return cachedRequest(`/employees/autocomplete?search=${encodeURIComponent(search)}`, 10000)
 }
 
-export function getEmployeeStats() {
-  return request('/employees/stats')
+export function getEmployeeStats(params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined))
+  ).toString()
+  return cachedRequest(`/employees/stats${qs ? '?' + qs : ''}`, 30000)
 }
 
 export function getEmployee(id) {
-  return request(`/employees/${id}`)
+  return cachedRequest(`/employees/${id}`, 30000)
 }
 
 // ── Depot Manager & HR (auto-fill on forms) ─────────────────
@@ -90,28 +116,31 @@ function cleanPayload(data) {
 
 export function createEmployee(data) {
   return request('/employees', { method: 'POST', body: JSON.stringify(cleanPayload(data)) })
+    .then(result => { invalidateEmployeeReads(); return result })
 }
 
 export function updateEmployee(id, data) {
   return request(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(cleanPayload(data)) })
+    .then(result => { invalidateEmployeeReads(); return result })
 }
 
 export function bulkUpdateSaturdayGroup(employeeIds, saturdayGroup) {
   return request('/employees/bulk-saturday-group', {
     method: 'POST',
     body: JSON.stringify({ employee_ids: employeeIds, saturday_group: saturdayGroup }),
-  })
+  }).then(result => { invalidateEmployeeReads(); return result })
 }
 
 export function bulkUpdateDirectManager(employeeIds, directManagerId) {
   return request('/employees/bulk-direct-manager', {
     method: 'POST',
     body: JSON.stringify({ employee_ids: employeeIds, direct_manager_id: directManagerId }),
-  })
+  }).then(result => { invalidateEmployeeReads(); return result })
 }
 
 export function deleteEmployee(id) {
   return request(`/employees/${id}`, { method: 'DELETE' })
+    .then(result => { invalidateEmployeeReads(); return result })
 }
 
 /** Upload Excel file → returns { imported, errors } */
@@ -122,7 +151,7 @@ export function importEmployees(file) {
     method: 'POST',
     headers: { Accept: 'application/json' }, // no Content-Type – let browser set multipart boundary
     body: form,
-  })
+  }).then(result => { invalidateEmployeeReads(); return result })
 }
 
 /** Download Excel – returns Blob */

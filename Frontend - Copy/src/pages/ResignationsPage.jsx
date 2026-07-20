@@ -357,6 +357,7 @@ export default function ResignationsPage() {
       await updateEmployee(form.employee_id, {
         name:              form.full_name,
         position:          form.current_title,
+        resignation_date:  form.resign_start_date,
         last_working_date: form.last_working_date,
       })
     } catch (err) {

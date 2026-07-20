@@ -148,6 +148,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/assets/{asset}/return',                    [EmployeeAssetController::class, 'markReturned']);
 
         // IT Asset Register
+        Route::get('/it-assets/stats',               [ITAssetController::class, 'stats']);
         Route::get('/it-assets',                     [ITAssetController::class, 'index']);
         Route::post('/it-assets',                    [ITAssetController::class, 'store']);
         Route::put('/it-assets/{itAsset}',           [ITAssetController::class, 'update']);

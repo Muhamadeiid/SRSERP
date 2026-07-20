@@ -40,7 +40,7 @@ class Employee extends Model
         'contract_start', 'contract_end',
         // Resignation — set from the ERF form. When last_working_date < today the
         // employee is auto-filtered out of the Workforce and appears in Ex-Employees.
-        'last_working_date',
+        'resignation_date', 'last_working_date',
         // HR Forms
         'vacation_form', 'sanctions_form', 'marital_status_form', 'no_warning_letters',
         // App status
@@ -69,6 +69,7 @@ class Employee extends Model
         'insurance_date'              => 'date',
         'contract_start'              => 'date',
         'contract_end'                => 'date',
+        'resignation_date'            => 'date',
         'last_working_date'           => 'date',
         'manager_manual'              => 'boolean',
         // Document flags

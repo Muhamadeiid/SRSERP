@@ -26,6 +26,18 @@ const ATTENDANCE_POLICY_DEFAULTS = {
   attendance_group_a_off_even_week: '1',
 }
 
+const DEFAULT_OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
+const DEFAULT_LEAVE_PURPOSE_OPTIONS = ['Sick | مرضي', 'Personal matter | أمر شخصي']
+
+const optionsSettingText = (value, fallback) => {
+  if (!value) return fallback.join('\n')
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.filter(Boolean).join('\n')
+  } catch { /* newline-separated settings are the normal format */ }
+  return String(value)
+}
+
 export default function SettingsPage() {
   // ── Org Structure state ───────────────────────────────────────────
   const [managers,       setManagers]       = useState([])
@@ -48,6 +60,13 @@ export default function SettingsPage() {
   const [leaveDefSaved,  setLeaveDefSaved]  = useState(false)
   const [leaveDefSaving, setLeaveDefSaving] = useState(false)
 
+  const [formOptions, setFormOptions] = useState({
+    otr_result_options: DEFAULT_OTR_RESULT_OPTIONS.join('\n'),
+    leave_purpose_options: DEFAULT_LEAVE_PURPOSE_OPTIONS.join('\n'),
+  })
+  const [formOptionsSaved, setFormOptionsSaved] = useState(false)
+  const [formOptionsSaving, setFormOptionsSaving] = useState(false)
+
   const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
   const [attendancePolicySaved, setAttendancePolicySaved] = useState(false)
   const [attendancePolicySaving, setAttendancePolicySaving] = useState(false)
@@ -61,6 +80,10 @@ export default function SettingsPage() {
         default_annual_days: parseInt(r.data?.default_annual_days ?? 21),
         default_casual_days: parseInt(r.data?.default_casual_days ?? 7),
         default_sick_days:   parseInt(r.data?.default_sick_days   ?? 90),
+      })
+      setFormOptions({
+        otr_result_options: optionsSettingText(r.data?.otr_result_options, DEFAULT_OTR_RESULT_OPTIONS),
+        leave_purpose_options: optionsSettingText(r.data?.leave_purpose_options, DEFAULT_LEAVE_PURPOSE_OPTIONS),
       })
       setAttendancePolicy({
         ...ATTENDANCE_POLICY_DEFAULTS,
@@ -134,6 +157,18 @@ export default function SettingsPage() {
       setHrSaved(true)
       setTimeout(() => setHrSaved(false), 2500)
     } finally { setHrSaving(false) }
+  }
+
+  const handleSaveFormOptions = async () => {
+    setFormOptionsSaving(true)
+    try {
+      await Promise.all([
+        saveSetting('otr_result_options', formOptions.otr_result_options),
+        saveSetting('leave_purpose_options', formOptions.leave_purpose_options),
+      ])
+      setFormOptionsSaved(true)
+      setTimeout(() => setFormOptionsSaved(false), 2500)
+    } finally { setFormOptionsSaving(false) }
   }
 
   const setPolicy = (key, value) => {
@@ -476,6 +511,47 @@ export default function SettingsPage() {
                 {hrSaved ? <><Check className="w-4 h-4" /> Saved</> : hrSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 flex items-center gap-2">
+          <Tag className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-bold text-secondary-700">Leave & Overtime Options</h2>
+          <p className="text-xs text-neutral-400 ml-2">Add one option per line</p>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Leave Request Purposes</label>
+            <textarea
+              rows={5}
+              value={formOptions.leave_purpose_options}
+              onChange={e => { setFormOptions(p => ({ ...p, leave_purpose_options: e.target.value })); setFormOptionsSaved(false) }}
+              placeholder="Sick&#10;Personal matter"
+              className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors resize-y"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Overtime Result Options</label>
+            <textarea
+              rows={5}
+              value={formOptions.otr_result_options}
+              onChange={e => { setFormOptions(p => ({ ...p, otr_result_options: e.target.value })); setFormOptionsSaved(false) }}
+              placeholder="Task is done&#10;Task is still pending"
+              className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors resize-y"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <button
+              onClick={handleSaveFormOptions}
+              disabled={formOptionsSaving}
+              className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-xl transition-all ${
+                formOptionsSaved ? 'bg-green-600 text-white' : 'bg-primary text-white hover:bg-primary/90 disabled:opacity-40'
+              }`}
+            >
+              {formOptionsSaved ? <><Check className="w-4 h-4" /> Saved</> : formOptionsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Form Options'}
+            </button>
           </div>
         </div>
       </div>

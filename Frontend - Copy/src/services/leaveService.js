@@ -26,6 +26,7 @@ export const getLeaveRequests  = (params = {}) => {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v]) => v))).toString()
   return request(`/leave-requests${qs ? '?' + qs : ''}`)
 }
+export const getLeaveRequest   = (id) => request(`/leave-requests/${id}`)
 export const getCalendarLeaves = () => request('/leave-requests/calendar')
 export const createLeaveRequest = (data)     => request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
 export const managerApproveLeave = (id)          => request(`/leave-requests/${id}/manager-approve`, { method: 'POST' })

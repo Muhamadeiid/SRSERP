@@ -121,9 +121,7 @@ function lrfTwoNameData(d = {}) {
 }
 
 function depotManagerNameFor(d) {
-  return d?.approver?.role === 'depot_manager'
-    ? twoName(d.approver.name)
-    : twoName(d?.depot_manager_name || DEPOT_MGR_FALLBACK)
+  return twoName(d?.approver?.name || d?.depot_manager_name || DEPOT_MGR_FALLBACK)
 }
 
 function para(text, opts = {}) {
@@ -180,7 +178,7 @@ const HR_OFFICER_FALLBACK = 'Hazem Khaled'
 const DEPOT_MGR_FALLBACK  = 'Mohamed Awaad'
 
 // ── main export ────────────────────────────────────────────────────
-export async function generateLRF(d) {
+export async function generateLRF(d, { download = true } = {}) {
   d = { ...lrfTwoNameData(d), available_balance: formatBalance(d.available_balance) }
   const logoBytes = await loadLogoBytes()
 
@@ -348,28 +346,35 @@ export async function generateLRF(d) {
   // Label uses rowspan=2 to span both rows.
   // When the direct manager IS the depot manager (same user signed both), leave
   // the direct-manager slot blank so the depot only signs the depot row.
-  const managerIsDepot = d.manager_approver?.id && d.approver?.id
-                          ? d.manager_approver.id === d.approver.id
-                          : false;
+  const signatureParties = d.signature_parties || d.signatureParties || {}
+  const directManager = signatureParties.direct_manager || signatureParties.directManager
+    || d.employee?.direct_manager || d.employee?.directManager || null
+  const hrParty = signatureParties.hr || null
+  const depotParty = signatureParties.depot_manager || signatureParties.depotManager || null
+  const managerIsDepot = directManager?.role === 'depot_manager'
+    || directManager?.user?.role === 'depot_manager'
   const sigNames = {
     employee:  d.employee_name || '',
     alternate: d.alternate_employee_name || twoName(d.alternate_employee?.name) || '',
-    direct:    managerIsDepot ? '' : (d.manager_approver?.name || d.direct_manager_name || ''),
-    hr:        d.hr_approver?.name || twoName(d.hr_name) || HR_OFFICER_FALLBACK,
-    depot:     depotManagerNameFor(d),
+    direct:    managerIsDepot ? '' : (d.direct_manager_name || directManager?.name || d.manager_approver?.name || ''),
+    hr:        hrParty?.name || twoName(d.hr_name) || HR_OFFICER_FALLBACK,
+    depot:     depotParty?.name || depotManagerNameFor(d),
   }
 
   // Resolve each signature slot to a docx image (PNG bytes). Runs in parallel.
   const [empSig, altSig, mgrSig, hrSig, depotSig] = await Promise.all([
     signatureToImage(d.employee?.e_signature),
     signatureToImage(d.alternate_employee?.e_signature),
-    signatureToImage(managerIsDepot ? null : d.manager_signature),
-    signatureToImage(d.hr_signature),
-    signatureToImage(d.depot_signature),
+    signatureToImage(managerIsDepot ? null : (directManager?.e_signature || d.manager_signature)),
+    signatureToImage(hrParty?.e_signature || d.hr_signature),
+    signatureToImage(depotParty?.e_signature || d.depot_signature),
   ])
   const sigImages = { employee: empSig, alternate: altSig, direct: mgrSig, hr: hrSig, depot: depotSig }
 
   const sigRows = (en, ar, name, image, mode = 'normal') => {
+    if (mode === 'compact') {
+      mode = 'compact'
+    }
     const compact = mode === 'compact'
     const emptyHeight = compact ? 620 : 840
     const nameHeight = compact ? 390 : 470
@@ -398,7 +403,7 @@ export async function generateLRF(d) {
     new TableRow({
       height: { value: nameHeight, rule: HeightRule.ATLEAST },
       children: [
-        cell([para(name, { size: 16, italics: true, color: '888888' })], { colspan: 8 }),
+        cell([para(name || '', { size: 16, italics: true, color: '666666' })], { colspan: 8 }),
       ],
     }),
   ]
@@ -491,5 +496,6 @@ export async function generateLRF(d) {
   })
 
   const blob = await Packer.toBlob(doc)
-  saveAs(blob, `LRF-${d.tracking_no || 'export'}.docx`)
+  if (download) saveAs(blob, `LRF-${d.tracking_no || 'export'}.docx`)
+  return blob
 }

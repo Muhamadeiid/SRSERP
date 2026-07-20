@@ -32,7 +32,7 @@ class SettingsController extends Controller
      */
     public function managers(): JsonResponse
     {
-        $managers = Employee::select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
+        $managers = Employee::active()->select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
             ->join('users', 'users.id', '=', 'employees.user_id')
             ->where(function ($q) {
                 $q->where('users.is_team_manager', true)
@@ -47,7 +47,7 @@ class SettingsController extends Controller
     /** GET /api/settings/manager/{empId}/employees — employees managed by a given employee */
     public function managerEmployees(int $empId): JsonResponse
     {
-        $employees = Employee::where('direct_manager_id', $empId)
+        $employees = Employee::active()->where('direct_manager_id', $empId)
             ->select('id', 'name', 'arabic_name', 'ibs_code', 'department')
             ->orderBy('name')
             ->get();
@@ -61,7 +61,7 @@ class SettingsController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'manager_id'  => 'nullable|exists:employees,id',
         ]);
-        Employee::where('id', $request->employee_id)
+        Employee::active()->where('id', $request->employee_id)
             ->update(['direct_manager_id' => $request->manager_id]);
         return response()->json(['success' => true]);
     }

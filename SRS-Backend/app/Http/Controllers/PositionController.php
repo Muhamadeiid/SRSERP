@@ -21,7 +21,7 @@ class PositionController extends Controller
         }
 
         if ($request->boolean('with_counts')) {
-            $q->withCount('employees');
+            $q->withCount(['employees' => fn ($employees) => $employees->active()]);
         }
 
         if ($request->filled('search')) {
@@ -38,7 +38,8 @@ class PositionController extends Controller
     public function all()
     {
         return response()->json(
-            Position::withCount('employees')->orderBy('sort')->orderBy('name_en')->get()
+            Position::withCount(['employees' => fn ($employees) => $employees->active()])
+                ->orderBy('sort')->orderBy('name_en')->get()
         );
     }
 

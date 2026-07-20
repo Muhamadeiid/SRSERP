@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { assetService } from '../../services/assetService'
 import { getEmployees } from '../../services/employeeService'
+import { listIssuingSources } from '../../services/issuingSourceService'
 import {
   Search, Plus, X, Pencil, Loader2, RefreshCw,
   Package, CheckCircle2, AlertTriangle, ChevronDown,
@@ -105,11 +106,11 @@ function EmployeePicker({ value, onChange, placeholder = 'Search employee…', c
 }
 
 // ── AssetForm modal ────────────────────────────────────────────────────────
-function AssetForm({ initial, onClose, onSaved }) {
+function AssetForm({ initial, sources, onClose, onSaved }) {
   const isEdit = !!initial?.id
   const [form, setForm] = useState({
     employee:           initial?.employee ?? null,
-    issuing_department: initial?.issuing_department ?? '',
+    issuing_source_id:  initial?.issuing_source_id ?? '',
     asset_name:         initial?.asset_name ?? '',
     asset_code:         initial?.asset_code ?? '',
     asset_category:     initial?.asset_category ?? '',
@@ -124,7 +125,7 @@ function AssetForm({ initial, onClose, onSaved }) {
 
   const save = async () => {
     if (!form.employee && !isEdit) return setErr('Please select an employee')
-    if (!form.issuing_department)  return setErr('Please select a department')
+    if (!form.issuing_source_id)   return setErr('Please select a department')
     if (!form.asset_name.trim())   return setErr('Asset name is required')
     if (!form.received_date)       return setErr('Received date is required')
 
@@ -132,7 +133,7 @@ function AssetForm({ initial, onClose, onSaved }) {
     try {
       const payload = {
         ...(isEdit ? {} : { employee_id: form.employee.id }),
-        issuing_department: form.issuing_department,
+        issuing_source_id:  Number(form.issuing_source_id),
         asset_name:         form.asset_name.trim(),
         asset_code:         form.asset_code.trim() || null,
         asset_category:     form.asset_category || null,
@@ -178,10 +179,10 @@ function AssetForm({ initial, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-neutral-500 mb-1">Issuing Department *</label>
-              <select value={form.issuing_department} onChange={set('issuing_department')}
+              <select value={form.issuing_source_id} onChange={set('issuing_source_id')}
                 className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
                 <option value="">Select…</option>
-                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                {sources.map(source => <option key={source.id} value={source.id}>{source.label_en}</option>)}
               </select>
             </div>
             <div>
@@ -421,12 +422,14 @@ ${active_count > 0 ? `
 function StatsBar({ stats }) {
   if (!stats) return null
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
       {[
         { label: 'Total Assets',    value: stats.total,    color: 'text-secondary-700' },
-        { label: 'Active / Held',   value: stats.active,   color: 'text-red-500' },
+        { label: 'Assigned / Held', value: stats.active,   color: 'text-blue-600' },
         { label: 'Returned',        value: stats.returned, color: 'text-green-600' },
-        { label: 'Departments',     value: stats.by_department?.length ?? 0, color: 'text-blue-600' },
+        { label: 'Good',            value: stats.good,     color: 'text-emerald-600' },
+        { label: 'Damaged',         value: stats.damaged,  color: 'text-orange-600' },
+        { label: 'Lost',            value: stats.lost,     color: 'text-red-600' },
       ].map(({ label, value, color }) => (
         <div key={label} className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center">
           <p className={`text-2xl font-black ${color}`}>{value}</p>
@@ -443,11 +446,13 @@ function EmployeeAssetsTab({ hideHeader = false }) {
   const [stats,       setStats]       = useState(null)
   const [loading,     setLoading]     = useState(false)
   const [pagination,  setPagination]  = useState(null)
+  const [sources,     setSources]     = useState([])
 
   // filters
   const [search,      setSearch]      = useState('')
   const [filterDept,  setFilterDept]  = useState('all')
   const [filterStatus,setFilterStatus]= useState('Active')
+  const [filterCondition, setFilterCondition] = useState('all')
   const [filterEmp,   setFilterEmp]   = useState(null)
 
   // modals
@@ -468,6 +473,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
         search:      params.search      ?? search,
         department:  params.department  ?? filterDept,
         status:      params.status      ?? filterStatus,
+        condition:   params.condition   ?? filterCondition,
         employee_id: params.employee_id ?? filterEmp?.id,
         per_page:    25,
       })
@@ -475,13 +481,19 @@ function EmployeeAssetsTab({ hideHeader = false }) {
       setPagination(res.pagination ?? null)
     } catch { setAssets([]) }
     finally { setLoading(false) }
-  }, [search, filterDept, filterStatus, filterEmp])
+  }, [search, filterDept, filterStatus, filterCondition, filterEmp])
 
   const loadStats = async () => {
     try { setStats(await assetService.stats()) } catch {}
   }
 
-  useEffect(() => { loadAssets(); loadStats() }, [filterDept, filterStatus, filterEmp])
+  useEffect(() => { loadAssets() }, [filterDept, filterStatus, filterCondition, filterEmp])
+  useEffect(() => { loadStats() }, [])
+  useEffect(() => {
+    listIssuingSources()
+      .then(data => setSources((Array.isArray(data) ? data : []).filter(source => source.is_active)))
+      .catch(() => setSources([]))
+  }, [])
 
   // debounce search
   useEffect(() => {
@@ -565,8 +577,8 @@ function EmployeeAssetsTab({ hideHeader = false }) {
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 pointer-events-none" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search asset or employee…"
-            className="pl-9 pr-4 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 w-56" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Employee, asset name or code…"
+            className="pl-9 pr-4 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 w-64" />
         </div>
 
         {/* Employee filter */}
@@ -577,7 +589,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
         <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
           className="px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
           <option value="all">All Departments</option>
-          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          {sources.map(source => <option key={source.id} value={source.id}>{source.label_en}</option>)}
         </select>
 
         {/* Status filter */}
@@ -589,6 +601,14 @@ function EmployeeAssetsTab({ hideHeader = false }) {
             </button>
           ))}
         </div>
+
+        <select value={filterCondition} onChange={e => setFilterCondition(e.target.value)}
+          className="px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
+          <option value="all">All Conditions</option>
+          <option value="Good">Good</option>
+          <option value="Damaged">Damaged</option>
+          <option value="Lost">Lost</option>
+        </select>
 
         {pagination && (
           <span className="ml-auto text-xs text-neutral-400 font-medium">
@@ -813,6 +833,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
       {showForm && (
         <AssetForm
           initial={editAsset}
+          sources={sources}
           onClose={() => { setShowForm(false); setEditAsset(null) }}
           onSaved={() => { setShowForm(false); setEditAsset(null); refresh() }}
         />
@@ -859,7 +880,7 @@ export default function AssetsTab() {
           ))}
         </div>
       </div>
-      {tab === 'employee' ? <EmployeeAssetsTab hideHeader={true} /> : <ITAssetsTab hideHeader={true} />}
+      {tab === 'employee' ? <EmployeeAssetsTab hideHeader={true} /> : <ITAssetsTab hideHeader={true} EmployeePicker={EmployeePicker} />}
     </div>
   )
 }

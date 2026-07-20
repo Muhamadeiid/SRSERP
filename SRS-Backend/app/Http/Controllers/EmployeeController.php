@@ -19,7 +19,7 @@ class EmployeeController extends Controller
     // ── GET /api/employees/autocomplete — open to all roles (leave request search)
     public function autocomplete(Request $request): JsonResponse
     {
-        $q = Employee::query()->select('id', 'name', 'arabic_name', 'position', 'department', 'work_location', 'ibs_code');
+        $q = Employee::active()->select('id', 'name', 'arabic_name', 'position', 'department', 'work_location', 'ibs_code');
         if ($request->filled('search'))
             $q->search($request->search);
         return response()->json($q->orderBy('name')->limit(10)->get());
@@ -70,7 +70,7 @@ class EmployeeController extends Controller
     // ── GET /api/employees/org-chart ───────────────────────
     public function orgChart(): JsonResponse
     {
-        $employees = Employee::select(
+        $employees = Employee::active()->select(
                 'employees.id','employees.name','employees.position',
                 'employees.department','employees.direct_manager_id',
                 'employees.status','employees.work_location',
@@ -111,20 +111,25 @@ class EmployeeController extends Controller
     }
 
     // ── GET /api/employees/stats ────────────────────────────
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
+        $employees = Employee::query();
+        $view = $request->get('view', 'active');
+        if ($view === 'ex') $employees->exEmployees();
+        elseif ($view !== 'all') $employees->active();
+
         return response()->json([
-            'total'          => Employee::count(),
-            'by_department'  => Employee::select('department', DB::raw('count(*) as count'))
+            'total'          => (clone $employees)->count(),
+            'by_department'  => (clone $employees)->select('department', DB::raw('count(*) as count'))
                                         ->groupBy('department')->pluck('count', 'department'),
-            'by_location'    => Employee::select('work_location', DB::raw('count(*) as count'))
+            'by_location'    => (clone $employees)->select('work_location', DB::raw('count(*) as count'))
                                         ->groupBy('work_location')->pluck('count', 'work_location'),
-            'by_status'      => Employee::select('status', DB::raw('count(*) as count'))
+            'by_status'      => (clone $employees)->select('status', DB::raw('count(*) as count'))
                                         ->groupBy('status')->pluck('count', 'status'),
-            'by_category'    => Employee::select('category', DB::raw('count(*) as count'))
+            'by_category'    => (clone $employees)->select('category', DB::raw('count(*) as count'))
                                         ->groupBy('category')->pluck('count', 'category'),
-            'locations'      => Employee::distinct()->pluck('work_location')->filter()->sort()->values(),
-            'missing_docs'   => Employee::missingDocs()->count(),
+            'locations'      => (clone $employees)->distinct()->pluck('work_location')->filter()->sort()->values(),
+            'missing_docs'   => (clone $employees)->missingDocs()->count(),
         ]);
     }
 
@@ -143,7 +148,7 @@ class EmployeeController extends Controller
 
         while ($managerId && !in_array($managerId, $visited)) {
             $visited[]  = $managerId;
-            $ancestor   = Employee::select('id','name','position','user_id','direct_manager_id','e_signature')
+            $ancestor   = Employee::active()->select('id','name','position','user_id','direct_manager_id','e_signature')
                             ->with('user:id,role')
                             ->find($managerId);
             if (!$ancestor) break;
@@ -229,7 +234,8 @@ class EmployeeController extends Controller
 
         $ids = array_values(array_unique($data['employee_ids']));
 
-        Employee::whereIn('id', $ids)->update([
+        $ids = Employee::active()->whereIn('id', $ids)->pluck('id')->all();
+        Employee::active()->whereIn('id', $ids)->update([
             'saturday_group' => $data['saturday_group'],
             'updated_at' => now(),
         ]);
@@ -237,7 +243,7 @@ class EmployeeController extends Controller
         return response()->json([
             'success' => true,
             'updated' => count($ids),
-            'data' => Employee::whereIn('id', $ids)->get(),
+            'data' => Employee::active()->whereIn('id', $ids)->get(),
         ]);
     }
 
@@ -251,6 +257,11 @@ class EmployeeController extends Controller
 
         $ids = array_values(array_unique($data['employee_ids']));
         $managerId = (int) $data['direct_manager_id'];
+
+        if (!Employee::active()->whereKey($managerId)->exists()) {
+            return response()->json(['message' => 'The selected manager is not an active employee.'], 422);
+        }
+        $ids = Employee::active()->whereIn('id', $ids)->pluck('id')->all();
 
         if (in_array($managerId, $ids, true)) {
             return response()->json([
@@ -266,7 +277,7 @@ class EmployeeController extends Controller
             }
         }
 
-        Employee::whereIn('id', $ids)->update([
+        Employee::active()->whereIn('id', $ids)->update([
             'direct_manager_id' => $managerId,
             'manager_manual' => true,
             'updated_at' => now(),
@@ -275,7 +286,7 @@ class EmployeeController extends Controller
         return response()->json([
             'success' => true,
             'updated' => count($ids),
-            'data' => Employee::whereIn('id', $ids)
+            'data' => Employee::active()->whereIn('id', $ids)
                 ->with('directManager:id,name,position,user_id,e_signature')
                 ->get(),
         ]);
@@ -405,6 +416,9 @@ class EmployeeController extends Controller
     public function export(Request $request): StreamedResponse
     {
         $q = Employee::query();
+        $view = $request->get('view', 'active');
+        if ($view === 'ex') $q->exEmployees();
+        elseif ($view !== 'all') $q->active();
         if ($request->filled('department') && $request->department !== 'all')
             $q->byDepartment($request->department);
         if ($request->filled('location') && $request->location !== 'all')
@@ -700,6 +714,7 @@ class EmployeeController extends Controller
             'insurance_date'=> 'nullable|date',
             'contract_start'=> 'nullable|date',
             'contract_end'  => 'nullable|date',
+            'resignation_date' => 'nullable|date',
             'last_working_date' => 'nullable|date',
             'category'     => 'nullable|in:Blue Collar,White Collar',
             'status'       => 'nullable|in:on_site,annual_leave,cert_expired,suspended,terminated,remote',

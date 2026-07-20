@@ -82,7 +82,7 @@ export default function WeeklyLeaveReportPage() {
     try {
       const [leaveRes, employeeRes, disciplinaryRes] = await Promise.all([
         getLeaveRequests(),
-        getEmployees({ view: 'all', per_page: 2000, sort_by: 'name', sort_dir: 'asc' }),
+        getEmployees({ view: 'active', per_page: 2000, sort_by: 'name', sort_dir: 'asc' }),
         getAllDisciplinaryCases(),
       ])
       setReqs(leaveRes?.data ?? [])

@@ -25,6 +25,8 @@ class ITAsset extends Model
         'managing_staff',
         'maintenance_frequency',
         'activity',
+        'condition',
+        'status',
         'notes',
         'created_by',
     ];
@@ -33,6 +35,11 @@ class ITAsset extends Model
         'registration_date' => 'date',
         'qty'               => 'integer',
     ];
+
+    public function employeeAssets()
+    {
+        return $this->hasMany(EmployeeAsset::class, 'it_asset_id');
+    }
 
     public function creator()
     {
