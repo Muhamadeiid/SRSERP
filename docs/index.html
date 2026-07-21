@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PetConnect — اكتشف</title>
+</head>
+<body>
+<style>
+:root {
+  --bg: #F5F7F3;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #2D6A4F;
+  --primary-hover: #245A42;
+  --primary-light: #E8F3ED;
+  --accent: #E8983E;
+  --accent-light: #FEF4E8;
+  --ink: #1A2E1F;
+  --ink-2: #5A6E5F;
+  --ink-3: #8A9B8E;
+  --border: #E2E8E0;
+  --danger: #C4654A;
+  --scrim: rgba(10,20,12,.55);
+  --sheet-bg: #FFFFFF;
+  --chip-bg: #EEF2EC;
+  --chip-active-bg: #2D6A4F;
+  --chip-active-ink: #FFFFFF;
+  --chip-ink: #5A6E5F;
+  --overlay: rgba(0,0,0,.45);
+  --toast-bg: #1A2E1F;
+  --toast-ink: #E8F3ED;
+  --nav-bg: #FFFFFF;
+  --nav-border: #E2E8E0;
+  --switch-track: #CCD4CA;
+  --switch-active: #2D6A4F;
+}
+@media(prefers-color-scheme:dark){
+  :root {
+    --bg: #0E1610; --surface: #1A241C; --card: #1E2A20;
+    --primary: #5DB97E; --primary-hover: #4EA86D; --primary-light: #1A2E22;
+    --accent: #F0A850; --accent-light: #2A2215;
+    --ink: #E0EBE2; --ink-2: #98A89A; --ink-3: #6A7A6C;
+    --border: #2A3A2C; --scrim: rgba(0,0,0,.6);
+    --sheet-bg: #1A241C; --chip-bg: #243028;
+    --chip-active-bg: #5DB97E; --chip-active-ink: #0E1610;
+    --chip-ink: #98A89A; --overlay: rgba(0,0,0,.6);
+    --toast-bg: #E0EBE2; --toast-ink: #1A2E1F;
+    --nav-bg: #1A241C; --nav-border: #2A3A2C;
+    --switch-track: #3A4A3C; --switch-active: #5DB97E;
+  }
+}
+:root[data-theme="dark"]{
+  --bg: #0E1610; --surface: #1A241C; --card: #1E2A20;
+  --primary: #5DB97E; --primary-hover: #4EA86D; --primary-light: #1A2E22;
+  --accent: #F0A850; --accent-light: #2A2215;
+  --ink: #E0EBE2; --ink-2: #98A89A; --ink-3: #6A7A6C;
+  --border: #2A3A2C; --scrim: rgba(0,0,0,.6);
+  --sheet-bg: #1A241C; --chip-bg: #243028;
+  --chip-active-bg: #5DB97E; --chip-active-ink: #0E1610;
+  --chip-ink: #98A89A; --overlay: rgba(0,0,0,.6);
+  --toast-bg: #E0EBE2; --toast-ink: #1A2E1F;
+  --nav-bg: #1A241C; --nav-border: #2A3A2C;
+  --switch-track: #3A4A3C; --switch-active: #5DB97E;
+}
+:root[data-theme="light"]{
+  --bg: #F5F7F3; --surface: #FFFFFF; --card: #FFFFFF;
+  --primary: #2D6A4F; --primary-hover: #245A42; --primary-light: #E8F3ED;
+  --accent: #E8983E; --accent-light: #FEF4E8;
+  --ink: #1A2E1F; --ink-2: #5A6E5F; --ink-3: #8A9B8E;
+  --border: #E2E8E0; --scrim: rgba(10,20,12,.55);
+  --sheet-bg: #FFFFFF; --chip-bg: #EEF2EC;
+  --chip-active-bg: #2D6A4F; --chip-active-ink: #FFFFFF;
+  --chip-ink: #5A6E5F; --overlay: rgba(0,0,0,.45);
+  --toast-bg: #1A2E1F; --toast-ink: #E8F3ED;
+  --nav-bg: #FFFFFF; --nav-border: #E2E8E0;
+  --switch-track: #CCD4CA; --switch-active: #2D6A4F;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:"SF Pro Arabic","Segoe UI",system-ui,-apple-system,sans-serif;
+  background:#1a1a1a;
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;
+  overflow:hidden;
+}
+
+.device{
+  width:375px;height:812px;
+  border-radius:44px;
+  background:var(--bg);
+  position:relative;overflow:hidden;
+  box-shadow:0 0 0 8px #1a1a1a,0 0 0 10px #333,0 40px 80px rgba(0,0,0,.5);
+}
+@media(max-width:420px){
+  .device{width:100vw;height:100vh;height:100dvh;border-radius:0;box-shadow:none}
+}
+
+.app{display:flex;flex-direction:column;height:100%;position:relative}
+
+/* ── Status Bar ── */
+.status-bar{
+  height:54px;padding:14px 24px 0;
+  display:flex;justify-content:space-between;align-items:center;
+  background:var(--bg);flex-shrink:0;position:relative;z-index:10;
+}
+.status-time{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.2px}
+.status-icons{display:flex;gap:5px;align-items:center}
+.status-icons svg{width:16px;height:16px;fill:var(--ink)}
+
+/* ── Top Nav ── */
+.top-nav{
+  padding:4px 16px 10px;display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg);flex-shrink:0;position:relative;z-index:10;
+}
+.nav-brand{display:flex;align-items:center;gap:8px}
+.nav-logo{
+  width:32px;height:32px;border-radius:10px;
+  background:var(--primary);display:flex;align-items:center;justify-content:center;
+  font-size:18px;
+}
+.nav-title{font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.3px}
+.nav-actions{display:flex;gap:4px}
+.nav-btn{
+  width:38px;height:38px;border-radius:50%;border:none;
+  background:var(--chip-bg);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.nav-btn:active{background:var(--border)}
+.nav-btn svg{width:20px;height:20px;stroke:var(--ink-2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── Filter Chips ── */
+.chips-bar{
+  padding:0 0 10px;flex-shrink:0;
+  background:var(--bg);position:relative;z-index:10;
+}
+.chips-scroll{
+  display:flex;gap:8px;padding:0 16px;
+  overflow-x:auto;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.chips-scroll::-webkit-scrollbar{display:none}
+.chip{
+  flex-shrink:0;padding:7px 16px;border-radius:20px;
+  font-size:13px;font-weight:600;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--chip-ink);cursor:pointer;
+  transition:all .2s;white-space:nowrap;
+  -webkit-user-select:none;user-select:none;
+}
+.chip.active{
+  background:var(--chip-active-bg);color:var(--chip-active-ink);
+  border-color:var(--chip-active-bg);
+}
+.chip:active{transform:scale(.95)}
+
+/* ── Pet Grid ── */
+.grid-container{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.grid-container::-webkit-scrollbar{display:none}
+.pet-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:3px;
+  padding:0 3px 100px;
+}
+.pet-card{
+  position:relative;cursor:pointer;
+  aspect-ratio:.72;overflow:hidden;
+  background:var(--card);
+  transition:opacity .15s;
+}
+.pet-card:active{opacity:.85}
+.pet-card:first-child{border-radius:0 14px 0 0}
+.pet-card:nth-child(2){border-radius:14px 0 0 0}
+
+.card-photo{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:64px;
+  background-size:cover;background-position:center;
+}
+.card-scrim{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:36px 10px 10px;
+  background:linear-gradient(to top,rgba(0,0,0,.7) 0%,rgba(0,0,0,.35) 60%,transparent 100%);
+}
+.card-name{
+  font-size:14.5px;font-weight:700;color:#fff;
+  line-height:1.2;margin-bottom:2px;
+  display:flex;align-items:center;gap:4px;
+}
+.card-breed{font-size:11.5px;color:rgba(255,255,255,.78);margin-bottom:2px}
+.card-distance{font-size:11px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+
+.card-badge{
+  position:absolute;top:8px;left:8px;
+  width:22px;height:22px;border-radius:50%;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
+}
+.card-badge svg{width:12px;height:12px;fill:#fff;stroke:none}
+
+.card-purpose{
+  position:absolute;top:8px;right:8px;
+  padding:3px 8px;border-radius:6px;
+  font-size:10.5px;font-weight:600;
+  background:rgba(0,0,0,.45);color:#fff;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+
+.card-fav{
+  position:absolute;bottom:58px;left:8px;
+  width:30px;height:30px;border-radius:50%;
+  background:rgba(0,0,0,.3);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.card-fav:active{transform:scale(1.2)}
+.card-fav svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2}
+.card-fav.liked svg{fill:#E8983E;stroke:#E8983E}
+
+/* ── Bottom Nav ── */
+.bottom-nav{
+  position:absolute;bottom:0;left:0;right:0;
+  height:84px;padding:0 8px 28px;
+  background:var(--nav-bg);
+  border-top:1px solid var(--nav-border);
+  display:flex;align-items:center;justify-content:space-around;
+  z-index:20;
+}
+.bnav-item{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border:none;background:none;cursor:pointer;padding:6px 12px;
+}
+.bnav-item svg{width:24px;height:24px;stroke:var(--ink-3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bnav-item span{font-size:10px;color:var(--ink-3);font-weight:500}
+.bnav-item.active svg{stroke:var(--primary);fill:var(--primary-light)}
+.bnav-item.active span{color:var(--primary);font-weight:600}
+
+/* ── Profile Modal ── */
+.profile-overlay{
+  position:absolute;inset:0;z-index:50;
+  background:var(--bg);
+  transform:translateX(-100%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;
+}
+.profile-overlay.open{transform:translateX(0)}
+
+.profile-header{
+  position:absolute;top:0;left:0;right:0;z-index:2;
+  padding:54px 16px 10px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.profile-back{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(0,0,0,.3);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.profile-back svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.profile-menu{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(0,0,0,.3);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.profile-menu svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
+
+.profile-scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+.profile-scroll::-webkit-scrollbar{display:none}
+
+.profile-photo{
+  height:400px;display:flex;align-items:center;justify-content:center;
+  font-size:120px;position:relative;
+}
+.profile-photo-scrim{
+  position:absolute;bottom:0;left:0;right:0;height:80px;
+  background:linear-gradient(to top,var(--bg),transparent);
+}
+
+.profile-info{padding:0 20px 120px}
+.profile-name-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.profile-name{font-size:26px;font-weight:700;color:var(--ink)}
+.profile-verified{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:3px 8px;border-radius:8px;
+  background:var(--accent-light);
+  font-size:11px;font-weight:600;color:var(--accent);
+}
+.profile-verified svg{width:12px;height:12px;fill:var(--accent)}
+.profile-breed{font-size:15px;color:var(--ink-2);margin-bottom:16px}
+
+.profile-stats{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+  margin-bottom:20px;
+}
+.stat-box{
+  padding:12px 8px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);
+  text-align:center;
+}
+.stat-val{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.stat-label{font-size:10px;color:var(--ink-3);font-weight:500}
+
+.profile-section{margin-bottom:18px}
+.profile-section-title{
+  font-size:13px;font-weight:700;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;
+}
+.profile-detail-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 0;border-bottom:1px solid var(--border);
+}
+.profile-detail-row:last-child{border-bottom:none}
+.detail-icon{
+  width:36px;height:36px;border-radius:10px;
+  background:var(--primary-light);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.detail-icon svg{width:18px;height:18px;stroke:var(--primary);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.detail-text{flex:1}
+.detail-label{font-size:11px;color:var(--ink-3)}
+.detail-value{font-size:14px;font-weight:600;color:var(--ink)}
+
+.profile-actions{
+  position:absolute;bottom:0;left:0;right:0;z-index:3;
+  padding:12px 20px 36px;
+  background:linear-gradient(to top,var(--bg) 70%,transparent);
+  display:flex;gap:10px;
+}
+.btn-interest{
+  flex:1;padding:14px;border-radius:14px;border:none;
+  background:var(--primary);color:#fff;
+  font-size:16px;font-weight:700;cursor:pointer;
+  font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:background .15s,transform .1s;
+}
+.btn-interest:active{background:var(--primary-hover);transform:scale(.97)}
+.btn-interest:disabled{opacity:.5;cursor:not-allowed}
+.btn-interest svg{width:20px;height:20px;fill:#fff}
+.btn-secondary{
+  width:52px;height:52px;border-radius:14px;border:1.5px solid var(--border);
+  background:var(--surface);cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.btn-secondary:active{background:var(--primary-light);border-color:var(--primary)}
+.btn-secondary svg{width:22px;height:22px;stroke:var(--ink-2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn-secondary.liked svg{fill:var(--accent);stroke:var(--accent)}
+
+/* ── Action menu ── */
+.action-menu{
+  position:absolute;top:96px;left:16px;z-index:60;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:6px 0;min-width:180px;
+  box-shadow:0 8px 32px rgba(0,0,0,.18);
+  display:none;
+}
+.action-menu.open{display:block}
+.action-menu button{
+  width:100%;padding:12px 18px;border:none;background:none;
+  font-family:inherit;font-size:14px;font-weight:500;
+  color:var(--ink);cursor:pointer;text-align:right;
+  display:flex;align-items:center;gap:10px;
+  transition:background .1s;
+}
+.action-menu button:active{background:var(--chip-bg)}
+.action-menu button.danger{color:var(--danger)}
+.action-menu button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── Filter Sheet ── */
+.sheet-overlay{
+  position:absolute;inset:0;z-index:60;
+  background:var(--overlay);opacity:0;pointer-events:none;
+  transition:opacity .3s;
+}
+.sheet-overlay.open{opacity:1;pointer-events:auto}
+
+.filter-sheet{
+  position:absolute;bottom:0;left:0;right:0;z-index:61;
+  background:var(--sheet-bg);border-radius:24px 24px 0 0;
+  padding:12px 20px 40px;max-height:75%;overflow-y:auto;
+  transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);
+  scrollbar-width:none;
+}
+.filter-sheet::-webkit-scrollbar{display:none}
+.filter-sheet.open{transform:translateY(0)}
+
+.sheet-handle{
+  width:36px;height:4px;border-radius:2px;
+  background:var(--border);margin:0 auto 16px;
+}
+.sheet-title{
+  font-size:18px;font-weight:700;color:var(--ink);
+  margin-bottom:20px;text-align:center;
+}
+
+.filter-group{margin-bottom:20px}
+.filter-label{font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px}
+
+.filter-options{display:flex;flex-wrap:wrap;gap:8px}
+.filter-opt{
+  padding:8px 14px;border-radius:10px;
+  font-size:13px;font-weight:500;
+  border:1.5px solid var(--border);background:var(--surface);
+  color:var(--ink-2);cursor:pointer;transition:all .15s;
+  font-family:inherit;
+}
+.filter-opt:active{transform:scale(.95)}
+.filter-opt.selected{
+  background:var(--primary-light);color:var(--primary);
+  border-color:var(--primary);font-weight:600;
+}
+
+.filter-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 0;border-bottom:1px solid var(--border);
+}
+.filter-toggle:last-child{border-bottom:none}
+.toggle-label{font-size:14px;color:var(--ink);font-weight:500}
+.toggle-switch{
+  width:44px;height:26px;border-radius:13px;
+  background:var(--switch-track);cursor:pointer;
+  position:relative;transition:background .2s;border:none;
+}
+.toggle-switch.on{background:var(--switch-active)}
+.toggle-switch::after{
+  content:'';position:absolute;top:3px;right:3px;
+  width:20px;height:20px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);
+  transition:transform .2s;
+}
+.toggle-switch.on::after{transform:translateX(-18px)}
+
+.range-row{
+  display:flex;align-items:center;gap:12px;
+  padding:8px 0;
+}
+.range-label{font-size:13px;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.range-input{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:4px;border-radius:2px;background:var(--border);
+  outline:none;
+}
+.range-input::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+  background:var(--primary);cursor:pointer;border:3px solid #fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+
+.sheet-apply{
+  width:100%;padding:14px;border-radius:14px;border:none;
+  background:var(--primary);color:#fff;
+  font-size:16px;font-weight:700;cursor:pointer;
+  font-family:inherit;margin-top:12px;transition:all .15s;
+}
+.sheet-apply:active{background:var(--primary-hover);transform:scale(.98)}
+
+/* ── Toast ── */
+.toast{
+  position:absolute;bottom:100px;left:50%;z-index:70;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--toast-bg);color:var(--toast-ink);
+  padding:12px 20px;border-radius:14px;
+  font-size:13px;font-weight:600;
+  box-shadow:0 8px 24px rgba(0,0,0,.2);
+  opacity:0;pointer-events:none;
+  transition:all .3s cubic-bezier(.4,0,.2,1);
+  white-space:nowrap;text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast.warn{background:var(--accent);color:#fff}
+
+/* ── Animations ── */
+@keyframes cardIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+.pet-card{animation:cardIn .3s ease backwards}
+
+/* ── Interest sent confirmation ── */
+.interest-sent{
+  position:absolute;inset:0;z-index:55;
+  background:rgba(45,106,79,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+}
+.interest-sent.show{opacity:1;pointer-events:auto}
+.interest-sent .paw-big{font-size:72px;margin-bottom:16px}
+.interest-sent .sent-text{font-size:22px;font-weight:700;color:#fff}
+.interest-sent .sent-sub{font-size:14px;color:rgba(255,255,255,.7);margin-top:6px}
+</style>
+
+<div class="device">
+  <div class="app" dir="rtl" id="app">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span class="status-time">٩:٤١</span>
+      <div class="status-icons">
+        <svg viewBox="0 0 16 16"><path d="M1 7h2v5H1zM5 4h2v8H5zM9 5h2v7H9zM13 2h2v10h-2z"/></svg>
+        <svg viewBox="0 0 16 16"><path d="M8 2C4.6 2 1.8 3.8.4 6.4l1.2.8C2.9 4.9 5.3 3.4 8 3.4s5.1 1.5 6.4 3.8l1.2-.8C14.2 3.8 11.4 2 8 2zm0 4c-2 0-3.8 1-4.8 2.6l1.2.8c.8-1.2 2.1-2 3.6-2s2.8.8 3.6 2l1.2-.8C11.8 7 10 6 8 6zm0 4c-1 0-1.8.5-2.4 1.2L8 14l2.4-2.8C9.8 10.5 9 10 8 10z"/></svg>
+        <svg viewBox="0 0 16 16"><path d="M14 4v8H2V4h12m1-1H1v10h14V3z"/><path d="M15 6v4h1V6z" fill-opacity=".4"/></svg>
+      </div>
+    </div>
+
+    <!-- Top Nav -->
+    <nav class="top-nav">
+      <div class="nav-brand">
+        <div class="nav-logo">🐾</div>
+        <span class="nav-title">اكتشف</span>
+      </div>
+      <div class="nav-actions">
+        <button class="nav-btn" onclick="openFilterSheet()" aria-label="فلتر">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Filter Chips -->
+    <div class="chips-bar">
+      <div class="chips-scroll" id="chips"></div>
+    </div>
+
+    <!-- Pet Grid -->
+    <div class="grid-container">
+      <div class="pet-grid" id="petGrid"></div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <button class="bnav-item active">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>اكتشف</span>
+      </button>
+      <button class="bnav-item">
+        <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>المفضلة</span>
+      </button>
+      <button class="bnav-item">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>المحادثات</span>
+      </button>
+      <button class="bnav-item">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>حسابي</span>
+      </button>
+    </nav>
+
+    <!-- Profile Modal -->
+    <div class="profile-overlay" id="profileModal">
+      <div class="profile-header">
+        <button class="profile-back" onclick="closeProfile()">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="profile-menu" onclick="toggleActionMenu()">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" fill="#fff" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="#fff" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="#fff" stroke="none"/></svg>
+        </button>
+      </div>
+
+      <div class="action-menu" id="actionMenu">
+        <button onclick="doAction('hide')">
+          <svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          إخفاء
+        </button>
+        <button onclick="doAction('report')" class="danger">
+          <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          إبلاغ
+        </button>
+        <button onclick="doAction('block')" class="danger">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          حظر
+        </button>
+      </div>
+
+      <div class="profile-scroll" id="profileContent"></div>
+
+      <div class="profile-actions" id="profileActions"></div>
+
+      <div class="interest-sent" id="interestSent">
+        <div class="paw-big">🐾</div>
+        <div class="sent-text">تم إرسال الاهتمام!</div>
+        <div class="sent-sub">سيتم إشعارك عند قبول صاحب الحيوان</div>
+      </div>
+    </div>
+
+    <!-- Filter Sheet -->
+    <div class="sheet-overlay" id="sheetOverlay" onclick="closeFilterSheet()"></div>
+    <div class="filter-sheet" id="filterSheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">تصفية النتائج</div>
+
+      <div class="filter-group">
+        <div class="filter-label">النوع</div>
+        <div class="filter-options" id="speciesFilter"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">الجنس</div>
+        <div class="filter-options" id="genderFilter"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">العمر</div>
+        <div class="filter-options" id="ageFilter"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">الغرض</div>
+        <div class="filter-options" id="purposeFilter"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">المسافة</div>
+        <div class="range-row">
+          <input type="range" class="range-input" min="1" max="50" value="25" id="distRange" oninput="updateDistLabel()">
+          <span class="range-label" id="distLabel">٢٥ كم</span>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-toggle">
+          <span class="toggle-label">محصّن فقط</span>
+          <button class="toggle-switch" id="vaccToggle" onclick="this.classList.toggle('on')"></button>
+        </div>
+        <div class="filter-toggle">
+          <span class="toggle-label">نشط مؤخراً</span>
+          <button class="toggle-switch on" id="activeToggle" onclick="this.classList.toggle('on')"></button>
+        </div>
+      </div>
+      <button class="sheet-apply" onclick="applyFilters()">عرض النتائج</button>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<script>
+const PETS = [
+  {id:1,name:'لولو',emoji:'🐱',breed:'شيرازي',age:'٨ أشهر',gender:'أنثى',dist:2.3,purpose:'تبني',verified:true,vacc:true,species:'قطط',owner:'سارة أحمد',ownerArea:'المعادي',gradient:'linear-gradient(135deg,#fce4ec,#f8bbd0)',bio:'قطة هادئة ومدللة، تحب اللعب والنوم بجانبك.'},
+  {id:2,name:'ريكس',emoji:'🐕',breed:'جيرمن شيبرد',age:'٣ سنوات',gender:'ذكر',dist:5.1,purpose:'تزاوج',verified:true,vacc:true,species:'كلاب',owner:'محمد خالد',ownerArea:'مدينة نصر',gradient:'linear-gradient(135deg,#e8eaf6,#c5cae9)',bio:'كلب مدرب وذكي، سلالة نقية مع شهادة صحية.'},
+  {id:3,name:'ميشو',emoji:'🐈',breed:'بريتش شورت هير',age:'سنة',gender:'ذكر',dist:1.2,purpose:'صداقة',verified:false,vacc:true,species:'قطط',owner:'نورا سمير',ownerArea:'الزمالك',gradient:'linear-gradient(135deg,#e0f2f1,#b2dfdb)',bio:'قط اجتماعي يحب الأطفال. أبحث عن رفيق لعب له.'},
+  {id:4,name:'بيلا',emoji:'🐕',breed:'جولدن ريتريفر',age:'سنتين',gender:'أنثى',dist:3.8,purpose:'تبني',verified:true,vacc:true,species:'كلاب',owner:'أحمد فؤاد',ownerArea:'الشيخ زايد',gradient:'linear-gradient(135deg,#fff3e0,#ffe0b2)',bio:'كلبة لطيفة جداً، مناسبة للعائلات. مدربة على المنزل.'},
+  {id:5,name:'سنو',emoji:'🐱',breed:'سيامي',age:'٦ أشهر',gender:'أنثى',dist:0.8,purpose:'تبني',verified:false,vacc:false,species:'قطط',owner:'ليلى حسن',ownerArea:'المهندسين',gradient:'linear-gradient(135deg,#e3f2fd,#bbdefb)',bio:'قطة صغيرة محتاجة بيت دافئ. لعوبة ونشيطة.'},
+  {id:6,name:'ماكس',emoji:'🐕',breed:'هاسكي سيبيري',age:'٤ سنوات',gender:'ذكر',dist:7.2,purpose:'صداقة',verified:true,vacc:true,species:'كلاب',owner:'عمر طارق',ownerArea:'التجمع الخامس',gradient:'linear-gradient(135deg,#e8eaf6,#9fa8da)',bio:'كلب نشيط يحتاج مساحة للجري. ودود مع الحيوانات.'},
+  {id:7,name:'نينا',emoji:'🐈',breed:'مين كون',age:'سنتين',gender:'أنثى',dist:4.5,purpose:'تزاوج',verified:false,vacc:true,species:'قطط',owner:'هدى محمود',ownerArea:'حلوان',gradient:'linear-gradient(135deg,#fce4ec,#f48fb1)',bio:'قطة كبيرة الحجم وجميلة. سلالة أصيلة مع أوراق.'},
+  {id:8,name:'روكي',emoji:'🐕',breed:'روت وايلر',age:'٥ سنوات',gender:'ذكر',dist:6.3,purpose:'تزاوج',verified:true,vacc:true,species:'كلاب',owner:'كريم سعيد',ownerArea:'٦ أكتوبر',gradient:'linear-gradient(135deg,#efebe9,#d7ccc8)',bio:'كلب حراسة ممتاز. هادئ مع العائلة، يقظ مع الغرباء.'},
+  {id:9,name:'كوكو',emoji:'🦜',breed:'ببغاء أفريقي',age:'٣ سنوات',gender:'ذكر',dist:2.1,purpose:'صداقة',verified:false,vacc:false,species:'طيور',owner:'ياسمين علي',ownerArea:'الدقي',gradient:'linear-gradient(135deg,#e8f5e9,#a5d6a7)',bio:'ببغاء متكلم يعرف كلمات كتير. لطيف ومرح.'},
+  {id:10,name:'زيزي',emoji:'🐱',breed:'بنغالي',age:'سنة',gender:'أنثى',dist:1.5,purpose:'تبني',verified:true,vacc:true,species:'قطط',owner:'منى عبدالله',ownerArea:'مصر الجديدة',gradient:'linear-gradient(135deg,#fff8e1,#ffecb3)',bio:'قطة بنغالي نادرة. محتاجة رعاية خاصة وحب.'},
+  {id:11,name:'بادي',emoji:'🐕',breed:'لابرادور',age:'سنة',gender:'ذكر',dist:3.2,purpose:'تبني',verified:false,vacc:true,species:'كلاب',owner:'حسام الدين',ownerArea:'الرحاب',gradient:'linear-gradient(135deg,#e0f7fa,#80deea)',bio:'كلب صغير لعوب. مناسب للأطفال وسهل التدريب.'},
+  {id:12,name:'عسل',emoji:'🐰',breed:'هولندي قزم',age:'٨ أشهر',gender:'أنثى',dist:0.5,purpose:'صداقة',verified:false,vacc:false,species:'أخرى',owner:'فاطمة أمين',ownerArea:'العباسية',gradient:'linear-gradient(135deg,#fce4ec,#f8bbd0)',bio:'أرنبة صغيرة لطيفة. هادئة ومناسبة للشقق.'},
+];
+
+const CHIPS = [
+  {key:'all',label:'الكل'},
+  {key:'nearby',label:'القريبة'},
+  {key:'new',label:'جديد'},
+  {key:'verified',label:'موثق'},
+  {key:'adopt',label:'تبني'},
+  {key:'breed',label:'تزاوج'},
+  {key:'friend',label:'صداقة'},
+];
+
+const PURPOSE_MAP = {'تبني':'adopt','تزاوج':'breed','صداقة':'friend'};
+const PURPOSE_AR = {'adopt':'تبني','breed':'تزاوج','friend':'صداقة'};
+
+let state = {
+  activeChip: 'all',
+  favorites: new Set(),
+  hidden: new Set(),
+  interestsSent: new Set(),
+  interestCount: 17,
+  maxInterests: 20,
+  currentPet: null,
+  menuOpen: false,
+};
+
+function toAr(n){return String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d])}
+
+function renderChips(){
+  const c = document.getElementById('chips');
+  c.innerHTML = CHIPS.map(ch =>
+    `<button class="chip${state.activeChip===ch.key?' active':''}" onclick="setChip('${ch.key}')">${ch.label}</button>`
+  ).join('');
+}
+
+function setChip(key){
+  state.activeChip = key;
+  renderChips();
+  renderGrid();
+}
+
+function filterPets(){
+  let pets = PETS.filter(p => !state.hidden.has(p.id));
+  const f = state.activeChip;
+  if(f==='nearby') pets = pets.filter(p=>p.dist<=3).sort((a,b)=>a.dist-b.dist);
+  else if(f==='new') pets = pets.slice().reverse();
+  else if(f==='verified') pets = pets.filter(p=>p.verified);
+  else if(f==='adopt') pets = pets.filter(p=>p.purpose==='تبني');
+  else if(f==='breed') pets = pets.filter(p=>p.purpose==='تزاوج');
+  else if(f==='friend') pets = pets.filter(p=>p.purpose==='صداقة');
+  return pets;
+}
+
+function renderGrid(){
+  const grid = document.getElementById('petGrid');
+  const pets = filterPets();
+  grid.innerHTML = pets.map((p,i) =>
+    `<div class="pet-card" style="animation-delay:${i*40}ms" onclick="openProfile(${p.id})">
+      <div class="card-photo" style="background:${p.gradient}">${p.emoji}</div>
+      <div class="card-scrim">
+        <div class="card-name">${p.name}${p.verified?'<svg width="14" height="14" viewBox="0 0 24 24" fill="#E8983E" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>':''}</div>
+        <div class="card-breed">${p.breed} · ${p.age}</div>
+        <div class="card-distance">${toAr(p.dist)} كم</div>
+      </div>
+      ${p.verified?'<div class="card-badge"><svg viewBox="0 0 24 24"><path d="M12 1l3.22 3.22h4.56v4.56L23 12l-3.22 3.22v4.56h-4.56L12 23l-3.22-3.22H4.22v-4.56L1 12l3.22-3.22V4.22h4.56L12 1z"/><path d="M8 12l3 3 5-5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>':''}
+      <div class="card-purpose">${p.purpose}</div>
+      <button class="card-fav${state.favorites.has(p.id)?' liked':''}" onclick="event.stopPropagation();toggleFav(${p.id})">
+        <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+    </div>`
+  ).join('');
+}
+
+function toggleFav(id){
+  if(state.favorites.has(id)) state.favorites.delete(id);
+  else state.favorites.add(id);
+  renderGrid();
+  if(state.currentPet) renderProfileActions(state.currentPet);
+}
+
+function openProfile(id){
+  const p = PETS.find(x=>x.id===id);
+  if(!p) return;
+  state.currentPet = p;
+  state.menuOpen = false;
+  document.getElementById('actionMenu').classList.remove('open');
+
+  const content = document.getElementById('profileContent');
+  content.innerHTML = `
+    <div class="profile-photo" style="background:${p.gradient}">
+      ${p.emoji}
+      <div class="profile-photo-scrim"></div>
+    </div>
+    <div class="profile-info">
+      <div class="profile-name-row">
+        <span class="profile-name">${p.name}</span>
+        ${p.verified?'<span class="profile-verified"><svg viewBox="0 0 24 24"><path d="M12 1l3.22 3.22h4.56v4.56L23 12l-3.22 3.22v4.56h-4.56L12 23l-3.22-3.22H4.22v-4.56L1 12l3.22-3.22V4.22h4.56L12 1z"/><path d="M8 12l3 3 5-5" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> موثق</span>':''}
+      </div>
+      <div class="profile-breed">${p.breed} · ${p.age} · ${p.gender}</div>
+
+      <div class="profile-stats">
+        <div class="stat-box"><div class="stat-val">${toAr(p.dist)} كم</div><div class="stat-label">المسافة</div></div>
+        <div class="stat-box"><div class="stat-val">${p.purpose}</div><div class="stat-label">الغرض</div></div>
+        <div class="stat-box"><div class="stat-val">${p.vacc?'نعم':'لا'}</div><div class="stat-label">محصّن</div></div>
+        <div class="stat-box"><div class="stat-val">${p.gender}</div><div class="stat-label">الجنس</div></div>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">عن ${p.name}</div>
+        <p style="font-size:14px;color:var(--ink-2);line-height:1.7">${p.bio}</p>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">المالك</div>
+        <div class="profile-detail-row">
+          <div class="detail-icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <div class="detail-text"><div class="detail-label">الاسم</div><div class="detail-value">${p.owner}</div></div>
+        </div>
+        <div class="profile-detail-row">
+          <div class="detail-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+          <div class="detail-text"><div class="detail-label">المنطقة</div><div class="detail-value">${p.ownerArea}</div></div>
+        </div>
+      </div>
+    </div>`;
+
+  renderProfileActions(p);
+  document.getElementById('profileModal').classList.add('open');
+  document.getElementById('interestSent').classList.remove('show');
+  content.scrollTop = 0;
+}
+
+function renderProfileActions(p){
+  const sent = state.interestsSent.has(p.id);
+  const remaining = state.maxInterests - state.interestCount;
+  const fav = state.favorites.has(p.id);
+
+  let btnLabel = 'أرسل اهتمام';
+  let btnDisabled = '';
+  if(sent){ btnLabel = 'تم الإرسال'; btnDisabled = 'disabled'; }
+  else if(remaining <= 0){ btnLabel = 'انتهت الطلبات'; btnDisabled = 'disabled'; }
+
+  document.getElementById('profileActions').innerHTML = `
+    <button class="btn-secondary${fav?' liked':''}" onclick="toggleFav(${p.id})" aria-label="مفضلة">
+      <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </button>
+    <button class="btn-interest" ${btnDisabled} onclick="sendInterest(${p.id})">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.3 0 2.5-.3 3.6-.7M9 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM15 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" fill="none" stroke="#fff" stroke-width="1.8"/><path d="M19.5 8c.6 0 1.1.2 1.5.6s.6.9.6 1.5-.2 1.1-.6 1.4-.9.6-1.5.6-1-.2-1.4-.6-.6-.9-.6-1.4.2-1.1.6-1.5.8-.6 1.4-.6z" fill="#fff"/></svg>
+      ${btnLabel}
+    </button>`;
+}
+
+function sendInterest(id){
+  if(state.interestsSent.has(id)) return;
+  const remaining = state.maxInterests - state.interestCount;
+  if(remaining <= 0){
+    showToast('وصلت الحد الأقصى من طلبات الاهتمام','warn');
+    return;
+  }
+  state.interestsSent.add(id);
+  state.interestCount++;
+  renderProfileActions(state.currentPet);
+
+  const sent = document.getElementById('interestSent');
+  sent.classList.add('show');
+  setTimeout(()=>sent.classList.remove('show'), 2000);
+
+  const newRemaining = state.maxInterests - state.interestCount;
+  if(newRemaining === 3){
+    setTimeout(()=>showToast('متبقي ٣ طلبات اهتمام فقط'),2200);
+  } else if(newRemaining === 0){
+    setTimeout(()=>showToast('وصلت الحد الأقصى (٢٠ طلب)','warn'),2200);
+  }
+}
+
+function closeProfile(){
+  document.getElementById('profileModal').classList.remove('open');
+  document.getElementById('actionMenu').classList.remove('open');
+  state.currentPet = null;
+  state.menuOpen = false;
+  renderGrid();
+}
+
+function toggleActionMenu(){
+  state.menuOpen = !state.menuOpen;
+  document.getElementById('actionMenu').classList.toggle('open', state.menuOpen);
+}
+
+function doAction(type){
+  if(!state.currentPet) return;
+  const name = state.currentPet.name;
+  document.getElementById('actionMenu').classList.remove('open');
+  state.menuOpen = false;
+  if(type==='hide'){
+    state.hidden.add(state.currentPet.id);
+    closeProfile();
+    showToast(`تم إخفاء ${name}`);
+  } else if(type==='report'){
+    closeProfile();
+    showToast(`تم الإبلاغ عن ${name}`);
+  } else if(type==='block'){
+    state.hidden.add(state.currentPet.id);
+    closeProfile();
+    showToast(`تم حظر ${name}`);
+  }
+}
+
+function openFilterSheet(){
+  document.getElementById('sheetOverlay').classList.add('open');
+  document.getElementById('filterSheet').classList.add('open');
+  renderFilterOptions();
+}
+
+function closeFilterSheet(){
+  document.getElementById('sheetOverlay').classList.remove('open');
+  document.getElementById('filterSheet').classList.remove('open');
+}
+
+function renderFilterOptions(){
+  const species = ['الكل','قطط','كلاب','طيور','أخرى'];
+  const genders = ['الكل','ذكر','أنثى'];
+  const ages = ['الكل','أقل من سنة','١-٣ سنوات','أكبر من ٣'];
+  const purposes = ['الكل','تبني','تزاوج','صداقة'];
+
+  const render = (id, opts) => {
+    document.getElementById(id).innerHTML = opts.map((o,i) =>
+      `<button class="filter-opt${i===0?' selected':''}" onclick="selectFilterOpt(this)">${o}</button>`
+    ).join('');
+  };
+  render('speciesFilter',species);
+  render('genderFilter',genders);
+  render('ageFilter',ages);
+  render('purposeFilter',purposes);
+}
+
+function selectFilterOpt(el){
+  el.parentElement.querySelectorAll('.filter-opt').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function updateDistLabel(){
+  const v = document.getElementById('distRange').value;
+  document.getElementById('distLabel').textContent = toAr(v) + ' كم';
+}
+
+function applyFilters(){
+  closeFilterSheet();
+  showToast('تم تطبيق الفلتر');
+}
+
+let toastTimer;
+function showToast(msg, type=''){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type?' '+type:'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// Init
+renderChips();
+renderGrid();
+</script>
+</body>
+</html>
