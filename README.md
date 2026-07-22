@@ -49,6 +49,38 @@ http://SERVER-IP:5175/login
 
 Replace `SERVER-IP` with the IP address printed by the script.
 
+## Docker Quick Start
+
+If Docker is installed on the server, run the whole stack with one command:
+
+```powershell
+docker compose up -d --build
+```
+
+Docker starts:
+
+- MySQL 8 on host port `3307`
+- Laravel API on host port `8000`
+- React/Nginx frontend on host port `5175`
+
+Open:
+
+```text
+http://localhost:5175/login
+```
+
+For another PC on the same LAN:
+
+```text
+http://SERVER-IP:5175/login
+```
+
+Detailed Arabic Docker steps are in:
+
+```text
+DOCKER_DEPLOY_AR.md
+```
+
 ## Environment Files
 
 Backend:

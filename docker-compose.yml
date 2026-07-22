@@ -1,0 +1,70 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: srs-erp-db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-srs}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-srs_root_password}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - srs_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-srs_root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: srs-erp-api:latest
+    build:
+      context: ./SRS-Backend
+    container_name: srs-erp-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-SRS}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-srs}
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-srs_root_password}
+      CACHE_DRIVER: file
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: file
+      SESSION_LIFETIME: 120
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5175,http://127.0.0.1:5175}
+      FILESYSTEM_DISK: local
+      MAIL_MAILER: log
+    ports:
+      - "${API_PORT:-8000}:80"
+    volumes:
+      - srs_backend_storage:/var/www/html/storage
+
+  frontend:
+    image: srs-erp-frontend:latest
+    build:
+      context: ./Frontend - Copy
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
+    container_name: srs-erp-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${FRONTEND_PORT:-5175}:80"
+
+volumes:
+  srs_mysql_data:
+  srs_backend_storage:

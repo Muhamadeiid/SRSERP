@@ -74,6 +74,8 @@ add_firewall_rules.bat
 *.sql
 !SRS-Backend/database/migrations/*.sql
 mysql_reset.sql
+backups/
+offline/
 
 # ───── Misc generated / test artifacts ─────────────────────────────
 lrf_preview.png
@@ -84,3 +86,4 @@ current-screen.png
 
 # ───── Codex / Claude work directories ─────────────────────────────
 .codex-work/
+.srs-docker-config/

@@ -7,9 +7,6 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# TiDB Cloud uses Let's Encrypt — system CA bundle is sufficient
-ENV MYSQL_ATTR_SSL_CA=/etc/ssl/certs/ca-certificates.crt
-
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
