@@ -48,13 +48,14 @@ class VerifyMachineLicense
 
     protected function computeMachineHash(): ?string
     {
-        $parts = [
-            $this->wmicValue('csproduct get UUID /format:list'),
-            $this->wmicValue('baseboard get SerialNumber /format:list'),
-            $this->wmicValue('diskdrive where "MediaType=\'Fixed hard disk media\'" get SerialNumber /format:list'),
-        ];
+        $parts = array_filter([
+            $this->registryValue('HKLM\SOFTWARE\Microsoft\Cryptography', 'MachineGuid'),
+            $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'ProductId'),
+            $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'InstallDate'),
+            $this->registryValue('HKLM\SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001', 'HwProfileGuid'),
+            gethostname() ?: '',
+        ], fn ($v) => $v !== '');
 
-        $parts = array_filter($parts, fn ($v) => $v !== '');
         if (count($parts) < 2) {
             return null;
         }
@@ -62,23 +63,23 @@ class VerifyMachineLicense
         return hash('sha256', implode('|', $parts));
     }
 
-    protected function wmicValue(string $query): string
+    protected function registryValue(string $key, string $name): string
     {
-        $output = @shell_exec('wmic ' . $query . ' 2>NUL');
+        $cmd = sprintf('reg query "%s" /v "%s" 2>NUL', $key, $name);
+        $output = @shell_exec($cmd);
         if (! is_string($output)) {
             return '';
         }
-        $lines = array_filter(array_map('trim', explode("\n", $output)));
-        $values = [];
-        foreach ($lines as $line) {
-            if (str_contains($line, '=')) {
-                [, $value] = explode('=', $line, 2);
-                $value = trim($value);
-                if ($value !== '' && $value !== '0') {
-                    $values[] = $value;
-                }
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            if (! str_starts_with($line, $name)) {
+                continue;
+            }
+            $parts = preg_split('/\s{2,}|\t+/', $line);
+            if (count($parts) >= 3) {
+                return trim(end($parts));
             }
         }
-        return implode(',', $values);
+        return '';
     }
 }
