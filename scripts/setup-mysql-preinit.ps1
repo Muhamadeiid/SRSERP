@@ -41,16 +41,19 @@ Log "Extracting..."
 Expand-Archive -Path $dataZip -DestinationPath 'C:\Users\RotemSRS_ERP\srs_stack' -Force
 Log "Data dir: $(Test-Path (Join-Path $dataDir 'mysql'))"
 
-# Write my.ini
+# Write my.ini - use forward slashes to avoid backslash escapes in ini parser
+$basedirFwd = $mysqlDir -replace '\\', '/'
+$datadirFwd = $dataDir -replace '\\', '/'
 $myIni = @"
 [mysqld]
-basedir=$mysqlDir
-datadir=$dataDir
+basedir=$basedirFwd
+datadir=$datadirFwd
 port=3306
 bind-address=0.0.0.0
 character-set-server=utf8mb4
 collation-server=utf8mb4_unicode_ci
 max_connections=100
+lc-messages-dir=$basedirFwd/share
 "@
 $myIniPath = Join-Path $mysqlDir 'my.ini'
 Set-Content -Path $myIniPath -Value $myIni -Encoding ASCII
