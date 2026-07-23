@@ -2,17 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
-
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/{any}', function () {
+    $index = public_path('index.html');
+    if (! file_exists($index)) {
+        return response('Frontend not built. Missing public/index.html', 500);
+    }
+    return response(file_get_contents($index), 200, ['Content-Type' => 'text/html']);
+})->where('any', '^(?!api).*$');
