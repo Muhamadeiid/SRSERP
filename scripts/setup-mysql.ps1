@@ -55,12 +55,18 @@ if (Test-Path $dataDir) {
         Log "Data directory already initialized: $dataDir"
     } else {
         Log "Initializing data directory..."
-        & $mysqld --initialize-insecure --datadir=$dataDir --basedir=$mysqlDir --console 2>&1 | ForEach-Object { Log "  $_" }
+        $initOut = 'C:\Users\RotemSRS_ERP\Desktop\mysql-init.log'
+        Start-Process -FilePath $mysqld -ArgumentList "--initialize-insecure","--datadir=$dataDir","--basedir=$mysqlDir","--log-error=$initOut" -Wait -NoNewWindow
+        Log "  init exit code: $LASTEXITCODE"
+        if (Test-Path $initOut) { Get-Content $initOut -Tail 20 | ForEach-Object { Log "  $_" } }
     }
 } else {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
     Log "Initializing data directory..."
-    & $mysqld --initialize-insecure --datadir=$dataDir --basedir=$mysqlDir --console 2>&1 | ForEach-Object { Log "  $_" }
+    $initOut = 'C:\Users\RotemSRS_ERP\Desktop\mysql-init.log'
+    Start-Process -FilePath $mysqld -ArgumentList "--initialize-insecure","--datadir=$dataDir","--basedir=$mysqlDir","--log-error=$initOut" -Wait -NoNewWindow
+    Log "  init exit code: $LASTEXITCODE"
+    if (Test-Path $initOut) { Get-Content $initOut -Tail 20 | ForEach-Object { Log "  $_" } }
 }
 
 # Kill any existing mysqld
