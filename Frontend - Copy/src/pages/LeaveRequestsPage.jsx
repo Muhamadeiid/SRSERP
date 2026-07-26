@@ -1763,9 +1763,12 @@ function SigStamp({ label, name, date, sig }) {
 
 // ── Approval steps progress bar ───────────────────────────────
 function ApprovalProgress({ req }) {
+  const managerSkipped = ['manager_approved','hr_approved','approved'].includes(req.status)
+    && !req.manager_approved_by
+    && !req.manager_approved_at
   const steps = [
     { label: 'Submitted',       done: true,                                              date: req.created_at },
-    { label: 'Manager Approval', done: ['manager_approved','hr_approved','approved'].includes(req.status), date: req.manager_approved_at, name: req.manager_approver?.name },
+    { label: managerSkipped ? 'Manager Skipped' : 'Manager Approval', done: ['manager_approved','hr_approved','approved'].includes(req.status), date: req.manager_approved_at, name: managerSkipped ? 'Not assigned' : req.manager_approver?.name },
     { label: 'HR Approval',      done: ['hr_approved','approved'].includes(req.status),       date: req.hr_approved_at,      name: req.hr_approver?.name },
     { label: 'Depot Approval',   done: req.status === 'approved',                            date: req.approved_at,         name: req.approver?.name },
   ]
@@ -1811,6 +1814,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canHrApprove = userRole === 'admin' || userRole === 'hr'
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
+  const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
   const signatureParties = req.signature_parties || req.signatureParties || {}
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
   const hrSignatureParty = signatureParties.hr || null
@@ -2006,7 +2010,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {req.status === 'manager_approved' && canHrApprove && (
+            {(req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)) && canHrApprove && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule"
@@ -2096,9 +2100,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }, [])
 
   // Pending actions: each role sees the stage it can move forward.
+  const requestHasNoDirectManager = (req) =>
+    !req.employee?.user_manager_id && !req.employee?.direct_manager_id
   const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
   const pending = typeFiltered.filter(r =>
-    (r.status === 'pending' && (isDepotAdmin || user?.role === 'manager')) ||
+    (r.status === 'pending' && (isDepotAdmin || user?.role === 'manager' || (isHrApprover && requestHasNoDirectManager(r)))) ||
     (r.status === 'manager_approved' && isHrApprover) ||
     (r.status === 'hr_approved' && isDepotAdmin)
   )
@@ -2379,12 +2385,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Manager Approve</button>
                   )}
                   {/* Regular manager: pending → Approve (manager step) */}
-                  {r.status === 'pending' && !isDepotAdmin && (
+                  {r.status === 'pending' && user?.role === 'manager' && isDirectManagerOf(r) && (
                     <button onClick={() => handleManagerApprove(r.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
                   )}
                   {/* Depot/admin: manager_approved → Final Approve */}
-                  {r.status === 'manager_approved' && isHrApprover && (
+                  {(r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover && (
                     <button onClick={() => handleHrApprove(r.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-all">HR Approve</button>
                   )}

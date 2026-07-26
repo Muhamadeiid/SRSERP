@@ -173,6 +173,11 @@ class LeaveRequestController extends Controller
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
+        if ($employee && !$this->directManagerUserId($employee)) {
+            // There is nobody who can perform the manager step. Move the
+            // request directly to HR without inventing an approver/signature.
+            $data['status'] = 'manager_approved';
+        }
         if (
             $data['type'] === 'lrf'
             && $employee
@@ -299,7 +304,14 @@ class LeaveRequestController extends Controller
         if (!in_array($user->role, ['admin', 'hr'])) {
             return response()->json(['success' => false, 'message' => 'Only HR can approve this step'], 403);
         }
-        if ($leaveRequest->status !== 'manager_approved') {
+        $employee = $leaveRequest->employee_id
+            ? Employee::active()->find($leaveRequest->employee_id)
+            : null;
+        $managerStepCanBeSkipped = $leaveRequest->status === 'pending'
+            && $employee
+            && !$this->directManagerUserId($employee);
+
+        if ($leaveRequest->status !== 'manager_approved' && !$managerStepCanBeSkipped) {
             return response()->json(['success' => false, 'message' => 'Request is not awaiting HR approval'], 422);
         }
 
@@ -514,6 +526,17 @@ class LeaveRequestController extends Controller
     private function notifyNewRequest(LeaveRequest $leave, ?Employee $employee): void
     {
         $typeLabel = $leave->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+
+        if ($leave->status === 'manager_approved') {
+            $this->notifyHr(
+                $leave,
+                $leave->type . '_manager_skipped',
+                "{$typeLabel} - HR Approval Required",
+                "{$leave->employee_name}'s {$typeLabel} ({$leave->tracking_no}) has no direct manager assigned. The manager step was skipped and the request is awaiting HR approval."
+            );
+            return;
+        }
+
         $hasDirectManager = false;
 
         if ($employee?->user_manager_id) {
@@ -533,6 +556,27 @@ class LeaveRequestController extends Controller
 
         Notification::notifyRole('hr', 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. HR review will be required after manager approval.", ['leave_request_id' => $leave->id]);
         Notification::notifyRole('admin', 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}", ['leave_request_id' => $leave->id]);
+    }
+
+    private function directManagerUserId(Employee $employee): ?int
+    {
+        if ($employee->user_manager_id && User::whereKey($employee->user_manager_id)->where('is_active', true)->exists()) {
+            return (int) $employee->user_manager_id;
+        }
+
+        if (!$employee->direct_manager_id) {
+            return null;
+        }
+
+        $managerUserId = Employee::active()
+            ->whereKey($employee->direct_manager_id)
+            ->value('user_id');
+
+        if (!$managerUserId || !User::whereKey($managerUserId)->where('is_active', true)->exists()) {
+            return null;
+        }
+
+        return (int) $managerUserId;
     }
 
     private function notifyHr(LeaveRequest $leave, string $type, string $title, string $body): void
