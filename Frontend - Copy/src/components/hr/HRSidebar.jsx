@@ -18,7 +18,7 @@ const isDashAccess = (user) =>
 const ALL_NAV = [
   { label: 'Workforce',      path: '/human-resources',                    icon: Users,         end: true  },
   { label: 'Leave Requests', path: '/human-resources/leave',              icon: FileText,      end: false },
-  { label: 'Resignations',   path: '/human-resources/resignations',       icon: UserMinus,     end: false },
+  { label: 'Resignations',   path: '/human-resources/resignations',       icon: UserMinus,     end: false, hrOnly: true },
   { label: 'Attendance',     path: '/human-resources/attendance',         icon: Clock,         end: false },
   { label: 'Certifications', path: '/human-resources/certifications',     icon: ShieldCheck,   end: false },
   { label: 'Disciplinary',   path: '/human-resources/disciplinary',       icon: AlertTriangle, end: false },
@@ -74,7 +74,7 @@ export default function HRSidebar() {
         <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest px-3 py-2">
           HR Modules
         </p>
-        {ALL_NAV.map(item => {
+        {ALL_NAV.filter(item => !item.hrOnly || isHRFull(user)).map(item => {
           const Icon = item.icon
           return (
             <NavLink

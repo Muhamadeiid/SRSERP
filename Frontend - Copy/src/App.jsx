@@ -144,7 +144,11 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="calendar"     element={<CalendarPage />} />
-          <Route path="resignations" element={<ResignationsPage />} />
+          <Route path="resignations" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <ResignationsPage />
+            </ProtectedRoute>
+          } />
           <Route path="internal-salary" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <InternalSalaryPage />

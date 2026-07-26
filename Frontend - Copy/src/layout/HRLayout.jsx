@@ -44,7 +44,7 @@ const NAV_GROUPS = [
     items: [
       { label: 'Leave Requests',     path: '/human-resources/leave',               icon: FileText },
       { label: 'Overtime',           path: '/human-resources/overtime',             icon: Clock },
-      { label: 'Resignations',       path: '/human-resources/resignations',        icon: UserMinus },
+      { label: 'Resignations',       path: '/human-resources/resignations',        icon: UserMinus, hrOnly: true },
       { label: 'Master List',        path: '/human-resources/leave-master',        icon: FileSpreadsheet, hrOnly: true },
       { label: 'Weekly Report',      path: '/human-resources/weekly-leave-report', icon: CalendarDays,    hrOnly: true },
     ],

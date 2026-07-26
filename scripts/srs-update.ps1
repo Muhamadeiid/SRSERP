@@ -100,8 +100,9 @@ Log "Clearing Laravel caches..."
 Log "Restarting PHP server..."
 Get-Process php -EA SilentlyContinue | Where-Object { $_.Path -eq $php } | Stop-Process -Force -EA SilentlyContinue
 Start-Sleep 2
+$phpErrorLog = "$env:USERPROFILE\Desktop\php-error.log"
 Start-Process -FilePath $php `
-    -ArgumentList "-S","0.0.0.0:8000","-t","$backend\public" `
+    -ArgumentList "-d","display_errors=0","-d","display_startup_errors=0","-d","log_errors=1","-d","error_log=$phpErrorLog","-S","0.0.0.0:8000","-t","$backend\public" `
     -WorkingDirectory $backend `
     -RedirectStandardOutput "$env:USERPROFILE\Desktop\php-server-out.log" `
     -RedirectStandardError "$env:USERPROFILE\Desktop\php-server-err.log" `

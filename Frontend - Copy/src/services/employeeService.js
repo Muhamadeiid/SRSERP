@@ -49,18 +49,39 @@ async function request(path, options = {}) {
     ...restOptions,
   })
 
+  if (options._blob && res.ok) return res.blob()
+
+  const raw = await res.text()
+  let payload = null
+  try {
+    payload = raw ? JSON.parse(raw) : null
+  } catch {
+    // Some portable PHP setups prepend an HTML warning before Laravel's JSON.
+    // Recover the JSON payload when possible, otherwise show a useful message.
+    const jsonStart = raw.indexOf('{')
+    const jsonEnd = raw.lastIndexOf('}')
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      try {
+        payload = JSON.parse(raw.slice(jsonStart, jsonEnd + 1))
+      } catch {
+        payload = null
+      }
+    }
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }))
+    const err = payload ?? {}
     // Laravel validation errors come as { errors: { field: [msg, ...] } }
     if (err.errors) {
       const firstMsg = Object.values(err.errors).flat()[0]
       throw new Error(firstMsg ?? 'Validation failed')
     }
-    throw new Error(err.message ?? 'Request failed')
+    const plainText = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    throw new Error(err.message ?? plainText.slice(0, 300) ?? res.statusText ?? 'Request failed')
   }
 
-  if (options._blob) return res.blob()
-  return res.json()
+  if (payload !== null) return payload
+  throw new Error('The server returned an invalid response. Check the PHP error log.')
 }
 // ── Employees ──────────────────────────────────────────────
 
