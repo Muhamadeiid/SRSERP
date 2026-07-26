@@ -86,7 +86,14 @@ async function printRequestWord(req) {
       html, body { margin: 0; padding: 0; background: #fff; }
       .docx-wrapper { background: #fff !important; padding: 0 !important; }
       .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }
-      @media print { .docx-wrapper { padding: 0 !important; } }
+      @media print {
+        .docx-wrapper { padding: 0 !important; }
+        .docx-wrapper > section.docx {
+          zoom: 0.97;
+          break-after: avoid-page !important;
+          page-break-after: avoid !important;
+        }
+      }
     `
     printWindow.document.head.appendChild(style)
 
@@ -97,7 +104,7 @@ async function printRequestWord(req) {
       {
         inWrapper: true,
         hideWrapperOnPrint: true,
-        breakPages: true,
+        breakPages: false,
         renderHeaders: true,
         renderFooters: true,
         useBase64URL: true,
