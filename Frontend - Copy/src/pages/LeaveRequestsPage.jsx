@@ -124,11 +124,31 @@ async function printRequestWord(req) {
       },
     )
 
+    await printWindow.document.fonts?.ready
+    await Promise.all(
+      Array.from(printWindow.document.images)
+        .filter((image) => !image.complete)
+        .map((image) => new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true })
+          image.addEventListener('error', resolve, { once: true })
+        })),
+    )
+    await new Promise((resolve) => printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(resolve)))
+
     const section = printWindow.document.querySelector('.docx-wrapper > section.docx')
     if (section) {
-      const a4HeightPx = 297 * 96 / 25.4
-      const renderedHeight = Math.max(section.scrollHeight, section.getBoundingClientRect().height)
-      const printScale = Math.min(0.96, (a4HeightPx - 12) / renderedHeight)
+      const sectionTop = section.getBoundingClientRect().top
+      const descendantBottom = Math.max(
+        ...Array.from(section.querySelectorAll('*'))
+          .map((element) => element.getBoundingClientRect().bottom - sectionTop),
+      )
+      const renderedHeight = Math.max(
+        section.scrollHeight,
+        section.getBoundingClientRect().height,
+        descendantBottom,
+      )
+      const printableHeightPx = (297 - 8) * 96 / 25.4
+      const printScale = Math.min(0.92, printableHeightPx / renderedHeight)
       section.style.transform = `scale(${printScale})`
       section.style.width = `${100 / printScale}%`
     }
