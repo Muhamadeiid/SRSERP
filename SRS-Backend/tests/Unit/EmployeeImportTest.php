@@ -22,6 +22,20 @@ class EmployeeImportTest extends TestCase
         );
     }
 
+    public function test_resignation_fields_are_mapped_for_ex_employee_imports(): void
+    {
+        $mapped = $this->mapRow([
+            'english name' => 'Former Employee',
+            'status' => 'terminated',
+            'resignation date' => '2026-06-30',
+            'last working date' => '2026-07-12',
+        ]);
+
+        $this->assertSame('terminated', $mapped['status']);
+        $this->assertSame('2026-06-30', $mapped['resignation_date']);
+        $this->assertSame('2026-07-12', $mapped['last_working_date']);
+    }
+
     private function mapRow(array $row): array
     {
         $method = new ReflectionMethod(EmployeeController::class, 'mapRow');

@@ -660,7 +660,7 @@ export default function WorkforceTab() {
     if (!file) return;
     setImporting(true);
     try {
-      const res = await importEmployees(file);
+      const res = await importEmployees(file, view);
       let msg = `✅ Imported ${res.imported} employees successfully.`;
       if (res.errors?.length) {
         msg += `\n\n⚠️ ${res.errors.length} row(s) failed:\n`;

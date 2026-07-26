@@ -144,9 +144,10 @@ export function deleteEmployee(id) {
 }
 
 /** Upload Excel file → returns { imported, errors } */
-export function importEmployees(file) {
+export function importEmployees(file, view = 'active') {
   const form = new FormData()
   form.append('file', file)
+  form.append('view', view)
   return request('/employees/import', {
     method: 'POST',
     headers: { Accept: 'application/json' }, // no Content-Type – let browser set multipart boundary

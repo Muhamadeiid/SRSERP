@@ -333,7 +333,11 @@ class EmployeeController extends Controller
     // ── POST /api/employees/import ──────────────────────────
     public function import(Request $request): JsonResponse
     {
-        $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv|max:10240']);
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            'view' => 'nullable|in:active,ex',
+        ]);
+        $importingExEmployees = $request->input('view') === 'ex';
 
         try {
             $spreadsheet = IOFactory::load($request->file('file')->getPathname());
@@ -364,11 +368,18 @@ class EmployeeController extends Controller
             $imported = 0;
             $errors   = [];
 
-            DB::transaction(function () use ($data, &$imported, &$errors) {
+            DB::transaction(function () use ($data, $importingExEmployees, &$imported, &$errors) {
                 foreach ($data as $i => $row) {
                     try {
                         $mapped = $this->mapRow($row);
                         if (empty($mapped['name'])) continue;
+
+                        if ($importingExEmployees) {
+                            if (empty($mapped['last_working_date'])) {
+                                throw new \InvalidArgumentException('Last Working Date is required for Ex-Employees');
+                            }
+                            $mapped['status'] = 'terminated';
+                        }
 
                         if ($mapped['ibs_code']) {
                             Employee::updateOrCreate(
@@ -614,7 +625,9 @@ class EmployeeController extends Controller
             'sanctions_form'             => $g(['sanctions form']),
             'marital_status_form'        => $g(['marital status form']),
             'no_warning_letters'         => (int) $g(['no of warning letters', 'warning letters']) ?: 0,
-            'status'                     => 'on_site',
+            'status'                     => strtolower($g(['status'])) === 'terminated' ? 'terminated' : 'on_site',
+            'resignation_date'           => $d($g(['resignation date'])),
+            'last_working_date'          => $d($g(['last working date'])),
         ];
     }
 
