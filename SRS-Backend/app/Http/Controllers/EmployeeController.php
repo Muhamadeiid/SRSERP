@@ -552,7 +552,7 @@ class EmployeeController extends Controller
         }
 
         $ibsCode = $g(['ibs code', 'ibscode']);
-        if ($ibsCode && !is_numeric($ibsCode)) {
+        if ($ibsCode === '' || !is_numeric($ibsCode)) {
             $ibsCode = null;
         }
 
