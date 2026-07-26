@@ -472,6 +472,9 @@ export async function generateLRF(d, { download = true } = {}) {
 
   // ── Document assembly ──────────────────────────────────────────
   const doc = new Document({
+    creator: 'SRS ERP',
+    title: 'Leave Request Form',
+    compatabilityModeVersion: 15,
     sections: [
       {
         properties: {
@@ -498,7 +501,10 @@ export async function generateLRF(d, { download = true } = {}) {
     ],
   })
 
-  const blob = await Packer.toBlob(doc)
+  const packedBlob = await Packer.toBlob(doc)
+  const blob = new Blob([packedBlob], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
   if (download) saveAs(blob, `LRF-${d.tracking_no || 'export'}.docx`)
   return blob
 }

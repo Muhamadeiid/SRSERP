@@ -617,6 +617,9 @@ export async function generateOTR(d, { download = true } = {}) {
 
   // ── Document assembly ────────────────────────────────────────────────────
   const doc = new Document({
+    creator: 'SRS ERP',
+    title: 'Overtime Request',
+    compatabilityModeVersion: 15,
     sections: [
       {
         properties: {

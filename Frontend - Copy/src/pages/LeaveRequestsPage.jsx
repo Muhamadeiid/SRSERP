@@ -87,9 +87,22 @@ async function printRequestWord(req) {
       .docx-wrapper { background: #fff !important; padding: 0 !important; }
       .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }
       @media print {
-        .docx-wrapper { padding: 0 !important; }
+        html, body {
+          width: 210mm !important;
+          height: 297mm !important;
+          overflow: hidden !important;
+        }
+        .docx-wrapper {
+          position: relative !important;
+          width: 210mm !important;
+          height: 297mm !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
         .docx-wrapper > section.docx {
-          zoom: 0.97;
+          position: absolute !important;
+          inset: 0 auto auto 0 !important;
+          transform-origin: top left !important;
           break-after: avoid-page !important;
           page-break-after: avoid !important;
         }
@@ -110,6 +123,15 @@ async function printRequestWord(req) {
         useBase64URL: true,
       },
     )
+
+    const section = printWindow.document.querySelector('.docx-wrapper > section.docx')
+    if (section) {
+      const a4HeightPx = 297 * 96 / 25.4
+      const renderedHeight = Math.max(section.scrollHeight, section.getBoundingClientRect().height)
+      const printScale = Math.min(0.96, (a4HeightPx - 12) / renderedHeight)
+      section.style.transform = `scale(${printScale})`
+      section.style.width = `${100 / printScale}%`
+    }
 
     printWindow.focus()
     setTimeout(() => printWindow.print(), 500)
