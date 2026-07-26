@@ -171,10 +171,12 @@ const lrfTwoNameData = (d = {}) => ({
   hr_approver: d.hr_approver ? { ...d.hr_approver, name: twoName(d.hr_approver.name) } : d.hr_approver,
   approver: d.approver ? { ...d.approver, name: twoName(d.approver.name) } : d.approver,
 })
-const depotManagerNameFor = (request) =>
-  request?.approver?.role === 'depot_manager'
-    ? twoName(request.approver.name)
-    : twoName(request?.depot_manager_name || DEPOT_MGR)
+const depotManagerNameFor = (request) => {
+  const parties = request?.signature_parties || request?.signatureParties || {}
+  const depotParty = parties.depot_manager || parties.depotManager
+  const approvedDepotName = request?.approver?.role === 'depot_manager' ? request.approver.name : ''
+  return twoName(depotParty?.name || request?.depot_manager_name || approvedDepotName || DEPOT_MGR)
+}
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const genLRFNo  = () => `LRF-GZ-????`

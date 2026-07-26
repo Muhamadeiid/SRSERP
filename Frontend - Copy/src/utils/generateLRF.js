@@ -121,7 +121,10 @@ function lrfTwoNameData(d = {}) {
 }
 
 function depotManagerNameFor(d) {
-  return twoName(d?.approver?.name || d?.depot_manager_name || DEPOT_MGR_FALLBACK)
+  const parties = d?.signature_parties || d?.signatureParties || {}
+  const depotParty = parties.depot_manager || parties.depotManager
+  const approvedDepotName = d?.approver?.role === 'depot_manager' ? d.approver.name : ''
+  return twoName(depotParty?.name || d?.depot_manager_name || approvedDepotName || DEPOT_MGR_FALLBACK)
 }
 
 function para(text, opts = {}) {

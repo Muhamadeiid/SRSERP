@@ -219,10 +219,17 @@ class LeaveRequestController extends Controller
             'managerApprover:id,name,e_signature,role',
             'hrApprover:id,name,e_signature,role',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
+            'employee.user:id,name,e_signature',
             'employee.directManager:id,name,position,user_id,e_signature',
             'employee.directManager.user:id,name,role,e_signature',
             'employee.userManager:id,name,role,e_signature',
         ]);
+
+        // A signature may have been uploaded from Workforce or saved on the
+        // employee's linked login account. Forms should accept either source.
+        if ($leave->employee && !$leave->employee->e_signature && $leave->employee->user?->e_signature) {
+            $leave->employee->setAttribute('e_signature', $leave->employee->user->e_signature);
+        }
 
         if ($leave->employee && $leave->employee->userManager) {
             $managerUser = $leave->employee->userManager;
