@@ -74,6 +74,21 @@ class LeaveBalanceController extends Controller
     // GET /employees/{employee}/leave-balance
     public function show(Employee $employee): JsonResponse
     {
+        $user = auth()->user();
+        $isOwnBalance = (int) $employee->user_id === (int) $user->id;
+        $isAssignedManager = (int) $employee->user_manager_id === (int) $user->id;
+        $isEmployeeManager = $employee->direct_manager_id
+            && Employee::whereKey($employee->direct_manager_id)
+                ->where('user_id', $user->id)
+                ->exists();
+
+        if (!$user->isHR() && !$isOwnBalance && !$isAssignedManager && !$isEmployeeManager) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You can only view your own balance or the balance of an assigned employee.',
+            ], 403);
+        }
+
         $this->deductions->processDue($employee->id);
 
         $settings = SystemSetting::whereIn('key', ['default_annual_days','default_casual_days','default_sick_days'])

@@ -100,6 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Employee search — all authenticated users (for leave request autocomplete)
     Route::get('/employees/autocomplete', [EmployeeController::class, 'autocomplete']);
+    Route::get('/employees/{employee}/leave-balance', [LeaveBalanceController::class, 'show']);
 
     // ── HR Only — Admin, Depot Manager, HR department ─────────────────────────
     Route::middleware('hr.only')->group(function () {
@@ -117,7 +118,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employees/{employee}',                       [EmployeeController::class, 'show']);
         Route::put('/employees/{employee}',                       [EmployeeController::class, 'update']);
         Route::delete('/employees/{employee}',                    [EmployeeController::class, 'destroy']);
-        Route::get('/employees/{employee}/leave-balance',         [LeaveBalanceController::class, 'show']);
         Route::put('/employees/{employee}/leave-balance',         [LeaveBalanceController::class, 'update']);
         Route::post('/employees/{employee}/signature',            [SignatureController::class, 'saveEmployeeSignature']);
 
