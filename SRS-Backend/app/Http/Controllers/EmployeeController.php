@@ -381,30 +381,32 @@ class EmployeeController extends Controller
                             $mapped['status'] = 'terminated';
                         }
 
-                        if ($mapped['ibs_code']) {
-                            Employee::updateOrCreate(
-                                ['ibs_code' => $mapped['ibs_code']],
-                                $mapped
-                            );
-                        } else {
-                            $existing = Employee::where('name', $mapped['name'])->first();
-                            if ($existing) {
-                                $existing->update($mapped);
-                            } else {
-                                Employee::create(array_merge($mapped, [
-                                    'doc_birth_certificate' => $mapped['doc_birth_certificate'] ?? false,
-                                    'doc_edu_certificate' => $mapped['doc_edu_certificate'] ?? false,
-                                    'doc_military_certificate' => $mapped['doc_military_certificate'] ?? false,
-                                    'doc_criminal_sheet' => $mapped['doc_criminal_sheet'] ?? false,
-                                    'doc_national_id' => $mapped['doc_national_id'] ?? false,
-                                    'doc_social_insurance_print' => $mapped['doc_social_insurance_print'] ?? false,
-                                    'doc_personal_photos' => $mapped['doc_personal_photos'] ?? false,
-                                    'doc_union_card' => $mapped['doc_union_card'] ?? false,
-                                    'form_1' => $mapped['form_1'] ?? false,
-                                    'no_warning_letters' => $mapped['no_warning_letters'] ?? 0,
-                                    'manager_manual' => false,
-                                ]));
+                        $existing = $this->findExistingImportEmployee($mapped);
+
+                        if ($existing) {
+                            if ($existing->trashed()) {
+                                $existing->restore();
                             }
+                            // A blank code in one workbook must not erase a valid
+                            // identifier already stored on the employee record.
+                            if (empty($mapped['ibs_code'])) {
+                                unset($mapped['ibs_code']);
+                            }
+                            $existing->update($mapped);
+                        } else {
+                            Employee::create(array_merge($mapped, [
+                                'doc_birth_certificate' => $mapped['doc_birth_certificate'] ?? false,
+                                'doc_edu_certificate' => $mapped['doc_edu_certificate'] ?? false,
+                                'doc_military_certificate' => $mapped['doc_military_certificate'] ?? false,
+                                'doc_criminal_sheet' => $mapped['doc_criminal_sheet'] ?? false,
+                                'doc_national_id' => $mapped['doc_national_id'] ?? false,
+                                'doc_social_insurance_print' => $mapped['doc_social_insurance_print'] ?? false,
+                                'doc_personal_photos' => $mapped['doc_personal_photos'] ?? false,
+                                'doc_union_card' => $mapped['doc_union_card'] ?? false,
+                                'form_1' => $mapped['form_1'] ?? false,
+                                'no_warning_letters' => $mapped['no_warning_letters'] ?? 0,
+                                'manager_manual' => false,
+                            ]));
                         }
                         $imported++;
                     } catch (\Throwable $e) {
@@ -544,6 +546,34 @@ class EmployeeController extends Controller
     }
 
     // ── Private helpers ─────────────────────────────────────
+
+    /** Find the existing employee represented by an imported row. */
+    private function findExistingImportEmployee(array $mapped): ?Employee
+    {
+        if (!empty($mapped['ibs_code'])) {
+            $byIbs = Employee::withTrashed()
+                ->where('ibs_code', $mapped['ibs_code'])
+                ->first();
+
+            if ($byIbs) {
+                return $byIbs;
+            }
+        }
+
+        $normalizedName = $this->normalizeEmployeeName($mapped['name'] ?? '');
+        if ($normalizedName === '') {
+            return null;
+        }
+
+        return Employee::withTrashed()
+            ->whereRaw('LOWER(TRIM(name)) = ?', [$normalizedName])
+            ->first();
+    }
+
+    private function normalizeEmployeeName(?string $name): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $name)));
+    }
 
     /** Map one Excel row (keyed by lowercase header) to Employee fillable array */
     private function mapRow(array $r): array

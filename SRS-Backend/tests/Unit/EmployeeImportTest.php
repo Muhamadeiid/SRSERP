@@ -36,6 +36,16 @@ class EmployeeImportTest extends TestCase
         $this->assertSame('2026-07-12', $mapped['last_working_date']);
     }
 
+    public function test_employee_names_are_normalized_for_import_matching(): void
+    {
+        $method = new ReflectionMethod(EmployeeController::class, 'normalizeEmployeeName');
+
+        $this->assertSame(
+            'alaa mohamed shehata',
+            $method->invoke(new EmployeeController(), '  ALAA   Mohamed  Shehata ')
+        );
+    }
+
     private function mapRow(array $row): array
     {
         $method = new ReflectionMethod(EmployeeController::class, 'mapRow');
