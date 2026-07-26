@@ -250,7 +250,9 @@ class LeaveRequestController extends Controller
                 'id' => $directManagerEmployee?->id ?? $directManagerUser?->id,
                 'name' => $leave->direct_manager_name ?: ($directManagerEmployee?->name ?? $directManagerUser?->name),
                 'role' => $directManagerUser?->role,
-                'e_signature' => $directManagerEmployee?->e_signature ?: $directManagerUser?->e_signature,
+                'e_signature' => $leave->manager_approved_at
+                    ? ($directManagerEmployee?->e_signature ?: $directManagerUser?->e_signature)
+                    : null,
             ] : null,
             'hr' => $hrOfficer ? [
                 'id' => $hrOfficer->id,
@@ -258,13 +260,17 @@ class LeaveRequestController extends Controller
                 'role' => $hrOfficer->role,
                 // Signatures uploaded from Workforce belong to the employee
                 // record and are the authoritative source for HR forms.
-                'e_signature' => $hrEmployee?->e_signature ?: $hrOfficer->e_signature,
+                'e_signature' => $leave->hr_approved_at
+                    ? ($hrEmployee?->e_signature ?: $hrOfficer->e_signature)
+                    : null,
             ] : null,
             'depot_manager' => $depotManager ? [
                 'id' => $depotManager->id,
                 'name' => $depotEmployee?->name ?: $depotManager->name,
                 'role' => $depotManager->role,
-                'e_signature' => $depotEmployee?->e_signature ?: $depotManager->e_signature,
+                'e_signature' => $leave->approved_at
+                    ? ($depotEmployee?->e_signature ?: $depotManager->e_signature)
+                    : null,
             ] : null,
         ]);
 

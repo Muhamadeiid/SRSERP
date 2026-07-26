@@ -97,8 +97,11 @@ class LeaveRequestSignaturePartiesTest extends TestCase
             'leave_type' => 'annual',
             'status' => 'approved',
             'manager_approved_by' => $admin->id,
+            'manager_approved_at' => now()->subMinutes(2),
             'hr_approved_by' => $admin->id,
+            'hr_approved_at' => now()->subMinute(),
             'approved_by' => $admin->id,
+            'approved_at' => now(),
         ]);
 
         $this->getJson("/api/leave-requests/{$leave->id}")
@@ -109,5 +112,17 @@ class LeaveRequestSignaturePartiesTest extends TestCase
             ->assertJsonPath('data.signature_parties.hr.e_signature', $signature)
             ->assertJsonPath('data.signature_parties.depot_manager.name', $depotEmployee?->name ?: $depot->name)
             ->assertJsonPath('data.signature_parties.depot_manager.e_signature', $signature);
+
+        $leave->update([
+            'status' => 'hr_approved',
+            'approved_by' => null,
+            'approved_at' => null,
+            'depot_signature' => null,
+        ]);
+
+        $this->getJson("/api/leave-requests/{$leave->id}")
+            ->assertOk()
+            ->assertJsonPath('data.signature_parties.depot_manager.name', $depotEmployee?->name ?: $depot->name)
+            ->assertJsonPath('data.signature_parties.depot_manager.e_signature', null);
     }
 }
