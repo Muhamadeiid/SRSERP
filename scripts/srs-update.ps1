@@ -80,8 +80,13 @@ if ($frontendNeeded) {
         Invoke-WebRequest -Uri 'https://github.com/Muhamadeiid/SRSERP/releases/latest/download/public-only.zip' -OutFile $zip -UseBasicParsing
         Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
         Expand-Archive $zip -DestinationPath $tmp -Force
+        $publicSource = if (Test-Path (Join-Path $tmp 'public')) {
+            Join-Path $tmp 'public'
+        } else {
+            $tmp
+        }
         Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
-        Copy-Item (Join-Path $tmp 'public\*') (Join-Path $backend 'public') -Recurse -Force
+        Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
         Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
         Log "Frontend replaced from Release"
     } catch {
