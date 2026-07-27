@@ -186,20 +186,23 @@ async function printRequestWord(req) {
     const leaveTypeRow = Array.from(section.querySelectorAll('tr'))
       .find((row) => row.textContent?.toLowerCase().includes('leave type'))
     if (leaveTypeRow) {
-      leaveTypeRow.querySelectorAll('table tr').forEach((row) => {
-        row.style.setProperty('height', 'auto', 'important')
-      })
-      leaveTypeRow.querySelectorAll('table td').forEach((cell) => {
-        cell.style.setProperty('padding-top', '3px', 'important')
-        cell.style.setProperty('padding-bottom', '3px', 'important')
-        cell.style.setProperty('vertical-align', 'middle', 'important')
-      })
-      leaveTypeRow.querySelectorAll('table td > p').forEach((paragraph) => {
-        paragraph.style.setProperty('margin-top', '0', 'important')
-        paragraph.style.setProperty('margin-bottom', '0', 'important')
-        paragraph.style.setProperty('line-height', '1.1', 'important')
-        paragraph.style.setProperty('white-space', 'nowrap', 'important')
-      })
+      const leaveTypeInnerRows = leaveTypeRow.querySelectorAll('table > tbody > tr')
+      const earlyLeaveRow = leaveTypeInnerRows[1]
+      if (earlyLeaveRow) {
+        earlyLeaveRow.style.setProperty('height', 'auto', 'important')
+        earlyLeaveRow.querySelectorAll(':scope > td').forEach((cell) => {
+          cell.style.setProperty('height', 'auto', 'important')
+          cell.style.setProperty('padding-top', '4px', 'important')
+          cell.style.setProperty('padding-bottom', '4px', 'important')
+          cell.style.setProperty('vertical-align', 'middle', 'important')
+        })
+        earlyLeaveRow.querySelectorAll(':scope > td > p').forEach((paragraph) => {
+          paragraph.style.setProperty('margin-top', '0', 'important')
+          paragraph.style.setProperty('margin-bottom', '0', 'important')
+          paragraph.style.setProperty('line-height', '1.15', 'important')
+          paragraph.style.setProperty('white-space', 'nowrap', 'important')
+        })
+      }
     }
 
     const canvas = await html2canvas(section, {
