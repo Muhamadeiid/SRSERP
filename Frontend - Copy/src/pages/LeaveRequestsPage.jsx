@@ -171,6 +171,14 @@ async function printRequestWord(req) {
 
     const root = printWindow.document.getElementById('word-print-root')
     const wrapper = printWindow.document.querySelector('.docx-wrapper')
+    const printCellSpacing = printWindow.document.createElement('style')
+    printCellSpacing.textContent = `
+      .docx-wrapper > section.docx table td {
+        box-sizing: border-box !important;
+        padding: 2px 5px !important;
+      }
+    `
+    printWindow.document.head.appendChild(printCellSpacing)
     Object.assign(root.style, { width: 'auto', height: 'auto', overflow: 'visible' })
     Object.assign(wrapper.style, { width: 'auto', height: 'auto', overflow: 'visible' })
     Object.assign(section.style, {
