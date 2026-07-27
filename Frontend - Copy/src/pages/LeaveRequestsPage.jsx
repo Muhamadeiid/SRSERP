@@ -171,14 +171,6 @@ async function printRequestWord(req) {
 
     const root = printWindow.document.getElementById('word-print-root')
     const wrapper = printWindow.document.querySelector('.docx-wrapper')
-    const printCellSpacing = printWindow.document.createElement('style')
-    printCellSpacing.textContent = `
-      .docx-wrapper > section.docx table td > p {
-        margin-left: 5px !important;
-        margin-right: 5px !important;
-      }
-    `
-    printWindow.document.head.appendChild(printCellSpacing)
     Object.assign(root.style, { width: 'auto', height: 'auto', overflow: 'visible' })
     Object.assign(wrapper.style, { width: 'auto', height: 'auto', overflow: 'visible' })
     Object.assign(section.style, {
@@ -190,6 +182,15 @@ async function printRequestWord(req) {
       maxHeight: 'none',
       overflow: 'visible',
     })
+
+    const leaveTypeRow = Array.from(section.querySelectorAll('tr'))
+      .find((row) => row.textContent?.toLowerCase().includes('leave type'))
+    if (leaveTypeRow) {
+      leaveTypeRow.querySelectorAll('td').forEach((cell) => {
+        cell.style.setProperty('padding-top', '3px', 'important')
+        cell.style.setProperty('padding-bottom', '3px', 'important')
+      })
+    }
 
     const canvas = await html2canvas(section, {
       backgroundColor: '#ffffff',
