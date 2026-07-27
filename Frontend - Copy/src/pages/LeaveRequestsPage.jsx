@@ -186,21 +186,36 @@ async function printRequestWord(req) {
     const leaveTypeRow = Array.from(section.querySelectorAll('tr'))
       .find((row) => row.textContent?.toLowerCase().includes('leave type'))
     if (leaveTypeRow) {
-      const leaveTypeInnerRows = leaveTypeRow.querySelectorAll('table > tbody > tr')
+      const leaveTypeInnerTable = Array.from(leaveTypeRow.querySelectorAll('table'))
+        .find((table) => table.textContent?.toLowerCase().includes('early leave'))
+      const leaveTypeInnerRows = leaveTypeInnerTable
+        ? Array.from(leaveTypeInnerTable.rows)
+        : []
+      const leaveOptionsRow = leaveTypeInnerRows[0]
       const earlyLeaveRow = leaveTypeInnerRows[1]
+      if (leaveOptionsRow) {
+        Array.from(leaveOptionsRow.querySelectorAll('p')).forEach((paragraph) => {
+          if (paragraph.textContent?.trim().toLowerCase() === 'casual leave') {
+            paragraph.style.setProperty('white-space', 'nowrap', 'important')
+          }
+        })
+      }
       if (earlyLeaveRow) {
         earlyLeaveRow.style.setProperty('height', 'auto', 'important')
         earlyLeaveRow.querySelectorAll(':scope > td').forEach((cell) => {
           cell.style.setProperty('height', 'auto', 'important')
-          cell.style.setProperty('padding-top', '4px', 'important')
-          cell.style.setProperty('padding-bottom', '4px', 'important')
+          cell.style.setProperty('padding-top', '0', 'important')
+          cell.style.setProperty('padding-bottom', '0', 'important')
           cell.style.setProperty('vertical-align', 'middle', 'important')
         })
         earlyLeaveRow.querySelectorAll(':scope > td > p').forEach((paragraph) => {
           paragraph.style.setProperty('margin-top', '0', 'important')
           paragraph.style.setProperty('margin-bottom', '0', 'important')
+          paragraph.style.setProperty('padding-top', '4px', 'important')
+          paragraph.style.setProperty('padding-bottom', '4px', 'important')
           paragraph.style.setProperty('line-height', '1.15', 'important')
           paragraph.style.setProperty('white-space', 'nowrap', 'important')
+          paragraph.style.setProperty('box-sizing', 'border-box', 'important')
         })
       }
     }
