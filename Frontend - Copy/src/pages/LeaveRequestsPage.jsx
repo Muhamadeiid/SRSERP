@@ -804,6 +804,8 @@ function LRFForm({ onSubmit, saving }) {
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
+    const selectedManager = emp?.form_direct_manager || emp?.direct_manager || emp?.directManager
+    const selectedManagerRole = selectedManager?.role || selectedManager?.user_role || selectedManager?.user?.role
     const region = emp.project_code ?? (emp.rotem_code?.toLowerCase().startsWith('ganz') ? 'GZ' : 'EG1')
     const previewTracking = `LRF-${region}-????`
     setForm(f => ({
@@ -813,7 +815,9 @@ function LRFForm({ onSubmit, saving }) {
       job_title:        emp.position ?? '',
       department:       selectedDept,
       department_label: deptLabel(emp),
-      direct_manager_name: '',
+      direct_manager_name: selectedManager?.name && selectedManagerRole !== 'depot_manager'
+        ? twoName(selectedManager.name)
+        : '',
       tracking_no:      previewTracking,
     }))
     setBalances(null)

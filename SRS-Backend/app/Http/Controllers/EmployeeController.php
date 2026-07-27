@@ -20,10 +20,29 @@ class EmployeeController extends Controller
     // ── GET /api/employees/autocomplete — open to all roles (leave request search)
     public function autocomplete(Request $request): JsonResponse
     {
-        $q = Employee::active()->select('id', 'name', 'arabic_name', 'position', 'department', 'work_location', 'ibs_code');
+        $q = Employee::active()->select(
+            'id',
+            'name',
+            'arabic_name',
+            'position',
+            'department',
+            'work_location',
+            'ibs_code',
+            'direct_manager_id'
+        );
         if ($request->filled('search'))
             $q->search($request->search);
-        return response()->json($q->orderBy('name')->limit(10)->get());
+        $employees = $q->orderBy('name')->limit(10)->get();
+        foreach ($employees as $employee) {
+            $manager = $this->resolveSigningManager($employee);
+            $employee->setAttribute('form_direct_manager', $manager ? [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'role' => $manager->user_role,
+            ] : null);
+        }
+
+        return response()->json($employees);
     }
 
     // ── GET /api/employees ─────────────────────────────────
@@ -138,7 +157,13 @@ class EmployeeController extends Controller
     public function show(Employee $employee): JsonResponse
     {
         $employee->append(['department_label', 'docs_completed', 'docs_percent']);
+        $employee->setRelation('directManager', $this->resolveSigningManager($employee));
 
+        return response()->json($employee);
+    }
+
+    private function resolveSigningManager(Employee $employee): ?Employee
+    {
         // Walk up the chain to find the first ancestor with a manager-level user account.
         // This means supervisors (no user account) are skipped and the signing engineer appears
         // on leave forms, while the org chart tree still reflects the full hierarchy.
@@ -164,9 +189,7 @@ class EmployeeController extends Controller
             $managerId = $ancestor->direct_manager_id;
         }
 
-        $employee->setRelation('directManager', $signingManager);
-
-        return response()->json($employee);
+        return $signingManager;
     }
 
     // ── POST /api/employees ─────────────────────────────────
