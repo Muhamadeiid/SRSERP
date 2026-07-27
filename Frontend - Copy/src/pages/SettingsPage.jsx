@@ -943,27 +943,30 @@ function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manag
 // Position autocomplete for the Auto-Assignment Rules form. Reads from the
 // Positions master list so admins pick a real, canonical title instead of
 // typing a substring that may or may not match anything.
-function PositionSearchInput({ value, onChange, direction = 'down' }) {
+function PositionSearchInput({ value, onChange }) {
   const [q, setQ]       = useState(value || '')
   const [results, setR] = useState([])
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
   const timer = useRef(null)
 
   useEffect(() => { setQ(value || '') }, [value])
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+  }, [])
 
   const runSearch = (v) => {
     setQ(v); onChange(v); setOpen(true)
+    setFailed(false)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(async () => {
       setBusy(true)
       try { const d = await searchPositions(v || ''); setR(Array.isArray(d) ? d : (d.data ?? [])) }
-      catch { setR([]) }
+      catch { setR([]); setFailed(true) }
       finally { setBusy(false) }
     }, 200)
   }
-
-  const popoverPos = direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
 
   return (
     <div className="relative">
@@ -979,8 +982,8 @@ function PositionSearchInput({ value, onChange, direction = 'down' }) {
         />
         {busy && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-neutral-300" />}
       </div>
-      {open && results.length > 0 && (
-        <div className={`absolute z-40 left-0 right-0 ${popoverPos} bg-white border border-neutral-200 rounded-xl shadow-xl max-h-48 overflow-y-auto`}>
+      {open && !busy && results.length > 0 && (
+        <div className="mt-1 bg-white border border-neutral-200 rounded-xl shadow-sm max-h-48 overflow-y-auto">
           {results.map(p => (
             <button key={p.id} type="button"
               onMouseDown={e => e.preventDefault()}
@@ -994,6 +997,11 @@ function PositionSearchInput({ value, onChange, direction = 'down' }) {
             </button>
           ))}
         </div>
+      )}
+      {open && !busy && results.length === 0 && (
+        <p className={`mt-1 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-xs ${failed ? 'text-red-500' : 'text-neutral-400'}`}>
+          {failed ? 'Unable to load positions. Try again.' : 'No matching positions found.'}
+        </p>
       )}
     </div>
   )
