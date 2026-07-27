@@ -165,10 +165,11 @@ export function deleteEmployee(id) {
 }
 
 /** Upload Excel file → returns { imported, errors } */
-export function importEmployees(file, view = 'active') {
+export function importEmployees(file, view = 'active', options = {}) {
   const form = new FormData()
   form.append('file', file)
   form.append('view', view)
+  if (options.dryRun) form.append('dry_run', '1')
   return request('/employees/import', {
     method: 'POST',
     headers: { Accept: 'application/json' }, // no Content-Type – let browser set multipart boundary

@@ -660,8 +660,27 @@ export default function WorkforceTab() {
     if (!file) return;
     setImporting(true);
     try {
+      const previewResult = await importEmployees(file, view, { dryRun: true });
+      const preview = previewResult.preview ?? {};
+      const previewMessage = [
+        "Review Excel import before applying:",
+        "",
+        `New employees: ${preview.new ?? 0}`,
+        `Employees to update: ${preview.update ?? 0}`,
+        `Duplicate records to merge: ${preview.merge ?? 0}`,
+        `Conflicts requiring review: ${preview.conflict ?? 0}`,
+      ];
+      if (previewResult.errors?.length) {
+        previewMessage.push("", previewResult.errors.slice(0, 10).join("\n"));
+      }
+      previewMessage.push("", "Continue with the safe rows?");
+      if (!window.confirm(previewMessage.join("\n"))) return;
+
       const res = await importEmployees(file, view);
       let msg = `✅ Imported ${res.imported} employees successfully.`;
+      if (res.merged) {
+        msg += `\n🔗 Merged ${res.merged} duplicate record(s) safely.`;
+      }
       if (res.errors?.length) {
         msg += `\n\n⚠️ ${res.errors.length} row(s) failed:\n`;
         msg += res.errors.map((err, i) => `  ${i + 1}. ${err}`).join('\n');

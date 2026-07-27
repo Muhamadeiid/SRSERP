@@ -106,8 +106,13 @@ class Employee extends Model
     public function scopeActive($q)
     {
         return $q->where(function ($sub) {
-            $sub->whereNull('last_working_date')
-                ->orWhere('last_working_date', '>=', now()->toDateString())
+            $sub->where(function ($active) {
+                $active->where('status', '!=', 'terminated')
+                    ->where(function ($dates) {
+                        $dates->whereNull('last_working_date')
+                            ->orWhere('last_working_date', '>=', now()->toDateString());
+                    });
+            })
                 ->orWhereHas('activeAssets');
         });
     }
@@ -124,9 +129,13 @@ class Employee extends Model
      */
     public function scopeExEmployees($q)
     {
-        return $q->whereNotNull('last_working_date')
-                 ->where('last_working_date', '<', now()->toDateString())
-                 ->whereDoesntHave('activeAssets');
+        return $q->where(function ($sub) {
+            $sub->where('status', 'terminated')
+                ->orWhere(function ($dated) {
+                    $dated->whereNotNull('last_working_date')
+                        ->where('last_working_date', '<', now()->toDateString());
+                });
+        })->whereDoesntHave('activeAssets');
     }
 
     public function scopeSearch($q, $term)

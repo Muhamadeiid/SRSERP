@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Services\EmployeeDuplicateMerger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -336,6 +337,7 @@ class EmployeeController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
             'view' => 'nullable|in:active,ex',
+            'dry_run' => 'nullable|boolean',
         ]);
         $importingExEmployees = $request->input('view') === 'ex';
 
@@ -366,26 +368,62 @@ class EmployeeController extends Controller
             }
 
             $imported = 0;
+            $merged   = 0;
             $errors   = [];
 
-            DB::transaction(function () use ($data, $importingExEmployees, &$imported, &$errors) {
+            if ($request->boolean('dry_run')) {
+                $preview = ['new' => 0, 'update' => 0, 'merge' => 0, 'conflict' => 0];
+
+                foreach ($data as $i => $row) {
+                    try {
+                        $mapped = $this->mapRow($row);
+                        if (empty($mapped['name'])) {
+                            continue;
+                        }
+
+                        [$existing, $duplicates] = $this->findExistingImportEmployee($mapped);
+                        if (!$existing) {
+                            $preview['new']++;
+                        } elseif ($duplicates->isNotEmpty()) {
+                            foreach ($duplicates as $duplicate) {
+                                app(EmployeeDuplicateMerger::class)->assertCanMerge($existing, $duplicate);
+                            }
+                            $preview['merge'] += $duplicates->count();
+                            $preview['update']++;
+                        } else {
+                            $preview['update']++;
+                        }
+                    } catch (\Throwable $e) {
+                        $preview['conflict']++;
+                        $errors[] = "Row " . ($i + 2) . ": " . $e->getMessage();
+                    }
+                }
+
+                return response()->json([
+                    'preview' => $preview,
+                    'errors' => $errors,
+                ]);
+            }
+
+            DB::transaction(function () use ($data, $importingExEmployees, &$imported, &$merged, &$errors) {
                 foreach ($data as $i => $row) {
                     try {
                         $mapped = $this->mapRow($row);
                         if (empty($mapped['name'])) continue;
 
                         if ($importingExEmployees) {
-                            if (empty($mapped['last_working_date'])) {
-                                throw new \InvalidArgumentException('Last Working Date is required for Ex-Employees');
-                            }
                             $mapped['status'] = 'terminated';
                         }
 
-                        $existing = $this->findExistingImportEmployee($mapped);
+                        [$existing, $duplicates] = $this->findExistingImportEmployee($mapped);
 
                         if ($existing) {
                             if ($existing->trashed()) {
                                 $existing->restore();
+                            }
+                            foreach ($duplicates as $duplicate) {
+                                app(EmployeeDuplicateMerger::class)->mergeInto($existing, $duplicate);
+                                $merged++;
                             }
                             // A blank code in one workbook must not erase a valid
                             // identifier already stored on the employee record.
@@ -417,6 +455,7 @@ class EmployeeController extends Controller
 
             return response()->json([
                 'imported' => $imported,
+                'merged'   => $merged,
                 'errors'   => $errors,
                 'message'  => "Imported {$imported} employees" . ($errors ? ' with ' . count($errors) . ' errors' : ''),
             ]);
@@ -548,26 +587,49 @@ class EmployeeController extends Controller
     // ── Private helpers ─────────────────────────────────────
 
     /** Find the existing employee represented by an imported row. */
-    private function findExistingImportEmployee(array $mapped): ?Employee
+    private function findExistingImportEmployee(array $mapped): array
     {
+        $normalizedName = $this->normalizeEmployeeName($mapped['name'] ?? '');
+        $sameName = $normalizedName === ''
+            ? collect()
+            : Employee::withTrashed()
+                ->whereRaw('LOWER(TRIM(name)) = ?', [$normalizedName])
+                ->orderBy('id')
+                ->get();
+
         if (!empty($mapped['ibs_code'])) {
             $byIbs = Employee::withTrashed()
                 ->where('ibs_code', $mapped['ibs_code'])
                 ->first();
 
             if ($byIbs) {
-                return $byIbs;
+                if (
+                    $normalizedName !== ''
+                    && $this->normalizeEmployeeName($byIbs->name) !== $normalizedName
+                ) {
+                    throw new \DomainException(
+                        "IBS {$mapped['ibs_code']} belongs to {$byIbs->name}, not {$mapped['name']}."
+                    );
+                }
+
+                return [
+                    $byIbs,
+                    $sameName->reject(fn(Employee $employee) => $employee->is($byIbs))->values(),
+                ];
             }
         }
 
-        $normalizedName = $this->normalizeEmployeeName($mapped['name'] ?? '');
         if ($normalizedName === '') {
-            return null;
+            return [null, collect()];
         }
 
-        return Employee::withTrashed()
-            ->whereRaw('LOWER(TRIM(name)) = ?', [$normalizedName])
-            ->first();
+        if ($sameName->count() > 1) {
+            throw new \DomainException(
+                "Multiple records already use the name {$mapped['name']} with different IBS codes."
+            );
+        }
+
+        return [$sameName->first(), collect()];
     }
 
     private function normalizeEmployeeName(?string $name): string
