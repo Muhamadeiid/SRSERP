@@ -1327,6 +1327,8 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const casualRem2  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
+    const selectedManager = emp?.form_direct_manager || emp?.direct_manager || emp?.directManager
+    const selectedManagerRole = selectedManager?.role || selectedManager?.user_role || selectedManager?.user?.role
     setForm(f => ({
       ...f,
       employee_id: emp.id ?? null,
@@ -1334,7 +1336,9 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
       job_title: emp.position ?? '',
       department: selectedDept,
       department_label: deptLabel(emp),
-      direct_manager_name: '',
+      direct_manager_name: selectedManager?.name && selectedManagerRole !== 'depot_manager'
+        ? twoName(selectedManager.name)
+        : '',
     }))
     setBalances(null)
     if (!emp.id) return
@@ -1623,6 +1627,8 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
   useEffect(() => { if (prefill && onPrefillDone) onPrefillDone() }, [])
 
   const handleEmployeeSelect = (emp) => {
+    const selectedManager = emp?.form_direct_manager || emp?.direct_manager || emp?.directManager
+    const selectedManagerRole = selectedManager?.role || selectedManager?.user_role || selectedManager?.user?.role
     setForm(f => ({
       ...f,
       employee_id:      emp.id ?? null,
@@ -1630,7 +1636,9 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
       job_title:        emp.position ?? '',
       department:       emp.department ?? '',
       department_label: DEPT_LABEL[emp.department] ?? emp.department ?? '',
-      direct_manager_name: '',
+      direct_manager_name: selectedManager?.name && selectedManagerRole !== 'depot_manager'
+        ? selectedManager.name
+        : '',
     }))
     if (emp.id) {
       getEmployee(emp.id)
