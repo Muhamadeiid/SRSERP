@@ -45,6 +45,32 @@ class EmployeeController extends Controller
         return response()->json($employees);
     }
 
+    public function formProfile(Employee $employee): JsonResponse
+    {
+        $manager = $this->resolveSigningManager($employee);
+        if (!$manager) {
+            $manager = $employee->directManager()
+                ->select('id', 'name', 'position', 'user_id')
+                ->with('user:id,role')
+                ->first();
+            if ($manager) {
+                $manager->user_role = $manager->user?->role;
+            }
+        }
+
+        return response()->json([
+            'id' => $employee->id,
+            'position' => $employee->position,
+            'department' => $employee->department,
+            'department_label' => $employee->department_label,
+            'direct_manager' => $manager ? [
+                'id' => $manager->id,
+                'name' => $manager->name,
+                'role' => $manager->user_role ?? null,
+            ] : null,
+        ]);
+    }
+
     // ── GET /api/employees ─────────────────────────────────
     public function index(Request $request): JsonResponse
     {

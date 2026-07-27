@@ -109,6 +109,10 @@ export function getEmployee(id) {
   return cachedRequest(`/employees/${id}`, 30000)
 }
 
+export function getEmployeeFormProfile(id) {
+  return cachedRequest(`/employees/${id}/form-profile`, 10000)
+}
+
 // ── Depot Manager & HR (auto-fill on forms) ─────────────────
 export function getDepotManager() {
   return request('/users/depot-manager')

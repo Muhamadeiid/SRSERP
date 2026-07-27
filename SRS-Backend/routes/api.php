@@ -100,6 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Employee search — all authenticated users (for leave request autocomplete)
     Route::get('/employees/autocomplete', [EmployeeController::class, 'autocomplete']);
+    Route::get('/employees/{employee}/form-profile', [EmployeeController::class, 'formProfile']);
     Route::get('/employees/{employee}/leave-balance', [LeaveBalanceController::class, 'show']);
 
     // ── HR Only — Admin, Depot Manager, HR department ─────────────────────────

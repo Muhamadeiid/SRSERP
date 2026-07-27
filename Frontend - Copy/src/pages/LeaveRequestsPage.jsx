@@ -6,7 +6,7 @@ import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download
 } from 'lucide-react'
-import { getEmployees, getEmployee, searchEmployees, getDepotManager } from '../services/employeeService'
+import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
@@ -828,7 +828,7 @@ function LRFForm({ onSubmit, saving }) {
         .catch(() => setBalances({}))
         .finally(() => setBalLoading(false))
       // fetch direct manager
-      getEmployee(emp.id)
+      getEmployeeFormProfile(emp.id)
         .then(res => {
           const full = unwrapData(res)
           const fullDept = deptValue(full) || selectedDept
@@ -839,7 +839,7 @@ function LRFForm({ onSubmit, saving }) {
             department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
           }))
           const mgr = full?.direct_manager || full?.directManager
-          if (mgr?.name && mgr?.user_role !== 'depot_manager') {
+          if (mgr?.name && (mgr?.role || mgr?.user_role) !== 'depot_manager') {
             setForm(f => ({ ...f, direct_manager_name: twoName(mgr.name) }))
           }
         })
@@ -1344,7 +1344,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     if (!emp.id) return
     setBalLoading(true)
     getLeaveBalance(emp.id).then(r => setBalances(r.data ?? {})).catch(() => setBalances({})).finally(() => setBalLoading(false))
-    getEmployee(emp.id).then(res => {
+    getEmployeeFormProfile(emp.id).then(res => {
       const full = unwrapData(res)
       const fullDept = deptValue(full) || selectedDept
       setForm(f => ({
@@ -1352,7 +1352,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         job_title: full?.position ?? f.job_title,
         department: fullDept,
         department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
-        direct_manager_name: ((full?.direct_manager || full?.directManager)?.user_role !== 'depot_manager' ? twoName((full?.direct_manager || full?.directManager)?.name) : null) ?? f.direct_manager_name,
+        direct_manager_name: (((full?.direct_manager || full?.directManager)?.role || (full?.direct_manager || full?.directManager)?.user_role) !== 'depot_manager' ? twoName((full?.direct_manager || full?.directManager)?.name) : null) ?? f.direct_manager_name,
       }))
     }).catch(() => {})
   }
@@ -1641,11 +1641,11 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
         : '',
     }))
     if (emp.id) {
-      getEmployee(emp.id)
+      getEmployeeFormProfile(emp.id)
         .then(res => {
           const full = unwrapData(res)
           const mgr = full?.direct_manager || full?.directManager
-          if (mgr?.name && mgr?.user_role !== 'depot_manager') {
+          if (mgr?.name && (mgr?.role || mgr?.user_role) !== 'depot_manager') {
             setForm(f => ({ ...f, direct_manager_name: mgr.name }))
           }
         })
