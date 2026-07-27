@@ -172,15 +172,13 @@ async function printRequestWord(req) {
         descendantBottom,
       )
       const renderedWidth = Math.max(section.scrollWidth, section.getBoundingClientRect().width)
-      const printableHeightPx = 280 * 96 / 25.4
-      const printableWidthPx = 202 * 96 / 25.4
-      // Chrome needed 93% on top of the previous 90% document scale.
-      // Applying the equivalent scale here keeps the dialog at its default
-      // while the rendered Word page still fits one physical A4 sheet.
-      const printScale = Math.min(0.83, printableHeightPx / renderedHeight, printableWidthPx / renderedWidth)
+      const printableHeightPx = 292 * 96 / 25.4
+      const printableWidthPx = 208 * 96 / 25.4
+      // CSS zoom changes the document's real print footprint, so unlike the
+      // old transform approach it can use most of A4 without creating page 2.
+      const printScale = Math.min(0.93, printableHeightPx / renderedHeight, printableWidthPx / renderedWidth)
       section.style.zoom = String(printScale)
       section.style.transform = 'none'
-      section.style.width = `${100 / printScale}%`
       section.style.maxHeight = `${printableHeightPx / printScale}px`
     }
 
