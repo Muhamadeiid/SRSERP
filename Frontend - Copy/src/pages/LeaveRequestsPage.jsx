@@ -173,15 +173,9 @@ async function printRequestWord(req) {
     const wrapper = printWindow.document.querySelector('.docx-wrapper')
     const printCellSpacing = printWindow.document.createElement('style')
     printCellSpacing.textContent = `
-      .docx-wrapper > section.docx table td {
-        box-sizing: border-box !important;
-        padding: 4px 7px !important;
-      }
       .docx-wrapper > section.docx table td > p {
-        box-sizing: border-box !important;
-        margin: 0 !important;
-        padding: 2px 4px !important;
-        max-width: 100% !important;
+        margin-left: 5px !important;
+        margin-right: 5px !important;
       }
     `
     printWindow.document.head.appendChild(printCellSpacing)
