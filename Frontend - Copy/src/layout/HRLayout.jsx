@@ -152,7 +152,8 @@ export default function HRLayout() {
       const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
       const param = isReschedule ? 'resubmit' : 'req'
       const requestPath = n.event?.startsWith('otr_') ? '/human-resources/overtime' : '/human-resources/leave'
-      navigate(`${requestPath}?${param}=${n.data.leave_request_id}`)
+      const focus = isReschedule ? '' : '&focus=approval'
+      navigate(`${requestPath}?${param}=${n.data.leave_request_id}${focus}`)
     }
   }
 

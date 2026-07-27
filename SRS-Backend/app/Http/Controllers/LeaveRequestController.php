@@ -351,10 +351,12 @@ class LeaveRequestController extends Controller
         if (!in_array($user->role, ['admin', 'depot_manager'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if ($leaveRequest->status !== 'hr_approved') {
-            return response()->json(['success' => false, 'message' => 'Request must be approved by HR before Depot Manager final approval'], 422);
+        if (!in_array($leaveRequest->status, ['pending', 'manager_approved', 'hr_approved'], true)) {
+            return response()->json(['success' => false, 'message' => 'Request is not awaiting approval'], 422);
         }
 
+        // Depot Manager and Super Admin may finalize an outstanding request directly.
+        // Skipped approval stages remain unsigned so the printed form stays truthful.
         $leaveRequest->update([
             'status' => 'approved',
             'approved_by' => $user->id,

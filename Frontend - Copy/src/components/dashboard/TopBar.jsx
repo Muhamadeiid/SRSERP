@@ -83,7 +83,8 @@ export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuCli
     if (n.data?.leave_request_id) {
       const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
       const param = isReschedule ? 'resubmit' : 'req'
-      navigate(`/human-resources/leave?${param}=${n.data.leave_request_id}`)
+      const focus = isReschedule ? '' : '&focus=approval'
+      navigate(`/human-resources/leave?${param}=${n.data.leave_request_id}${focus}`)
     }
   }
 

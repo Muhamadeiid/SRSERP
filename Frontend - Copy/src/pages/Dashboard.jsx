@@ -347,7 +347,7 @@ export default function DashboardPage() {
               subColor={pendingLrfCount > 0 ? 'text-amber-600' : 'text-neutral-400'}
               icon={Calendar}
               iconBg="bg-amber-100 text-amber-600"
-              onClick={() => navigate('/human-resources/leave')}
+              onClick={() => navigate('/human-resources/leave?focus=pending')}
             />
             <SectionStat
               label="Pending Overtime"
@@ -356,7 +356,7 @@ export default function DashboardPage() {
               subColor={pendingOtCount > 0 ? 'text-orange-600' : 'text-neutral-400'}
               icon={Clock}
               iconBg="bg-orange-100 text-orange-600"
-              onClick={() => navigate('/human-resources/leave')}
+              onClick={() => navigate('/human-resources/overtime?focus=pending')}
             />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">

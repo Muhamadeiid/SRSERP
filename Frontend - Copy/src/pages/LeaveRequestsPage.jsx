@@ -1855,7 +1855,7 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated, focusApproval = false }) {
   const { departments } = useLookups()
   const resolveDept = (raw) => {
     if (!raw) return ''
@@ -1865,11 +1865,21 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const [trackingDraft, setTrackingDraft]   = useState(req?.tracking_no || '')
   const [editingTracking, setEditingTracking] = useState(false)
   const [savingTracking, setSavingTracking] = useState(false)
+  const approvalActionsRef = useRef(null)
 
   useEffect(() => {
     setTrackingDraft(req?.tracking_no || '')
     setEditingTracking(false)
   }, [req?.tracking_no, req?.id])
+
+  useEffect(() => {
+    if (!focusApproval || !req) return
+    const timer = window.setTimeout(() => {
+      approvalActionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      approvalActionsRef.current?.focus({ preventScroll: true })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [focusApproval, req])
 
   if (!req) return null
   const isLRF       = req.type === 'lrf'
@@ -1882,7 +1892,6 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
   const hrSignatureParty = signatureParties.hr || null
   const depotSignatureParty = signatureParties.depot_manager || signatureParties.depotManager || null
-
   const saveTracking = async () => {
     const value = trackingDraft.trim()
     if (!value) { alert('Tracking number cannot be empty'); return }
@@ -2022,7 +2031,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             </button>
           </div>
 
-          <div className="flex gap-2 items-center flex-wrap justify-end">
+          <div
+            ref={approvalActionsRef}
+            tabIndex={-1}
+            className={`flex gap-2 items-center flex-wrap justify-end rounded-lg outline-none ${focusApproval ? 'ring-2 ring-amber-300 ring-offset-4' : ''}`}
+          >
             {canWithdraw && (
               <button onClick={() => onCancel(req.id)}
                 title="Withdraw"
@@ -2052,8 +2065,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {/* Depot/admin: pending or manager_approved → single Approve */}
-            {req.status === 'pending' && isDepotAdmin && (
+            {/* Depot Manager / Super Admin may finalize any outstanding stage. */}
+            {['pending', 'manager_approved'].includes(req.status) && isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule"
@@ -2065,8 +2078,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                   className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
                   <XCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => onManagerApprove(req.id)}
-                  title="Manager Approve"
+                <button onClick={() => onApprove(req.id)}
+                  title="Approve and finalize"
                   className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
                 </button>
@@ -2139,6 +2152,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [submitted,   setSubmitted]   = useState(false)
   const [formKey,     setFormKey]     = useState(0)   // increment to reset form
   const [viewReq,     setViewReq]     = useState(null)
+  const [focusApproval, setFocusApproval] = useState(false)
   const [resubmitFrom, setResubmitFrom] = useState(null) // prefill data for LRF/OTR form after reschedule
   const [rejectModal,  setRejectModal]  = useState(null) // { id }
   const [rejectReason, setRejectReason] = useState('')
@@ -2153,7 +2167,8 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyPage,   setHistoryPage]   = useState(1)
   const HISTORY_PER_PAGE = 25
 
-  const openRequest = useCallback((request) => {
+  const openRequest = useCallback((request, options = {}) => {
+    setFocusApproval(Boolean(options.focusApproval))
     setViewReq(request)
     fetchRequestDetails(request)
       .then(fullRequest => {
@@ -2263,7 +2278,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           setFormKey(k => k + 1)
           window.scrollTo({ top: 0, behavior: 'smooth' })
         } else {
-          openRequest(found)
+          openRequest(found, { focusApproval: params.get('focus') === 'approval' })
         }
         navigate(location.pathname, { replace: true })
       } else {
@@ -2273,6 +2288,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       fetchRequests()
     }
   }, [location.search, location.pathname, requests, loadingReqs, fetchRequests, navigate, openRequest])
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('focus') !== 'pending') return
+    const timer = window.setTimeout(() => {
+      document.getElementById('pending-approvals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [location.search, pending.length])
 
   const handleSubmit = async (data) => {
     setSaving(true)
@@ -2411,7 +2434,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {/* Pending approvals — manager / depot_manager only */}
       {(isDepotAdmin || isHrApprover || user?.role === 'manager') && pending.length > 0 && (
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+        <div id="pending-approvals" className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden scroll-mt-6">
           <div className="px-6 py-4 border-b border-amber-100 bg-amber-50 flex items-center gap-2">
             <Bell className="w-4 h-4 text-amber-500" />
             <h2 className="text-sm font-bold text-amber-700">Pending Approvals</h2>
@@ -2442,10 +2465,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all">Reschedule</button>
                   <button onClick={() => setRejectModal({ id: r.id })}
                     className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-all">Reject</button>
-                  {/* Depot/admin: pending → Approve directly (full approve) */}
-                  {r.status === 'pending' && isDepotAdmin && (
-                    <button onClick={() => handleManagerApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Manager Approve</button>
+                  {/* Depot Manager / Super Admin can finalize any outstanding stage. */}
+                  {['pending', 'manager_approved'].includes(r.status) && isDepotAdmin && (
+                    <button onClick={() => handleApprove(r.id)}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve & Finalize</button>
                   )}
                   {/* Regular manager: pending → Approve (manager step) */}
                   {r.status === 'pending' && user?.role === 'manager' && isDirectManagerOf(r) && (
@@ -2663,6 +2686,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           currentUserId={user?.id}
           isDirectManager={isDirectManagerOf(viewReq)}
           onUpdated={fetchRequests}
+          focusApproval={focusApproval}
         />
       )}
 
