@@ -78,33 +78,57 @@ async function printRequestWord(req) {
     ])
     const blob = await generateRequestWord(fullRequest, { download: false })
 
-    printWindow.document.title = req.tracking_no || (req.type === 'lrf' ? 'Leave Request' : 'Overtime Request')
+    const printTitle = req.tracking_no || (req.type === 'lrf' ? 'Leave Request' : 'Overtime Request')
+    printWindow.document.title = printTitle
+    try {
+      const safeTitle = String(printTitle).replace(/[^a-z0-9_-]+/gi, '-')
+      printWindow.history.replaceState({}, printTitle, `/print/${safeTitle}`)
+    } catch (_) {}
     printWindow.document.body.innerHTML = '<div id="word-print-root"></div>'
     const style = printWindow.document.createElement('style')
     style.textContent = `
       @page { size: A4 portrait; margin: 0; }
-      html, body { margin: 0; padding: 0; background: #fff; }
+      * { box-sizing: border-box; }
+      html, body {
+        width: 210mm !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        overflow: hidden !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      #word-print-root {
+        width: 210mm !important;
+        height: 296mm !important;
+        overflow: hidden !important;
+      }
       .docx-wrapper { background: #fff !important; padding: 0 !important; }
       .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }
       @media print {
         html, body {
           width: 210mm !important;
-          height: 297mm !important;
+          height: 296mm !important;
           overflow: hidden !important;
         }
         .docx-wrapper {
           position: relative !important;
           width: 210mm !important;
-          height: 297mm !important;
+          height: 296mm !important;
           padding: 0 !important;
           overflow: hidden !important;
+          break-after: avoid !important;
+          page-break-after: avoid !important;
         }
         .docx-wrapper > section.docx {
           position: absolute !important;
           inset: 0 auto auto 0 !important;
+          transform: none !important;
           transform-origin: top left !important;
           break-after: avoid-page !important;
           page-break-after: avoid !important;
+          overflow: hidden !important;
         }
       }
     `
@@ -147,14 +171,21 @@ async function printRequestWord(req) {
         section.getBoundingClientRect().height,
         descendantBottom,
       )
-      const printableHeightPx = (297 - 8) * 96 / 25.4
-      const printScale = Math.min(0.92, printableHeightPx / renderedHeight)
-      section.style.transform = `scale(${printScale})`
+      const renderedWidth = Math.max(section.scrollWidth, section.getBoundingClientRect().width)
+      const printableHeightPx = 286 * 96 / 25.4
+      const printableWidthPx = 206 * 96 / 25.4
+      const printScale = Math.min(0.9, printableHeightPx / renderedHeight, printableWidthPx / renderedWidth)
+      section.style.zoom = String(printScale)
+      section.style.transform = 'none'
       section.style.width = `${100 / printScale}%`
+      section.style.maxHeight = `${printableHeightPx / printScale}px`
     }
 
     printWindow.focus()
-    setTimeout(() => printWindow.print(), 500)
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.onafterprint = () => printWindow.close()
+    }, 500)
   } catch (error) {
     printWindow.close()
     alert(error?.message || 'Unable to prepare the form for printing.')
