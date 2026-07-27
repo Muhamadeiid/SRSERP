@@ -72,9 +72,16 @@ async function printRequestWord(req) {
   printWindow.document.close()
 
   try {
-    const [fullRequest, { renderAsync: renderWordDocument }] = await Promise.all([
+    const [
+      fullRequest,
+      { renderAsync: renderWordDocument },
+      { default: html2canvas },
+      { jsPDF },
+    ] = await Promise.all([
       fetchRequestDetails(req),
       import('docx-preview'),
+      import('html2canvas'),
+      import('jspdf'),
     ])
     const blob = await generateRequestWord(fullRequest, { download: false })
 
@@ -160,33 +167,51 @@ async function printRequestWord(req) {
     await new Promise((resolve) => printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(resolve)))
 
     const section = printWindow.document.querySelector('.docx-wrapper > section.docx')
-    if (section) {
-      const sectionTop = section.getBoundingClientRect().top
-      const descendantBottom = Math.max(
-        ...Array.from(section.querySelectorAll('*'))
-          .map((element) => element.getBoundingClientRect().bottom - sectionTop),
-      )
-      const renderedHeight = Math.max(
-        section.scrollHeight,
-        section.getBoundingClientRect().height,
-        descendantBottom,
-      )
-      const renderedWidth = Math.max(section.scrollWidth, section.getBoundingClientRect().width)
-      const printableHeightPx = 292 * 96 / 25.4
-      const printableWidthPx = 208 * 96 / 25.4
-      // CSS zoom changes the document's real print footprint, so unlike the
-      // old transform approach it can use most of A4 without creating page 2.
-      const printScale = Math.min(0.93, printableHeightPx / renderedHeight, printableWidthPx / renderedWidth)
-      section.style.zoom = String(printScale)
-      section.style.transform = 'none'
-      section.style.maxHeight = `${printableHeightPx / printScale}px`
-    }
+    if (!section) throw new Error('Unable to render the form for printing.')
 
+    const root = printWindow.document.getElementById('word-print-root')
+    const wrapper = printWindow.document.querySelector('.docx-wrapper')
+    Object.assign(root.style, { width: 'auto', height: 'auto', overflow: 'visible' })
+    Object.assign(wrapper.style, { width: 'auto', height: 'auto', overflow: 'visible' })
+    Object.assign(section.style, {
+      position: 'relative',
+      inset: 'auto',
+      zoom: '1',
+      transform: 'none',
+      margin: '0',
+      maxHeight: 'none',
+      overflow: 'visible',
+    })
+
+    const canvas = await html2canvas(section, {
+      backgroundColor: '#ffffff',
+      scale: 2.5,
+      useCORS: true,
+      logging: false,
+      imageTimeout: 15000,
+    })
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
+    const margin = 4
+    const maxWidth = 210 - margin * 2
+    const maxHeight = 297 - margin * 2
+    const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+    const imageWidth = canvas.width * ratio
+    const imageHeight = canvas.height * ratio
+    const imageX = (210 - imageWidth) / 2
+    const imageY = (297 - imageHeight) / 2
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', imageX, imageY, imageWidth, imageHeight, undefined, 'FAST')
+
+    const pdfUrl = URL.createObjectURL(pdf.output('blob'))
+    printWindow.location.replace(pdfUrl)
     printWindow.focus()
     setTimeout(() => {
       printWindow.print()
-      printWindow.onafterprint = () => printWindow.close()
-    }, 500)
+      printWindow.onafterprint = () => {
+        URL.revokeObjectURL(pdfUrl)
+        printWindow.close()
+      }
+    }, 1200)
   } catch (error) {
     printWindow.close()
     alert(error?.message || 'Unable to prepare the form for printing.')
