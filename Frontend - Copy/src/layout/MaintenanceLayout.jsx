@@ -27,11 +27,12 @@ export default function MaintenanceLayout() {
   const location  = useLocation()
   const dispatch  = useDispatch()
   const { user }  = useSelector(s => s.auth)
+  const visibleNavItems = user?.role === 'admin' ? NAV_ITEMS : NAV_ITEMS.slice(0, 1)
   const sidebarW  = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset = isMobile ? 0 : sidebarW
 
-  const activeNav = NAV_ITEMS.find(n =>
+  const activeNav = visibleNavItems.find(n =>
     n.end ? location.pathname === n.path : location.pathname.startsWith(n.path)
   )
   const pageLabel = activeNav?.label ?? 'Maintenance'
@@ -72,7 +73,7 @@ export default function MaintenanceLayout() {
             {!collapsed && (
               <p className="text-[10px] font-semibold text-neutral-300 uppercase tracking-widest px-3 py-1.5">Modules</p>
             )}
-            {NAV_ITEMS.map(item => (
+            {visibleNavItems.map(item => (
               <NavLink
                 key={item.label}
                 to={item.path}

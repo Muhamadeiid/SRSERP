@@ -25,6 +25,7 @@ use App\Http\Controllers\DisciplinaryCaseController;
 use App\Http\Controllers\FleetCheckController;
 use App\Http\Controllers\WithdrawalController;
 use App\Http\Controllers\PublicHolidayController;
+use App\Http\Controllers\MaintenanceTaskController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -74,6 +75,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Depot Manager & HR — any authenticated user (auto-fill on forms) ──────
     Route::get('/users/depot-manager', [UserController::class, 'depotManager']);
     Route::get('/users/hr-officer',    [UserController::class, 'hrOfficer']);
+
+    Route::get('/maintenance-tasks/options', [MaintenanceTaskController::class, 'options']);
+    Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);
+    Route::post('/maintenance-tasks', [MaintenanceTaskController::class, 'store']);
+    Route::put('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'update']);
+    Route::delete('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'destroy']);
 
     // ── Procurement (PRF) — every authenticated user can submit; approvals
     //     gated inside the controller (procurement → ehs → depot_manager)

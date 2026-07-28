@@ -42,3 +42,10 @@ export const createWithdrawal   = (data)   => request('/withdrawals', { method: 
 export const updateWithdrawal   = (id, d)  => request(`/withdrawals/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) })
 export const deleteWithdrawal   = (id)     => request(`/withdrawals/${id}`, { method: 'DELETE' })
 export const getWithdrawalStats = ()       => request('/withdrawals/stats')
+
+// Pending tasks
+export const getMaintenanceTasks = (params = {}) => request('/maintenance-tasks?' + new URLSearchParams(params))
+export const getMaintenanceTaskOptions = () => request('/maintenance-tasks/options')
+export const createMaintenanceTask = (data) => request('/maintenance-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+export const updateMaintenanceTask = (id, data) => request(`/maintenance-tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+export const deleteMaintenanceTask = (id) => request(`/maintenance-tasks/${id}`, { method: 'DELETE' })

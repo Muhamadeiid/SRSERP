@@ -91,7 +91,7 @@ export default function App() {
 
         {/* Maintenance Layout — Admin only (under development) */}
         <Route path="/maintenance" element={
-          <ProtectedRoute roles={['admin']} redirect="/">
+          <ProtectedRoute roles={['admin', 'depot_manager', 'manager']} redirect="/">
             <MaintenanceLayout />
           </ProtectedRoute>
         }>
