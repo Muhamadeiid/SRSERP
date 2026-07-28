@@ -54,7 +54,7 @@ Log ".env and machine_lock restored"
 # What changed?
 $changed = git diff --name-only "$local..HEAD" 2>&1
 $composerNeeded = $changed -match 'composer\.(json|lock)|SRS-Backend/app/|SRS-Backend/routes/|SRS-Backend/config/'
-$migrationsNeeded = $changed -match 'SRS-Backend/database/migrations/'
+$migrationsNeeded = $forceFrontendRefresh -or ($changed -match 'SRS-Backend/database/migrations/')
 $frontendNeeded = $forceFrontendRefresh -or ($changed -match 'Frontend - Copy/')
 
 if ($composerNeeded) {
