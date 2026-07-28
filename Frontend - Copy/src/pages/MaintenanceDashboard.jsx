@@ -291,11 +291,16 @@ function PendingTasks({ user }) {
 export default function MaintenanceDashboard() {
   const navigate = useNavigate()
   const { user } = useSelector(state => state.auth)
+  const isAdmin = user?.role === 'admin'
   const [loading, setLoading] = useState(true)
   const [tabStats, setTabStats] = useState({})
   const [eqStats, setEqStats] = useState({})
 
   const fetchStats = useCallback(async () => {
+    if (!isAdmin) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const [cm, pm, hm, eq] = await Promise.all([
@@ -308,7 +313,7 @@ export default function MaintenanceDashboard() {
       setEqStats(eq.data ?? {})
     } catch (_) {}
     setLoading(false)
-  }, [])
+  }, [isAdmin])
 
   useEffect(() => { fetchStats() }, [fetchStats])
 
@@ -331,7 +336,7 @@ export default function MaintenanceDashboard() {
       </div>
 
       {/* Equipment overview */}
-      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
+      {isAdmin && <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
           <Cog className="w-4 h-4 text-neutral-400" />
           <h2 className="text-sm font-bold text-secondary-700">Fleet Overview</h2>
@@ -361,12 +366,12 @@ export default function MaintenanceDashboard() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       <PendingTasks user={user} />
 
       {/* 3 Maintenance tabs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {isAdmin && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {TABS.map(tab => {
           const s = tabStats[tab.key] ?? {}
           return (
@@ -407,7 +412,7 @@ export default function MaintenanceDashboard() {
             </div>
           )
         })}
-      </div>
+      </div>}
     </div>
   )
 }
