@@ -454,11 +454,12 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
         $isOwner = $leaveRequest->user_id === $user->id;
+        $isApproverAccount = in_array($user->role, ['admin', 'depot_manager', 'hr', 'manager'], true);
 
-        if (!$isOwner) {
+        if (!$isOwner || $isApproverAccount) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the account that created this request can withdraw it.',
+                'message' => 'Only the staff account that submitted this request can withdraw it. Approvers must reject it instead.',
             ], 403);
         }
         if (in_array($leaveRequest->status, ['cancelled', 'rejected'])) {

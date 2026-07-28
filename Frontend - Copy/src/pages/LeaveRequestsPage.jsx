@@ -2005,6 +2005,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     && req.user_id != null
     && currentUserId != null
     && String(req.user_id) === String(currentUserId)
+    && !['admin', 'depot_manager', 'hr', 'manager'].includes(userRole)
   const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
   const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF
