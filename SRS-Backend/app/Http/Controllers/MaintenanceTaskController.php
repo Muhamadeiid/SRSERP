@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\MaintenanceTask;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,6 +98,17 @@ class MaintenanceTaskController extends Controller
         $task->viewers()->sync($viewerIds);
         $task->refresh();
 
+        $position = $this->trainPosition($task);
+        foreach ($viewerIds as $viewerId) {
+            Notification::notifyUser(
+                $viewerId,
+                'maintenance_task_assigned',
+                'New maintenance task',
+                $task->title . ($position ? " - {$position}" : ''),
+                ['maintenance_task_id' => $task->id, 'path' => '/maintenance']
+            );
+        }
+
         return response()->json([
             'success' => true,
             'data' => $task->load(['viewers', 'creator:id,name']),
@@ -159,5 +171,20 @@ class MaintenanceTaskController extends Controller
     private function canViewTasks(User $user): bool
     {
         return $this->canManageAll($user) || $user->role === 'manager';
+    }
+
+    private function trainPosition(MaintenanceTask $task): string
+    {
+        if (!$task->train_number) return '';
+
+        $label = 'TS' . str_pad((string) $task->train_number, 2, '0', STR_PAD_LEFT);
+        if ($task->unit_number) {
+            $unitCode = 1000 + $task->train_number + (($task->unit_number - 1) * 20);
+            $label .= " / Unit {$task->unit_number} ({$unitCode})";
+        }
+        if ($task->car_code) {
+            $label .= " / {$task->car_code}";
+        }
+        return $label;
     }
 }

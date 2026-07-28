@@ -1,12 +1,14 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   Wrench, BarChart3, Zap, CalendarClock, HardHat, Cog,
-  ChevronLeft, ChevronRight, LogOut, Bell, Menu, Construction,
+  ChevronLeft, ChevronRight, LogOut, Bell, Menu, Construction, X, CheckCheck,
   ClipboardCheck, ArrowLeftRight,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
+import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 
 const NAV_ITEMS = [
   { label: 'Dashboard',    path: '/maintenance',          icon: BarChart3,     end: true },
@@ -21,6 +23,10 @@ const NAV_ITEMS = [
 const initials = (name) =>
   name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
+const fmtTime = value => value
+  ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  : ''
+
 export default function MaintenanceLayout() {
   const { collapsed, setCollapsed, isMobile } = useSidebar()
   const navigate  = useNavigate()
@@ -31,6 +37,9 @@ export default function MaintenanceLayout() {
   const sidebarW  = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset = isMobile ? 0 : sidebarW
+  const [notifs, setNotifs] = useState([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const panelRef = useRef()
 
   const activeNav = visibleNavItems.find(n =>
     n.end ? location.pathname === n.path : location.pathname.startsWith(n.path)
@@ -38,6 +47,42 @@ export default function MaintenanceLayout() {
   const pageLabel = activeNav?.label ?? 'Maintenance'
 
   const handleLogout = () => { dispatch(logout()); navigate('/login') }
+
+  const fetchNotifs = useCallback(async () => {
+    try {
+      const result = await getNotifications()
+      setNotifs(result.data ?? [])
+    } catch (_) {}
+  }, [])
+
+  useEffect(() => {
+    fetchNotifs()
+    const timer = setInterval(fetchNotifs, 30000)
+    return () => clearInterval(timer)
+  }, [fetchNotifs])
+
+  useEffect(() => {
+    const close = event => {
+      if (panelRef.current && !panelRef.current.contains(event.target)) setNotificationsOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+
+  const unread = notifs.filter(notification => !notification.read).length
+  const handleMarkAll = async event => {
+    event.stopPropagation()
+    await markAllRead()
+    setNotifs(current => current.map(notification => ({ ...notification, read: true })))
+  }
+  const handleNotifClick = async notification => {
+    if (!notification.read) {
+      await markOneRead(notification.id)
+      setNotifs(current => current.map(item => item.id === notification.id ? { ...item, read: true } : item))
+    }
+    setNotificationsOpen(false)
+    navigate(notification.data?.path || '/maintenance')
+  }
 
   return (
     <div className="font-sans bg-neutral-50 min-h-screen flex overflow-x-hidden">
@@ -148,9 +193,43 @@ export default function MaintenanceLayout() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
-            <button className="w-8 h-8 border border-neutral-100 rounded-lg flex items-center justify-center hover:bg-neutral-50 transition-colors text-secondary">
-              <Bell className="w-4 h-4" />
-            </button>
+            <div className="relative" ref={panelRef}>
+              <button onClick={() => setNotificationsOpen(open => !open)} className="relative w-8 h-8 border border-neutral-100 rounded-lg flex items-center justify-center hover:bg-neutral-50 transition-colors text-secondary">
+                <Bell className="w-4 h-4" />
+                {unread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">{unread > 9 ? '9+' : unread}</span>}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 top-10 w-[calc(100vw-2rem)] max-w-80 bg-white border border-neutral-200 shadow-2xl z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-primary" />
+                      <p className="text-sm font-bold text-secondary-700">Notifications</p>
+                      {unread > 0 && <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full">{unread} new</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unread > 0 && <button onClick={handleMarkAll} className="flex items-center gap-1 text-[11px] text-primary font-semibold hover:underline"><CheckCheck className="w-3 h-3" /> Mark all read</button>}
+                      <button onClick={() => setNotificationsOpen(false)} className="p-1 text-neutral-400 hover:bg-neutral-100"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-neutral-50">
+                    {notifs.length === 0 ? (
+                      <div className="py-10 text-center text-neutral-300"><Bell className="w-7 h-7 mx-auto mb-2 opacity-40" /><p className="text-xs">No notifications yet</p></div>
+                    ) : notifs.map(notification => (
+                      <button key={notification.id} onClick={() => handleNotifClick(notification)} className={`w-full text-left px-4 py-3 hover:bg-neutral-50 flex items-start gap-3 ${!notification.read ? 'bg-blue-50/50' : ''}`}>
+                        <Bell className={`w-4 h-4 mt-1 shrink-0 ${!notification.read ? 'text-primary' : 'text-neutral-300'}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-xs font-bold truncate ${!notification.read ? 'text-secondary-700' : 'text-neutral-500'}`}>{notification.title}</p>
+                          <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed line-clamp-2">{notification.body}</p>
+                          <p className="text-[10px] text-neutral-300 mt-1">{fmtTime(notification.created_at)}</p>
+                        </div>
+                        {!notification.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="w-px h-6 bg-neutral-100" />
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="hidden sm:block min-w-0 max-w-[180px] text-right">
