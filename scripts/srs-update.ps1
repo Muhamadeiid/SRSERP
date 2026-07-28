@@ -34,10 +34,9 @@ git fetch origin main 2>&1 | ForEach-Object { Log "  $_" }
 
 $local = (git rev-parse HEAD).Trim()
 $remote = (git rev-parse origin/main).Trim()
+$forceFrontendRefresh = $local -eq $remote
 if ($local -eq $remote) {
-    Log "Already up to date ($local). Nothing to do."
-    Log "=== DONE ==="
-    exit 0
+    Log "Source is already up to date ($local). Refreshing deployed frontend."
 }
 
 Log "Local:  $local"
@@ -56,7 +55,7 @@ Log ".env and machine_lock restored"
 $changed = git diff --name-only "$local..HEAD" 2>&1
 $composerNeeded = $changed -match 'composer\.(json|lock)|SRS-Backend/app/|SRS-Backend/routes/|SRS-Backend/config/'
 $migrationsNeeded = $changed -match 'SRS-Backend/database/migrations/'
-$frontendNeeded = $changed -match 'Frontend - Copy/'
+$frontendNeeded = $forceFrontendRefresh -or ($changed -match 'Frontend - Copy/')
 
 if ($composerNeeded) {
     Log "Backend files changed - reinstalling composer packages..."
