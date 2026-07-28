@@ -12,7 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class LeaveRequestController extends Controller
 {
@@ -328,12 +330,16 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not awaiting HR approval'], 422);
         }
 
-        $leaveRequest->update([
-            'status' => 'hr_approved',
-            'hr_approved_by' => $user->id,
-            'hr_approved_at' => now(),
-            'hr_signature' => $user->e_signature ?? null,
-        ]);
+        $changes = $this->validatedApprovalLeaveChanges($request, $leaveRequest);
+
+        DB::transaction(function () use ($leaveRequest, $changes, $user) {
+            $leaveRequest->update(array_merge($changes, [
+                'status' => 'hr_approved',
+                'hr_approved_by' => $user->id,
+                'hr_approved_at' => now(),
+                'hr_signature' => $user->e_signature ?? null,
+            ]));
+        });
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         Notification::notifyRole('depot_manager', $leaveRequest->type . '_hr_approved', "{$typeLabel} - Depot Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by HR {$user->name}. Awaiting Depot Manager final approval.", ['leave_request_id' => $leaveRequest->id]);
@@ -355,14 +361,18 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not awaiting approval'], 422);
         }
 
+        $changes = $this->validatedApprovalLeaveChanges($request, $leaveRequest);
+
         // Depot Manager and Super Admin may finalize an outstanding request directly.
         // Skipped approval stages remain unsigned so the printed form stays truthful.
-        $leaveRequest->update([
-            'status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-            'depot_signature' => $user->e_signature ?? null,
-        ]);
+        DB::transaction(function () use ($leaveRequest, $changes, $user) {
+            $leaveRequest->update(array_merge($changes, [
+                'status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+                'depot_signature' => $user->e_signature ?? null,
+            ]));
+        });
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         if ($leaveRequest->user_id) {
@@ -645,7 +655,7 @@ class LeaveRequestController extends Controller
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 
-    private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days): bool
+    private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days, ?int $excludeRequestId = null): bool
     {
         $balance = LeaveBalance::firstOrCreate(
             ['employee_id' => $employeeId],
@@ -662,6 +672,7 @@ class LeaveRequestController extends Controller
             ->where(function ($q) {
                 $q->where('paid', true)->orWhereNull('paid');
             })
+            ->when($excludeRequestId, fn ($q) => $q->where('id', '!=', $excludeRequestId))
             ->selectRaw('leave_type, SUM(days) as days')
             ->groupBy('leave_type')
             ->pluck('days', 'leave_type');
@@ -679,5 +690,70 @@ class LeaveRequestController extends Controller
             'sick' => $sickLeft >= $days,
             default => true,
         };
+    }
+
+    private function validatedApprovalLeaveChanges(Request $request, LeaveRequest $leaveRequest): array
+    {
+        if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'early_from', 'early_to'])) {
+            return [];
+        }
+
+        $validated = $request->validate([
+            'leave_type' => 'sometimes|required|in:annual,casual,sick,early',
+            'paid' => 'sometimes|required|boolean',
+            'early_from' => 'nullable|required_if:leave_type,early|date_format:H:i',
+            'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i|after:early_from',
+        ]);
+
+        $leaveType = $validated['leave_type'] ?? $leaveRequest->leave_type;
+        $paid = array_key_exists('paid', $validated) ? (bool) $validated['paid'] : (bool) $leaveRequest->paid;
+        $days = (float) $leaveRequest->days;
+        $changes = [];
+
+        if ($leaveType === 'early') {
+            $from = $validated['early_from'] ?? substr((string) $leaveRequest->early_from, 0, 5);
+            $to = $validated['early_to'] ?? substr((string) $leaveRequest->early_to, 0, 5);
+            if (!$from || !$to) {
+                throw ValidationException::withMessages([
+                    'early_from' => 'Early Leave From and To times are required.',
+                ]);
+            }
+            [$fromHour, $fromMinute] = array_map('intval', explode(':', $from));
+            [$toHour, $toMinute] = array_map('intval', explode(':', $to));
+            $minutes = ($toHour * 60 + $toMinute) - ($fromHour * 60 + $fromMinute);
+            if ($minutes <= 0) {
+                throw ValidationException::withMessages([
+                    'early_to' => 'Early Leave To time must be after From time.',
+                ]);
+            }
+            $days = round($minutes / 480, 2);
+            $changes['early_from'] = $from;
+            $changes['early_to'] = $to;
+        } else {
+            $changes['early_from'] = null;
+            $changes['early_to'] = null;
+        }
+
+        if (
+            $paid
+            && $leaveRequest->employee_id
+            && $days > 0
+            && !$this->hasAvailableLeaveBalance(
+                $leaveRequest->employee_id,
+                $leaveType,
+                $days,
+                $leaveRequest->id
+            )
+        ) {
+            throw ValidationException::withMessages([
+                'leave_type' => 'The employee does not have enough available leave balance for these changes.',
+            ]);
+        }
+
+        return array_merge($changes, [
+            'leave_type' => $leaveType,
+            'paid' => $paid,
+            'days' => $days,
+        ]);
     }
 }

@@ -1959,12 +1959,27 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const [trackingDraft, setTrackingDraft]   = useState(req?.tracking_no || '')
   const [editingTracking, setEditingTracking] = useState(false)
   const [savingTracking, setSavingTracking] = useState(false)
+  const [hrLeaveDraft, setHrLeaveDraft] = useState({
+    leave_type: req?.leave_type || 'annual',
+    paid: req?.paid !== false,
+    early_from: normalizeTime(req?.early_from),
+    early_to: normalizeTime(req?.early_to),
+  })
   const approvalActionsRef = useRef(null)
 
   useEffect(() => {
     setTrackingDraft(req?.tracking_no || '')
     setEditingTracking(false)
   }, [req?.tracking_no, req?.id])
+
+  useEffect(() => {
+    setHrLeaveDraft({
+      leave_type: req?.leave_type || 'annual',
+      paid: req?.paid !== false,
+      early_from: normalizeTime(req?.early_from),
+      early_to: normalizeTime(req?.early_to),
+    })
+  }, [req?.id, req?.leave_type, req?.paid, req?.early_from, req?.early_to])
 
   useEffect(() => {
     if (!focusApproval || !req) return
@@ -1982,6 +1997,37 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
   const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
+  const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
+  const canEditHrLeave = isLRF
+    && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
+    && ['hr', 'depot_manager', 'admin'].includes(userRole)
+  const hrEarlyDays = hrLeaveDraft.leave_type === 'early'
+    ? earlyDays(hrLeaveDraft.early_from, hrLeaveDraft.early_to)
+    : ''
+  const submitHrApproval = () => {
+    if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
+      alert('Enter a valid Early Leave From and To time.')
+      return
+    }
+    onHrApprove(req.id, {
+      leave_type: hrLeaveDraft.leave_type,
+      paid: hrLeaveDraft.paid,
+      early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
+      early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
+    })
+  }
+  const submitFinalApproval = () => {
+    if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
+      alert('Enter a valid Early Leave From and To time.')
+      return
+    }
+    onApprove(req.id, {
+      leave_type: hrLeaveDraft.leave_type,
+      paid: hrLeaveDraft.paid,
+      early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
+      early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
+    })
+  }
   const signatureParties = req.signature_parties || req.signatureParties || {}
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
   const hrSignatureParty = signatureParties.hr || null
@@ -2096,6 +2142,66 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           ) : null)}
         </div>
 
+        {canEditHrLeave && (
+          <div className="mx-6 mb-4 rounded-lg border border-purple-200 bg-purple-50/60 p-4">
+            <div className="mb-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-purple-700">HR Leave Classification</p>
+              <p className="mt-1 text-xs text-neutral-500">Review or correct the leave details before approval.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className={LBL}>Leave Type</span>
+                <select
+                  value={hrLeaveDraft.leave_type}
+                  onChange={e => setHrLeaveDraft(d => ({ ...d, leave_type: e.target.value }))}
+                  className={INP}
+                >
+                  <option value="annual">Annual Leave</option>
+                  <option value="casual">Casual Leave</option>
+                  <option value="sick">Sick Leave</option>
+                  <option value="early">Early Leave</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={LBL}>Payment</span>
+                <select
+                  value={hrLeaveDraft.paid ? 'paid' : 'unpaid'}
+                  onChange={e => setHrLeaveDraft(d => ({ ...d, paid: e.target.value === 'paid' }))}
+                  className={INP}
+                >
+                  <option value="paid">Paid</option>
+                  <option value="unpaid">Unpaid</option>
+                </select>
+              </label>
+            </div>
+            {hrLeaveDraft.leave_type === 'early' && (
+              <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-end gap-3">
+                <label className="block">
+                  <span className={LBL}>From</span>
+                  <input
+                    type="time"
+                    value={hrLeaveDraft.early_from}
+                    onChange={e => setHrLeaveDraft(d => ({ ...d, early_from: e.target.value }))}
+                    className={INP}
+                  />
+                </label>
+                <label className="block">
+                  <span className={LBL}>To</span>
+                  <input
+                    type="time"
+                    value={hrLeaveDraft.early_to}
+                    onChange={e => setHrLeaveDraft(d => ({ ...d, early_to: e.target.value }))}
+                    className={INP}
+                  />
+                </label>
+                <div className="h-[38px] min-w-16 rounded-lg border border-purple-200 bg-white px-3 flex items-center justify-center text-sm font-bold text-purple-700">
+                  {hrEarlyDays || '0'} day
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Signatures strip (show when approved) */}
         {['hr_approved','approved'].includes(req.status) && (
           <div className="px-6 pb-4 border-t border-neutral-100">
@@ -2172,7 +2278,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                   className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
                   <XCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => onApprove(req.id)}
+                  <button onClick={submitFinalApproval}
                   title="Approve and finalize"
                   className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
@@ -2180,7 +2286,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {(req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)) && canHrApprove && (
+            {awaitingHrApproval && canHrApprove && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule"
@@ -2192,7 +2298,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                   className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
                   <XCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => onHrApprove(req.id)}
+                <button onClick={submitHrApproval}
                   title="HR Approve"
                   className="flex items-center justify-center w-10 h-10 text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
@@ -2212,7 +2318,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                   className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
                   <XCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => onApprove(req.id)}
+                <button onClick={submitFinalApproval}
                   title="Final Approve"
                   className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
@@ -2414,17 +2520,17 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     } catch (e) { alert(e.message) }
   }
 
-  const handleHrApprove = async (id) => {
+  const handleHrApprove = async (id, changes = {}) => {
     try {
-      await hrApproveLeave(id)
+      await hrApproveLeave(id, changes)
       setViewReq(null)
       fetchRequests()
     } catch (e) { alert(e.message) }
   }
 
-  const handleApprove = async (id) => {
+  const handleApprove = async (id, changes = {}) => {
     try {
-      await approveLeave(id)
+      await approveLeave(id, changes)
       setViewReq(null)
       fetchRequests()
     } catch (e) { alert(e.message) }
