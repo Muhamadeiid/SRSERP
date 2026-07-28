@@ -8,7 +8,8 @@ class MaintenanceTask extends Model
 {
     protected $fillable = [
         'title', 'description', 'target_department', 'assigned_user_id',
-        'equipment_id', 'priority', 'status', 'due_date', 'created_by', 'completed_at',
+        'equipment_id', 'train_number', 'unit_number', 'car_code',
+        'priority', 'status', 'due_date', 'created_by', 'completed_at',
     ];
 
     protected $casts = [
@@ -29,5 +30,10 @@ class MaintenanceTask extends Model
     public function equipment()
     {
         return $this->belongsTo(Equipment::class);
+    }
+
+    public function viewers()
+    {
+        return $this->belongsToMany(User::class, 'maintenance_task_viewers')->withTimestamps();
     }
 }

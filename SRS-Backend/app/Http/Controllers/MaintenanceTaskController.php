@@ -11,6 +11,11 @@ use Illuminate\Http\Request;
 class MaintenanceTaskController extends Controller
 {
     private const DEPARTMENTS = ['cm', 'pm', 'hm'];
+    private const UNIT_CARS = [
+        1 => ['MC1', 'T', 'M1'],
+        2 => ['M2', 'T', 'M1'],
+        3 => ['M1', 'T', 'MC2'],
+    ];
 
     public function index(Request $request): JsonResponse
     {
@@ -19,15 +24,13 @@ class MaintenanceTaskController extends Controller
         $query = MaintenanceTask::with([
             'assignee:id,name,department',
             'creator:id,name',
+            'viewers:id,name,department',
             'equipment:id,code,name,type,car_type,train_number,unit_index,parent_id',
             'equipment.parent:id,code,name,train_number',
         ])->latest();
 
         if (!$this->canManageAll($user)) {
-            $query->where(function ($q) use ($user) {
-                $q->where('target_department', $user->department)
-                    ->orWhere('assigned_user_id', $user->id);
-            });
+            $query->whereHas('viewers', fn ($q) => $q->where('users.id', $user->id));
         }
 
         if ($request->filled('status')) {
@@ -52,16 +55,9 @@ class MaintenanceTaskController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'department']);
 
-        $equipment = Equipment::where(function ($q) {
-                $q->where('type', 'train')->orWhereNotNull('parent_id');
-            })
-            ->orderBy('train_number')
-            ->orderBy('unit_index')
-            ->get(['id', 'code', 'name', 'type', 'car_type', 'train_number', 'unit_index', 'parent_id']);
-
         return response()->json([
             'success' => true,
-            'data' => compact('managers', 'equipment'),
+            'data' => ['managers' => $managers],
         ]);
     }
 
@@ -72,26 +68,34 @@ class MaintenanceTaskController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:2000',
-            'target_department' => 'required|in:cm,pm,hm',
-            'assigned_user_id' => 'nullable|exists:users,id',
-            'equipment_id' => 'nullable|exists:equipment,id',
+            'viewer_user_ids' => 'required|array|min:1',
+            'viewer_user_ids.*' => 'integer|distinct|exists:users,id',
+            'train_number' => 'nullable|integer|between:1,20|required_with:unit_number,car_code',
+            'unit_number' => 'nullable|integer|between:1,3|required_with:car_code',
+            'car_code' => 'nullable|string|in:MC1,MC2,M1,M2,T',
             'priority' => 'required|in:low,medium,high,critical',
             'due_date' => 'nullable|date',
         ]);
 
-        if (!empty($data['assigned_user_id'])) {
-            $validAssignee = User::whereKey($data['assigned_user_id'])
-                ->where('department', $data['target_department'])
-                ->exists();
-            abort_unless($validAssignee, 422, 'The selected manager does not belong to the target department.');
+        $viewerIds = $data['viewer_user_ids'];
+        unset($data['viewer_user_ids']);
+        if (!empty($data['car_code']) && !in_array($data['car_code'], self::UNIT_CARS[$data['unit_number']] ?? [], true)) {
+            abort(422, 'The selected car does not belong to this unit.');
         }
-
+        $validViewerCount = User::whereIn('id', $viewerIds)
+            ->where(function ($q) {
+                $q->where('role', 'manager')->orWhere('is_team_manager', true);
+            })
+            ->count();
+        abort_unless($validViewerCount === count($viewerIds), 422, 'One or more selected viewers are not maintenance managers.');
+        $data['target_department'] = User::whereKey($viewerIds[0])->value('department') ?? 'cm';
         $data['created_by'] = $request->user()->id;
         $task = MaintenanceTask::create($data);
+        $task->viewers()->sync($viewerIds);
 
         return response()->json([
             'success' => true,
-            'data' => $task->load(['assignee:id,name,department', 'creator:id,name', 'equipment.parent']),
+            'data' => $task->load(['viewers:id,name,department', 'creator:id,name']),
         ], 201);
     }
 
@@ -100,8 +104,7 @@ class MaintenanceTaskController extends Controller
         $user = $request->user();
         abort_unless($this->canViewTasks($user), 403);
         $canUpdate = $this->canManageAll($user)
-            || $maintenanceTask->target_department === $user->department
-            || $maintenanceTask->assigned_user_id === $user->id;
+            || $maintenanceTask->viewers()->where('users.id', $user->id)->exists();
         abort_unless($canUpdate, 403);
 
         $rules = $this->canManageAll($user)
@@ -109,8 +112,11 @@ class MaintenanceTaskController extends Controller
                 'title' => 'sometimes|string|max:255',
                 'description' => 'nullable|string|max:2000',
                 'target_department' => 'sometimes|in:cm,pm,hm',
-                'assigned_user_id' => 'nullable|exists:users,id',
-                'equipment_id' => 'nullable|exists:equipment,id',
+                'viewer_user_ids' => 'sometimes|array|min:1',
+                'viewer_user_ids.*' => 'integer|distinct|exists:users,id',
+                'train_number' => 'nullable|integer|between:1,20',
+                'unit_number' => 'nullable|integer|between:1,3',
+                'car_code' => 'nullable|string|in:MC1,MC2,M1,M2,T',
                 'priority' => 'sometimes|in:low,medium,high,critical',
                 'due_date' => 'nullable|date',
                 'status' => 'sometimes|in:pending,in_progress,done',
@@ -118,14 +124,19 @@ class MaintenanceTaskController extends Controller
             : ['status' => 'required|in:pending,in_progress,done'];
 
         $data = $request->validate($rules);
+        $viewerIds = $data['viewer_user_ids'] ?? null;
+        unset($data['viewer_user_ids']);
         if (isset($data['status'])) {
             $data['completed_at'] = $data['status'] === 'done' ? now() : null;
         }
         $maintenanceTask->update($data);
+        if ($viewerIds !== null) {
+            $maintenanceTask->viewers()->sync($viewerIds);
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $maintenanceTask->load(['assignee:id,name,department', 'creator:id,name', 'equipment.parent']),
+            'data' => $maintenanceTask->load(['viewers:id,name,department', 'creator:id,name']),
         ]);
     }
 

@@ -55,22 +55,30 @@ const TASK_PRIORITY = {
 }
 
 const EMPTY_TASK = {
-  title: '', description: '', target_department: 'cm', assigned_user_id: '',
-  equipment_id: '', priority: 'medium', due_date: '',
+  title: '', description: '', viewer_user_ids: [],
+  train_number: '', unit_number: '', car_code: '', priority: 'medium', due_date: '',
 }
 
-function equipmentLabel(item) {
-  if (!item) return ''
-  if (item.type === 'train') return `TS${String(item.train_number ?? item.name).padStart(2, '0')}`
-  const train = item.parent?.train_number ?? item.train_number
-  const prefix = train ? `TS${String(train).padStart(2, '0')} / ` : ''
-  return `${prefix}${item.code || item.name}${item.car_type ? ` (${item.car_type})` : ''}`
+const UNIT_CARS = {
+  1: ['MC1', 'T', 'M1'],
+  2: ['M2', 'T', 'M1'],
+  3: ['M1', 'T', 'MC2'],
+}
+
+const unitCode = (trainNumber, unitNumber) =>
+  trainNumber && unitNumber ? 1000 + Number(trainNumber) + ((Number(unitNumber) - 1) * 20) : ''
+
+const trainPositionLabel = task => {
+  if (!task.train_number) return ''
+  const unit = task.unit_number ? ` / Unit ${task.unit_number} (${unitCode(task.train_number, task.unit_number)})` : ''
+  const car = task.car_code ? ` / ${task.car_code}` : ''
+  return `TS${String(task.train_number).padStart(2, '0')}${unit}${car}`
 }
 
 function PendingTasks({ user }) {
   const canCreate = ['admin', 'depot_manager'].includes(user?.role)
   const [tasks, setTasks] = useState([])
-  const [options, setOptions] = useState({ managers: [], equipment: [] })
+  const [options, setOptions] = useState({ managers: [] })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -84,7 +92,7 @@ function PendingTasks({ user }) {
       setTasks(taskResult.data ?? [])
       if (canCreate) {
         const optionResult = await getMaintenanceTaskOptions()
-        setOptions(optionResult.data ?? { managers: [], equipment: [] })
+        setOptions(optionResult.data ?? { managers: [] })
       }
     } catch (err) {
       setError(err.message)
@@ -111,8 +119,9 @@ function PendingTasks({ user }) {
     try {
       const payload = {
         ...form,
-        assigned_user_id: form.assigned_user_id || null,
-        equipment_id: form.equipment_id || null,
+        train_number: form.train_number ? Number(form.train_number) : null,
+        unit_number: form.unit_number ? Number(form.unit_number) : null,
+        car_code: form.car_code || null,
         due_date: form.due_date || null,
       }
       const result = await createMaintenanceTask(payload)
@@ -136,8 +145,13 @@ function PendingTasks({ user }) {
     }
   }
 
-  const visibleManagers = options.managers.filter(manager => manager.department === form.target_department)
   const active = tasks.filter(task => task.status !== 'done')
+  const toggleViewer = id => setForm(current => ({
+    ...current,
+    viewer_user_ids: current.viewer_user_ids.includes(id)
+      ? current.viewer_user_ids.filter(viewerId => viewerId !== id)
+      : [...current.viewer_user_ids, id],
+  }))
 
   return (
     <section className="bg-white border border-neutral-200 shadow-sm">
@@ -172,9 +186,8 @@ function PendingTasks({ user }) {
                     <p className="text-sm font-semibold text-secondary-700 break-words">{task.title}</p>
                     {task.description && <p className="mt-0.5 text-[11px] leading-4 text-neutral-500 break-words">{task.description}</p>}
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[10px] text-neutral-400">
-                      <span>{task.target_department?.toUpperCase()}</span>
-                      {task.assignee?.name && <span>{task.assignee.name}</span>}
-                      {task.equipment && <span className="inline-flex items-center gap-1"><Train className="w-3 h-3" />{equipmentLabel(task.equipment)}</span>}
+                      {task.viewers?.length > 0 && <span>Visible: {task.viewers.map(viewer => viewer.name).join(', ')}</span>}
+                      {task.train_number && <span className="inline-flex items-center gap-1"><Train className="w-3 h-3" />{trainPositionLabel(task)}</span>}
                     </div>
                   </div>
                 </div>
@@ -209,21 +222,41 @@ function PendingTasks({ user }) {
               <label className="col-span-2 text-xs font-semibold text-neutral-600">Task title
                 <input autoFocus required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal" />
               </label>
-              <label className="text-xs font-semibold text-neutral-600">Visible to
-                <select value={form.target_department} onChange={e => setForm(f => ({ ...f, target_department: e.target.value, assigned_user_id: '' }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white">
-                  <option value="cm">CM Manager</option><option value="pm">PM Manager</option><option value="hm">HM Manager</option>
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-neutral-600">Assign manager
-                <select value={form.assigned_user_id} onChange={e => setForm(f => ({ ...f, assigned_user_id: e.target.value }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white">
-                  <option value="">Whole department</option>
-                  {visibleManagers.map(manager => <option key={manager.id} value={manager.id}>{manager.name}</option>)}
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-neutral-600">Train / car
-                <select value={form.equipment_id} onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white">
+              <fieldset className="col-span-2">
+                <legend className="text-xs font-semibold text-neutral-600">Visible to</legend>
+                <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto border border-neutral-200 rounded p-2">
+                  {options.managers.map(manager => (
+                    <label key={manager.id} className="flex items-center gap-2 px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50 rounded cursor-pointer">
+                      <input type="checkbox" checked={form.viewer_user_ids.includes(manager.id)} onChange={() => toggleViewer(manager.id)} />
+                      <span className="min-w-0 truncate">{manager.name}</span>
+                      <span className="ml-auto text-[10px] text-neutral-400 uppercase">{manager.department}</span>
+                    </label>
+                  ))}
+                </div>
+                {form.viewer_user_ids.length === 0 && <p className="mt-1 text-[10px] text-red-500">Select at least one person.</p>}
+              </fieldset>
+              <label className="text-xs font-semibold text-neutral-600">Train Set
+                <select value={form.train_number} onChange={e => setForm(f => ({ ...f, train_number: e.target.value, unit_number: '', car_code: '' }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white">
                   <option value="">General task</option>
-                  {options.equipment.map(item => <option key={item.id} value={item.id}>{equipmentLabel(item)}</option>)}
+                  {Array.from({ length: 20 }, (_, index) => index + 1).map(number => (
+                    <option key={number} value={number}>TS{String(number).padStart(2, '0')}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-neutral-600">Unit
+                <select disabled={!form.train_number} value={form.unit_number} onChange={e => setForm(f => ({ ...f, unit_number: e.target.value, car_code: '' }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white disabled:bg-neutral-100">
+                  <option value="">Whole train</option>
+                  {[1, 2, 3].map(number => (
+                    <option key={number} value={number}>Unit {number} — {unitCode(form.train_number, number)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-neutral-600">Car
+                <select disabled={!form.unit_number} value={form.car_code} onChange={e => setForm(f => ({ ...f, car_code: e.target.value }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white disabled:bg-neutral-100">
+                  <option value="">Whole unit</option>
+                  {(UNIT_CARS[form.unit_number] ?? []).map((car, index) => (
+                    <option key={`${car}-${index}`} value={car}>{index + 1}. {car}</option>
+                  ))}
                 </select>
               </label>
               <label className="text-xs font-semibold text-neutral-600">Due date
@@ -240,7 +273,7 @@ function PendingTasks({ user }) {
             </div>
             <footer className="flex justify-end gap-2 px-5 py-4 border-t bg-neutral-50">
               <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-xs font-bold text-neutral-600">Cancel</button>
-              <button disabled={saving} className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-md disabled:opacity-60">{saving ? 'Saving...' : 'Create Task'}</button>
+              <button disabled={saving || form.viewer_user_ids.length === 0} className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-md disabled:opacity-60">{saving ? 'Saving...' : 'Create Task'}</button>
             </footer>
           </form>
         </div>
