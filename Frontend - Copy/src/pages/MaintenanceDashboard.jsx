@@ -146,6 +146,7 @@ function PendingTasks({ user }) {
   }
 
   const active = tasks.filter(task => task.status !== 'done')
+  const noViewers = form.viewer_user_ids.length === 0
   const toggleViewer = id => setForm(current => ({
     ...current,
     viewer_user_ids: current.viewer_user_ids.includes(id)
@@ -225,6 +226,11 @@ function PendingTasks({ user }) {
               <fieldset className="col-span-2">
                 <legend className="text-xs font-semibold text-neutral-600">Visible to</legend>
                 <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto border border-neutral-200 rounded p-2">
+                  <label className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 rounded cursor-pointer">
+                    <input type="checkbox" checked={noViewers} onChange={() => setForm(current => ({ ...current, viewer_user_ids: [] }))} />
+                    <span>None</span>
+                    <span className="ml-auto text-[10px] font-normal text-neutral-400">Depot only</span>
+                  </label>
                   {options.managers.map(manager => (
                     <label key={manager.id} className="flex items-center gap-2 px-2 py-1.5 text-xs text-neutral-700 hover:bg-neutral-50 rounded cursor-pointer">
                       <input type="checkbox" checked={form.viewer_user_ids.includes(manager.id)} onChange={() => toggleViewer(manager.id)} />
@@ -233,7 +239,6 @@ function PendingTasks({ user }) {
                     </label>
                   ))}
                 </div>
-                {form.viewer_user_ids.length === 0 && <p className="mt-1 text-[10px] text-red-500">Select at least one person.</p>}
               </fieldset>
               <label className="text-xs font-semibold text-neutral-600">Train Set
                 <select value={form.train_number} onChange={e => setForm(f => ({ ...f, train_number: e.target.value, unit_number: '', car_code: '' }))} className="mt-1 w-full h-10 border border-neutral-200 rounded px-3 font-normal bg-white">
@@ -273,7 +278,7 @@ function PendingTasks({ user }) {
             </div>
             <footer className="flex justify-end gap-2 px-5 py-4 border-t bg-neutral-50">
               <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-xs font-bold text-neutral-600">Cancel</button>
-              <button disabled={saving || form.viewer_user_ids.length === 0} className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-md disabled:opacity-60">{saving ? 'Saving...' : 'Create Task'}</button>
+              <button disabled={saving} className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-md disabled:opacity-60">{saving ? 'Saving...' : 'Create Task'}</button>
             </footer>
           </form>
         </div>

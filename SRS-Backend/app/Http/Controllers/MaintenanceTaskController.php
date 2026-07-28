@@ -68,7 +68,7 @@ class MaintenanceTaskController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:2000',
-            'viewer_user_ids' => 'required|array|min:1',
+            'viewer_user_ids' => 'present|array',
             'viewer_user_ids.*' => 'integer|distinct|exists:users,id',
             'train_number' => 'nullable|integer|between:1,20|required_with:unit_number,car_code',
             'unit_number' => 'nullable|integer|between:1,3|required_with:car_code',
@@ -88,7 +88,9 @@ class MaintenanceTaskController extends Controller
             })
             ->count();
         abort_unless($validViewerCount === count($viewerIds), 422, 'One or more selected viewers are not maintenance managers.');
-        $data['target_department'] = User::whereKey($viewerIds[0])->value('department') ?? 'cm';
+        $data['target_department'] = !empty($viewerIds)
+            ? (User::whereKey($viewerIds[0])->value('department') ?? 'cm')
+            : 'cm';
         $data['created_by'] = $request->user()->id;
         $task = MaintenanceTask::create($data);
         $task->viewers()->sync($viewerIds);
@@ -112,7 +114,7 @@ class MaintenanceTaskController extends Controller
                 'title' => 'sometimes|string|max:255',
                 'description' => 'nullable|string|max:2000',
                 'target_department' => 'sometimes|in:cm,pm,hm',
-                'viewer_user_ids' => 'sometimes|array|min:1',
+                'viewer_user_ids' => 'sometimes|array',
                 'viewer_user_ids.*' => 'integer|distinct|exists:users,id',
                 'train_number' => 'nullable|integer|between:1,20',
                 'unit_number' => 'nullable|integer|between:1,3',
