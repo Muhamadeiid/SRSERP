@@ -2286,7 +2286,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {awaitingHrApproval && canHrApprove && (
+            {awaitingHrApproval && canHrApprove && !isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule"
