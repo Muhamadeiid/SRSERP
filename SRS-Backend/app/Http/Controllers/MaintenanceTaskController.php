@@ -91,9 +91,11 @@ class MaintenanceTaskController extends Controller
         $data['target_department'] = !empty($viewerIds)
             ? (User::whereKey($viewerIds[0])->value('department') ?? 'cm')
             : 'cm';
+        $data['status'] = 'pending';
         $data['created_by'] = $request->user()->id;
         $task = MaintenanceTask::create($data);
         $task->viewers()->sync($viewerIds);
+        $task->refresh();
 
         return response()->json([
             'success' => true,

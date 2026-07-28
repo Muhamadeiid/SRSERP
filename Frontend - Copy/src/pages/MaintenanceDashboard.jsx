@@ -178,7 +178,8 @@ function PendingTasks({ user }) {
         <div className="divide-y divide-neutral-100">
           {tasks.map(task => {
             const overdue = task.status !== 'done' && task.due_date && new Date(`${task.due_date}T23:59:59`) < new Date()
-            const status = TASK_STATUS[task.status]
+            const taskStatus = task.status || 'pending'
+            const status = TASK_STATUS[taskStatus] || TASK_STATUS.pending
             return (
               <div key={task.id} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_120px_150px_150px_100px] gap-3 items-center px-5 py-3">
                 <div className="min-w-0 flex items-start gap-3">
@@ -196,7 +197,7 @@ function PendingTasks({ user }) {
                 <span className={`text-xs ${overdue ? 'font-bold text-red-600' : 'text-neutral-500'}`}>
                   {task.due_date ? `${overdue ? 'Overdue · ' : ''}${new Date(`${task.due_date}T00:00:00`).toLocaleDateString('en-GB')}` : 'No due date'}
                 </span>
-                <select value={task.status} onChange={event => setStatus(task, event.target.value)} className="h-8 border border-neutral-200 rounded px-2 text-xs bg-white">
+                <select value={taskStatus} onChange={event => setStatus(task, event.target.value)} className="h-8 border border-neutral-200 rounded px-2 text-xs bg-white">
                   <option value="pending">Pending</option>
                   <option value="in_progress">In Progress</option>
                   <option value="done">Done</option>
