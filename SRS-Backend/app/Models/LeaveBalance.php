@@ -12,6 +12,7 @@ class LeaveBalance extends Model
         'casual',  'casual_remaining',
         'sick',    'sick_remaining',
         'early',   'early_remaining',
+        'leave_cycle_started_on',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class LeaveBalance extends Model
         'sick_remaining'   => 'decimal:2',
         'early'            => 'decimal:2',
         'early_remaining'  => 'decimal:2',
+        'leave_cycle_started_on' => 'date',
     ];
 
     public function employee()

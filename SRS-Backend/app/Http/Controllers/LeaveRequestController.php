@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\LeaveDeductionService;
+use App\Services\LeaveYearService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -18,7 +19,10 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveRequestController extends Controller
 {
-    public function __construct(private LeaveDeductionService $deductions)
+    public function __construct(
+        private LeaveDeductionService $deductions,
+        private LeaveYearService $leaveYears
+    )
     {
     }
 
@@ -28,6 +32,7 @@ class LeaveRequestController extends Controller
         // at most once per minute instead of scanning the same rows twice.
         if (Cache::add('leave-deductions-processed', true, now()->addMinute())) {
             $this->deductions->processDue();
+            $this->leaveYears->refreshDue();
         }
 
         $user = auth()->user();
@@ -186,6 +191,9 @@ class LeaveRequestController extends Controller
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
+        if ($employee) {
+            $this->leaveYears->refreshDue($employee->id);
+        }
         if ($employee && !$this->directManagerUserId($employee)) {
             // There is nobody who can perform the manager step. Move the
             // request directly to HR without inventing an approver/signature.
@@ -667,9 +675,16 @@ class LeaveRequestController extends Controller
 
     private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days, ?int $excludeRequestId = null): bool
     {
+        $this->leaveYears->refreshDue($employeeId);
         $balance = LeaveBalance::firstOrCreate(
             ['employee_id' => $employeeId],
-            ['annual' => 21, 'casual' => 7, 'sick' => 90, 'early' => 0]
+            [
+                'annual' => 21,
+                'casual' => 7,
+                'sick' => 90,
+                'early' => 0,
+                'leave_cycle_started_on' => $this->leaveYears->currentCycleStart()->toDateString(),
+            ]
         );
 
         $reserved = LeaveRequest::query()

@@ -56,7 +56,7 @@ export default function SettingsPage() {
   const [hrSaving,   setHrSaving]   = useState(false)
 
   // ── Leave Defaults state ──────────────────────────────────────────
-  const [leaveDef,     setLeaveDef]     = useState({ default_annual_days: 21, default_casual_days: 7, default_sick_days: 90 })
+  const [leaveDef,     setLeaveDef]     = useState({ default_annual_days: 21, default_casual_days: 7, default_sick_days: 90, leave_year_start: `${new Date().getFullYear()}-01-01` })
   const [leaveDefSaved,  setLeaveDefSaved]  = useState(false)
   const [leaveDefSaving, setLeaveDefSaving] = useState(false)
 
@@ -80,6 +80,7 @@ export default function SettingsPage() {
         default_annual_days: parseInt(r.data?.default_annual_days ?? 21),
         default_casual_days: parseInt(r.data?.default_casual_days ?? 7),
         default_sick_days:   parseInt(r.data?.default_sick_days   ?? 90),
+        leave_year_start: `${new Date().getFullYear()}-${r.data?.leave_year_start ?? '01-01'}`,
       })
       setFormOptions({
         otr_result_options: optionsSettingText(r.data?.otr_result_options, DEFAULT_OTR_RESULT_OPTIONS),
@@ -144,6 +145,7 @@ export default function SettingsPage() {
         saveSetting('default_annual_days', String(leaveDef.default_annual_days)),
         saveSetting('default_casual_days', String(leaveDef.default_casual_days)),
         saveSetting('default_sick_days',   String(leaveDef.default_sick_days)),
+        saveSetting('leave_year_start', leaveDef.leave_year_start.slice(5)),
       ])
       setLeaveDefSaved(true)
       setTimeout(() => setLeaveDefSaved(false), 2500)
@@ -382,6 +384,16 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
+          </div>
+          <div className="mb-4 max-w-sm">
+            <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Leave Year Start</label>
+            <p className="text-[11px] text-neutral-400 mb-2">Annual and Casual renew once a year; Sick balance is not reset</p>
+            <input
+              type="date"
+              value={leaveDef.leave_year_start}
+              onChange={e => { setLeaveDef(p => ({ ...p, leave_year_start: e.target.value })); setLeaveDefSaved(false) }}
+              className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors font-bold"
+            />
           </div>
           <button
             onClick={handleSaveLeaveDefaults}

@@ -138,7 +138,18 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
     setBal(null); setBalEdit(false);
     if (!emp?.id) return;
     getLeaveBalance(emp.id)
-      .then(r => { const d = r.data ?? {}; setBal(d); setBalForm({ annual: d.annual ?? 21, casual: d.casual ?? 7, sick: d.sick ?? 90, early: d.early ?? 0 }); })
+      .then(r => {
+        const d = r.data ?? {};
+        setBal(d);
+        setBalForm({
+          annual: d.annual ?? 21,
+          annual_remaining: d.annual_remaining ?? d.annual ?? 21,
+          casual: d.casual ?? 7,
+          casual_remaining: d.casual_remaining ?? d.casual ?? 7,
+          sick: d.sick ?? 90,
+          early: d.early ?? 0,
+        });
+      })
       .catch(() => setBal({}));
   }, [emp?.id]);
 
@@ -148,7 +159,9 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
       const r = await updateLeaveBalance(emp.id, balForm);
       setBal(r.data ?? bal);
       setBalEdit(false);
-    } catch (_) {}
+    } catch (error) {
+      alert(error?.message || 'Unable to update the leave balance.');
+    }
     finally { setBalSaving(false); }
   };
 
@@ -359,20 +372,45 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                 <div className="flex gap-2 pb-1">
                   <button
                     type="button"
-                    onClick={() => setBalForm(f => ({ ...f, annual: 15, casual: Math.min(Number(f.casual ?? 7), 7) }))}
+                    onClick={() => setBalForm(f => ({ ...f, annual: 15, annual_remaining: 15, casual: 7, casual_remaining: 7 }))}
                     className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
                   >
                     First year 15d
                   </button>
                   <button
                     type="button"
-                    onClick={() => setBalForm(f => ({ ...f, annual: 21, casual: 7 }))}
+                    onClick={() => setBalForm(f => ({ ...f, annual: 21, annual_remaining: 21, casual: 7, casual_remaining: 7 }))}
                     className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-neutral-50 text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
                   >
                     Standard 21/7
                   </button>
                 </div>
-                {[['annual','Annual',21],['casual','Casual (sub-limit)',7],['sick','Sick',90],['early','Early Leave',0]].map(([k, label, def]) => (
+                <div className="grid grid-cols-[1fr_82px_82px] gap-2 items-end px-1">
+                  <span />
+                  <span className="text-[9px] font-bold text-neutral-400 uppercase text-center">Total</span>
+                  <span className="text-[9px] font-bold text-neutral-400 uppercase text-center">Current</span>
+                </div>
+                {[
+                  ['annual', 'annual_remaining', 'Annual Pool (includes Casual)', 21],
+                  ['casual', 'casual_remaining', 'Casual Sub-limit', 7],
+                ].map(([totalKey, remainingKey, label, def]) => (
+                  <div key={totalKey} className="grid grid-cols-[1fr_82px_82px] gap-2 items-center">
+                    <span className="text-xs text-secondary-700">{label}</span>
+                    <input
+                      type="number" min={0} max={365} step={0.25}
+                      value={balForm[totalKey] ?? def}
+                      onChange={e => setBalForm(f => ({ ...f, [totalKey]: parseFloat(e.target.value) || 0 }))}
+                      className="w-full text-sm text-center border border-neutral-200 rounded-lg px-2 py-1 outline-none focus:border-primary/50"
+                    />
+                    <input
+                      type="number" min={0} max={balForm[totalKey] ?? def} step={0.25}
+                      value={balForm[remainingKey] ?? def}
+                      onChange={e => setBalForm(f => ({ ...f, [remainingKey]: parseFloat(e.target.value) || 0 }))}
+                      className="w-full text-sm text-center border border-primary/30 bg-blue-50 rounded-lg px-2 py-1 outline-none focus:border-primary"
+                    />
+                  </div>
+                ))}
+                {[['sick','Sick Total',90],['early','Early Leave',0]].map(([k, label, def]) => (
                   <div key={k} className="flex items-center justify-between">
                     <span className="text-xs text-secondary-700 w-36">{label}</span>
                     <input
@@ -383,6 +421,9 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                     />
                   </div>
                 ))}
+                <p className="text-[10px] leading-relaxed text-neutral-400">
+                  Annual Pool already includes Casual. Current is the real balance before open requests are reserved.
+                </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveBalance} disabled={balSaving} className="flex-1 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50">
                     {balSaving ? 'Saving…' : 'Save'}

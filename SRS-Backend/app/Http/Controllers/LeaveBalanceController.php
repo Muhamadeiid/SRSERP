@@ -9,10 +9,14 @@ use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Services\LeaveDeductionService;
+use App\Services\LeaveYearService;
 
 class LeaveBalanceController extends Controller
 {
-    public function __construct(private LeaveDeductionService $deductions)
+    public function __construct(
+        private LeaveDeductionService $deductions,
+        private LeaveYearService $leaveYears
+    )
     {
     }
 
@@ -90,6 +94,7 @@ class LeaveBalanceController extends Controller
         }
 
         $this->deductions->processDue($employee->id);
+        $this->leaveYears->refreshDue($employee->id);
 
         $settings = SystemSetting::whereIn('key', ['default_annual_days','default_casual_days','default_sick_days'])
             ->pluck('value', 'key');
@@ -101,6 +106,7 @@ class LeaveBalanceController extends Controller
                 'casual' => (int) ($settings['default_casual_days'] ?? 7),
                 'sick'   => (int) ($settings['default_sick_days']   ?? 90),
                 'early'  => 0,
+                'leave_cycle_started_on' => $this->leaveYears->currentCycleStart()->toDateString(),
             ]
         );
 
@@ -120,6 +126,8 @@ class LeaveBalanceController extends Controller
             'casual' => 'nullable|numeric|min:0|max:365',
             'sick'   => 'nullable|numeric|min:0|max:365',
             'early'  => 'nullable|numeric|min:0|max:365',
+            'annual_remaining' => 'nullable|numeric|min:0|max:365',
+            'casual_remaining' => 'nullable|numeric|min:0|max:365',
         ]);
 
         $balance = LeaveBalance::firstOrNew(['employee_id' => $employee->id]);
@@ -137,6 +145,22 @@ class LeaveBalanceController extends Controller
                 $used = max(0, $oldTotal - (float) $oldRemaining);
                 $balance->{$type . '_remaining'} = max(0, $newTotal - $used);
             }
+        }
+
+        foreach (['annual', 'casual'] as $type) {
+            $remainingKey = $type . '_remaining';
+            if (!array_key_exists($remainingKey, $v) || $v[$remainingKey] === null) {
+                continue;
+            }
+
+            $total = (float) ($balance->{$type} ?? 0);
+            if ((float) $v[$remainingKey] > $total) {
+                return response()->json([
+                    'success' => false,
+                    'message' => ucfirst($type) . ' current remaining cannot be greater than its total entitlement.',
+                ], 422);
+            }
+            $balance->{$remainingKey} = (float) $v[$remainingKey];
         }
         $balance->save();
 
