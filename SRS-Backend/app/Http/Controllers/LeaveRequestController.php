@@ -37,6 +37,7 @@ class LeaveRequestController extends Controller
             'approver:id,name,role',
             'managerApprover:id,name,role',
             'hrApprover:id,name,role',
+            'user:id,name',
             'employee:id,name,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id',
             'employee.userManager:id,name',
@@ -220,6 +221,7 @@ class LeaveRequestController extends Controller
             'approver:id,name,e_signature,role',
             'managerApprover:id,name,e_signature,role',
             'hrApprover:id,name,e_signature,role',
+            'user:id,name',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.user:id,name,e_signature',
             'employee.directManager:id,name,position,user_id,e_signature',
@@ -442,10 +444,12 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
         $isOwner = $leaveRequest->user_id === $user->id;
-        $isAdmin = in_array($user->role, ['admin', 'depot_manager']);
 
-        if (!$isOwner && !$isAdmin) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (!$isOwner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the account that created this request can withdraw it.',
+            ], 403);
         }
         if (in_array($leaveRequest->status, ['cancelled', 'rejected'])) {
             return response()->json(['success' => false, 'message' => 'Cannot cancel this request'], 422);
@@ -470,13 +474,8 @@ class LeaveRequestController extends Controller
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $msg = "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was cancelled by {$user->name}.";
-        if (!$isOwner && $leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
-        }
-        if (!$isAdmin) {
-            Notification::notifyRole('admin', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
-            Notification::notifyRole('depot_manager', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
-        }
+        Notification::notifyRole('admin', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
+        Notification::notifyRole('depot_manager', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
 
         return response()->json([
             'success' => true,

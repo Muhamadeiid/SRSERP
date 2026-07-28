@@ -315,6 +315,9 @@ const depotManagerNameFor = (request) => {
 }
 const fmtDate   = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : ''
 const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—'
+const fmtDateTime = d => d ? new Date(d).toLocaleString('en-GB', {
+  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+}) : '—'
 const genLRFNo  = () => `LRF-GZ-????`
 const fmtDays   = d => d != null ? +parseFloat(d) : d
 const genOTRNo  = () => `OTR-EG1-????`
@@ -1995,7 +1998,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
   const canHrApprove = userRole === 'admin' || userRole === 'hr'
   const isHR         = isDepotAdmin || canHrApprove
-  const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status) && (isDepotAdmin || req.user_id === currentUserId)
+  const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status)
+    && req.user_id === currentUserId
   const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
   const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF
@@ -2326,6 +2330,12 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
           </div>
+        </div>
+
+        <div className="px-6 pb-4 text-center text-[10px] text-neutral-400">
+          Created by <span className="font-semibold text-neutral-500">{req.user?.name || 'Unknown account'}</span>
+          {' · '}
+          {fmtDateTime(req.created_at)}
         </div>
 
         </div>
