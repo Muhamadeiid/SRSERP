@@ -85,7 +85,10 @@ function earlyDays(from, to) {
   const [th, tm] = end.split(':').map(Number)
   const mins = (th * 60 + tm) - (fh * 60 + fm)
   if (mins <= 0) return ''
-  return (mins / 60 / 8).toFixed(2).replace(/\.?0+$/, '')
+  if (mins <= 120) return '0.25'
+  if (mins <= 240) return '0.5'
+  if (mins <= 360) return '0.75'
+  return ''
 }
 
 function normalizeTime(value) {

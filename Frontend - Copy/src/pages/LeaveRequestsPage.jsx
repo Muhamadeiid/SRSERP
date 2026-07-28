@@ -269,7 +269,7 @@ const diffHours = (s, e) => {
   if (m < 0) m += 24 * 60   // crosses midnight (e.g. 23:00 → 02:00)
   return m === 0 ? 0 : Math.round(m / 60)
 }
-// Early leave: 2h=0.25 day, 4h=0.5 day, 6h=0.75 day (workday=8h)
+// Early leave uses fixed company bands, not proportional fractions.
 const normalizeTime = (value) => {
   const raw = String(value ?? '').trim()
   if (!raw) return ''
@@ -287,7 +287,10 @@ const earlyDays = (from, to) => {
   const [th, tm] = end.split(':').map(Number)
   const mins = (th * 60 + tm) - (fh * 60 + fm)
   if (mins <= 0) return ''
-  return (mins / 60 / 8).toFixed(2).replace(/\.?0+$/, '')
+  if (mins <= 120) return '0.25'
+  if (mins <= 240) return '0.5'
+  if (mins <= 360) return '0.75'
+  return ''
 }
 const lrfDays = (form) => form.leave_type === 'early'
   ? parseFloat(earlyDays(form.early_from, form.early_to) || 0)
@@ -1999,7 +2002,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canHrApprove = userRole === 'admin' || userRole === 'hr'
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status)
-    && req.user_id === currentUserId
+    && req.user_id != null
+    && currentUserId != null
+    && String(req.user_id) === String(currentUserId)
   const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
   const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF

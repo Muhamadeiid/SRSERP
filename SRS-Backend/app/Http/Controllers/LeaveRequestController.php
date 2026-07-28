@@ -173,6 +173,16 @@ class LeaveRequestController extends Controller
         }
 
         $data = $v->validated();
+        if ($data['type'] === 'lrf' && ($data['leave_type'] ?? null) === 'early') {
+            $earlyDays = $this->earlyLeaveDays($data['early_from'] ?? null, $data['early_to'] ?? null);
+            if ($earlyDays === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Early Leave must be between 1 minute and 6 hours, and To time must be after From time.',
+                ], 422);
+            }
+            $data['days'] = $earlyDays;
+        }
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
@@ -717,15 +727,13 @@ class LeaveRequestController extends Controller
                     'early_from' => 'Early Leave From and To times are required.',
                 ]);
             }
-            [$fromHour, $fromMinute] = array_map('intval', explode(':', $from));
-            [$toHour, $toMinute] = array_map('intval', explode(':', $to));
-            $minutes = ($toHour * 60 + $toMinute) - ($fromHour * 60 + $fromMinute);
-            if ($minutes <= 0) {
+            $earlyDays = $this->earlyLeaveDays($from, $to);
+            if ($earlyDays === null) {
                 throw ValidationException::withMessages([
-                    'early_to' => 'Early Leave To time must be after From time.',
+                    'early_to' => 'Early Leave must be between 1 minute and 6 hours, and To time must be after From time.',
                 ]);
             }
-            $days = round($minutes / 480, 2);
+            $days = $earlyDays;
             $changes['early_from'] = $from;
             $changes['early_to'] = $to;
         } else {
@@ -754,5 +762,23 @@ class LeaveRequestController extends Controller
             'paid' => $paid,
             'days' => $days,
         ]);
+    }
+
+    private function earlyLeaveDays(?string $from, ?string $to): ?float
+    {
+        if (!$from || !$to) {
+            return null;
+        }
+
+        [$fromHour, $fromMinute] = array_map('intval', explode(':', substr($from, 0, 5)));
+        [$toHour, $toMinute] = array_map('intval', explode(':', substr($to, 0, 5)));
+        $minutes = ($toHour * 60 + $toMinute) - ($fromHour * 60 + $fromMinute);
+
+        return match (true) {
+            $minutes >= 1 && $minutes <= 120 => 0.25,
+            $minutes >= 121 && $minutes <= 240 => 0.5,
+            $minutes >= 241 && $minutes <= 360 => 0.75,
+            default => null,
+        };
     }
 }
