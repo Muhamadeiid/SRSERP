@@ -24,7 +24,7 @@ class MaintenanceTaskController extends Controller
         $query = MaintenanceTask::with([
             'assignee:id,name,department',
             'creator:id,name',
-            'viewers:id,name,department',
+            'viewers',
             'equipment:id,code,name,type,car_type,train_number,unit_index,parent_id',
             'equipment.parent:id,code,name,train_number',
         ])->latest();
@@ -97,7 +97,7 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $task->load(['viewers:id,name,department', 'creator:id,name']),
+            'data' => $task->load(['viewers', 'creator:id,name']),
         ], 201);
     }
 
@@ -138,7 +138,7 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $maintenanceTask->load(['viewers:id,name,department', 'creator:id,name']),
+            'data' => $maintenanceTask->load(['viewers', 'creator:id,name']),
         ]);
     }
 
