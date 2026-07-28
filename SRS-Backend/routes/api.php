@@ -81,6 +81,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/maintenance-tasks', [MaintenanceTaskController::class, 'store']);
     Route::put('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'update']);
     Route::delete('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'destroy']);
+    Route::get('/maintenance-tasks/{maintenanceTask}/activities', [MaintenanceTaskController::class, 'activities']);
+    Route::post('/maintenance-tasks/{maintenanceTask}/activities', [MaintenanceTaskController::class, 'addActivity']);
 
     // ── Procurement (PRF) — every authenticated user can submit; approvals
     //     gated inside the controller (procurement → ehs → depot_manager)

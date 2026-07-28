@@ -36,4 +36,9 @@ class MaintenanceTask extends Model
     {
         return $this->belongsToMany(User::class, 'maintenance_task_viewers')->withTimestamps();
     }
+
+    public function activities()
+    {
+        return $this->hasMany(MaintenanceTaskActivity::class)->latest();
+    }
 }

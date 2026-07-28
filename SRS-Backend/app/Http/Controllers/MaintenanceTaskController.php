@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\MaintenanceTask;
+use App\Models\MaintenanceTaskActivity;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -119,9 +120,7 @@ class MaintenanceTaskController extends Controller
     {
         $user = $request->user();
         abort_unless($this->canViewTasks($user), 403);
-        $canUpdate = $this->canManageAll($user)
-            || $maintenanceTask->viewers()->where('users.id', $user->id)->exists();
-        abort_unless($canUpdate, 403);
+        abort_unless($this->canAccessTask($user, $maintenanceTask), 403);
 
         $rules = $this->canManageAll($user)
             ? [
@@ -140,12 +139,23 @@ class MaintenanceTaskController extends Controller
             : ['status' => 'required|in:pending,in_progress,done'];
 
         $data = $request->validate($rules);
+        $oldStatus = $maintenanceTask->status;
         $viewerIds = $data['viewer_user_ids'] ?? null;
         unset($data['viewer_user_ids']);
         if (isset($data['status'])) {
             $data['completed_at'] = $data['status'] === 'done' ? now() : null;
         }
         $maintenanceTask->update($data);
+        if (isset($data['status']) && $data['status'] !== $oldStatus) {
+            MaintenanceTaskActivity::create([
+                'maintenance_task_id' => $maintenanceTask->id,
+                'user_id' => $user->id,
+                'type' => 'status_change',
+                'from_status' => $oldStatus,
+                'to_status' => $data['status'],
+            ]);
+            $this->notifyTaskParticipants($maintenanceTask, $user->id, 'Task status updated', "{$user->name} changed {$maintenanceTask->title} to " . str_replace('_', ' ', $data['status']));
+        }
         if ($viewerIds !== null) {
             $maintenanceTask->viewers()->sync($viewerIds);
         }
@@ -163,6 +173,63 @@ class MaintenanceTaskController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function activities(Request $request, MaintenanceTask $maintenanceTask): JsonResponse
+    {
+        abort_unless($this->canAccessTask($request->user(), $maintenanceTask), 403);
+
+        return response()->json([
+            'success' => true,
+            'data' => $maintenanceTask->activities()->with('user:id,name')->get(),
+        ]);
+    }
+
+    public function addActivity(Request $request, MaintenanceTask $maintenanceTask): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($this->canAccessTask($user, $maintenanceTask), 403);
+
+        $data = $request->validate([
+            'body' => 'required|string|max:3000',
+            'status' => 'nullable|in:pending,in_progress,done',
+        ]);
+
+        $activity = MaintenanceTaskActivity::create([
+            'maintenance_task_id' => $maintenanceTask->id,
+            'user_id' => $user->id,
+            'type' => 'comment',
+            'body' => $data['body'],
+        ]);
+
+        if (!empty($data['status']) && $data['status'] !== $maintenanceTask->status) {
+            $oldStatus = $maintenanceTask->status;
+            $maintenanceTask->update([
+                'status' => $data['status'],
+                'completed_at' => $data['status'] === 'done' ? now() : null,
+            ]);
+            MaintenanceTaskActivity::create([
+                'maintenance_task_id' => $maintenanceTask->id,
+                'user_id' => $user->id,
+                'type' => 'status_change',
+                'from_status' => $oldStatus,
+                'to_status' => $data['status'],
+            ]);
+        }
+
+        $this->notifyTaskParticipants(
+            $maintenanceTask,
+            $user->id,
+            'Maintenance task update',
+            "{$user->name} added an update to {$maintenanceTask->title}"
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $activity->load('user:id,name'),
+            'task' => $maintenanceTask->fresh()->load(['viewers', 'creator:id,name']),
+            'activities' => $maintenanceTask->activities()->with('user:id,name')->get(),
+        ], 201);
+    }
+
     private function canManageAll(User $user): bool
     {
         return in_array($user->role, ['admin', 'depot_manager'], true);
@@ -171,6 +238,30 @@ class MaintenanceTaskController extends Controller
     private function canViewTasks(User $user): bool
     {
         return $this->canManageAll($user) || $user->role === 'manager';
+    }
+
+    private function canAccessTask(User $user, MaintenanceTask $task): bool
+    {
+        return $this->canManageAll($user)
+            || ($user->role === 'manager' && $task->viewers()->where('users.id', $user->id)->exists());
+    }
+
+    private function notifyTaskParticipants(MaintenanceTask $task, int $actorId, string $title, string $body): void
+    {
+        $recipientIds = $task->viewers()->pluck('users.id')->push($task->created_by)
+            ->filter()
+            ->unique()
+            ->reject(fn ($id) => (int) $id === $actorId);
+
+        foreach ($recipientIds as $recipientId) {
+            Notification::notifyUser(
+                (int) $recipientId,
+                'maintenance_task_updated',
+                $title,
+                $body,
+                ['maintenance_task_id' => $task->id, 'path' => '/maintenance']
+            );
+        }
     }
 
     private function trainPosition(MaintenanceTask $task): string

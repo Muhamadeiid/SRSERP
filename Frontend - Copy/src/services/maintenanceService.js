@@ -49,3 +49,5 @@ export const getMaintenanceTaskOptions = () => request('/maintenance-tasks/optio
 export const createMaintenanceTask = (data) => request('/maintenance-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
 export const updateMaintenanceTask = (id, data) => request(`/maintenance-tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
 export const deleteMaintenanceTask = (id) => request(`/maintenance-tasks/${id}`, { method: 'DELETE' })
+export const getMaintenanceTaskActivities = (id) => request(`/maintenance-tasks/${id}/activities`)
+export const addMaintenanceTaskActivity = (id, data) => request(`/maintenance-tasks/${id}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
