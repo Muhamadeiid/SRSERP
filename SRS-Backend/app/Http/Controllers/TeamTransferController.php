@@ -25,28 +25,41 @@ class TeamTransferController extends Controller
     {
         $data = $request->validate([
             'mode'            => 'required|in:direct,user,both',
-            'from_id'         => 'required|integer',
-            'to_id'           => 'nullable|integer',
+            'from_id'         => 'required|integer|exists:employees,id',
+            'to_id'           => 'nullable|integer|exists:employees,id|different:from_id',
             'employee_ids'    => 'nullable|array',
             'employee_ids.*'  => 'integer|exists:employees,id',
         ]);
 
         return DB::transaction(function () use ($data) {
-            $affected = 0;
+            $fromManager = Employee::active()->findOrFail($data['from_id']);
+            $toManager = !empty($data['to_id'])
+                ? Employee::active()->findOrFail($data['to_id'])
+                : null;
+            $affectedIds = collect();
 
             if (in_array($data['mode'], ['direct', 'both'])) {
-                $q = Employee::active()->where('direct_manager_id', $data['from_id']);
+                $q = Employee::active()->where('direct_manager_id', $fromManager->id);
                 if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
-                $affected += $q->update(['direct_manager_id' => $data['to_id']]);
+                $ids = (clone $q)->pluck('id');
+                $q->update(['direct_manager_id' => $toManager?->id]);
+                $affectedIds = $affectedIds->merge($ids);
             }
 
             if (in_array($data['mode'], ['user', 'both'])) {
-                $q = Employee::active()->where('user_manager_id', $data['from_id']);
+                if (!$fromManager->user_id || ($toManager && !$toManager->user_id)) {
+                    return response()->json([
+                        'message' => 'Manager Account transfer requires both managers to have active user accounts.',
+                    ], 422);
+                }
+                $q = Employee::active()->where('user_manager_id', $fromManager->user_id);
                 if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
-                $affected += $q->update(['user_manager_id' => $data['to_id']]);
+                $ids = (clone $q)->pluck('id');
+                $q->update(['user_manager_id' => $toManager?->user_id]);
+                $affectedIds = $affectedIds->merge($ids);
             }
 
-            return response()->json(['ok' => true, 'affected' => $affected]);
+            return response()->json(['ok' => true, 'affected' => $affectedIds->unique()->count()]);
         });
     }
 }

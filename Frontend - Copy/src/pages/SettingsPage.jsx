@@ -737,7 +737,7 @@ function TeamTransferPanel() {
   const [managers, setManagers]  = useState([])
   const [fromMgr,  setFromMgr]   = useState(null)
   const [toMgr,    setToMgr]     = useState(null)
-  const [mode,     setMode]      = useState('user')  // 'direct' | 'user' | 'both'
+  const [mode,     setMode]      = useState('direct')  // 'direct' | 'user' | 'both'
   const [busy,     setBusy]      = useState(false)
   const [result,   setResult]    = useState(null)
 

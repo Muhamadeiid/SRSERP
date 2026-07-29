@@ -48,13 +48,25 @@ class SettingsController extends Controller
      */
     public function managers(): JsonResponse
     {
-        $managers = Employee::active()->select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
-            ->join('users', 'users.id', '=', 'employees.user_id')
+        $managers = Employee::active()
+            ->select('employees.id', 'employees.name', 'employees.arabic_name', 'employees.position', 'employees.department', 'employees.user_id', 'users.role')
+            ->leftJoin('users', 'users.id', '=', 'employees.user_id')
+            ->withCount([
+                'directReports as assigned_employees_count' => fn ($q) => $q->active(),
+            ])
             ->where(function ($q) {
                 $q->where('users.is_team_manager', true)
-                  ->orWhere('users.role', 'depot_manager');
+                  ->orWhere('users.role', 'depot_manager')
+                  ->orWhereHas('directReports', fn ($reports) => $reports->active())
+                  ->orWhereExists(function ($reports) {
+                      $reports->selectRaw('1')
+                          ->from('employees as account_reports')
+                          ->whereColumn('account_reports.user_manager_id', 'users.id');
+                  });
             })
-            ->where('users.is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('users.id')->orWhere('users.is_active', true);
+            })
             ->orderBy('employees.name')
             ->get();
         return response()->json(['success' => true, 'data' => $managers]);
