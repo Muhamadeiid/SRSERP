@@ -80,6 +80,7 @@ if ($frontendNeeded) {
 
     if (Test-Path $npm) {
         Log "Frontend source changed - building latest source..."
+        $env:PATH = "$nodeDir;$env:PATH"
         Set-Location $frontend
         if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
             Log "Installing frontend packages..."
