@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -28,17 +29,27 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->filled('department')) {
+            $request->merge(['department' => strtolower(trim((string) $request->department))]);
+        }
+
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users',
             'password'        => 'required|string|min:8',
             'role'            => 'required|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
-            'department'      => 'required|in:cm,hm,pm,warranty,cm_intervention,admin',
+            'department'      => [
+                'required',
+                Rule::exists('lookups', 'key')->where(
+                    fn ($query) => $query->where('type', 'department')->where('is_active', true)
+                ),
+            ],
             'manager_id'      => 'nullable|exists:users,id',
             'is_team_manager' => 'sometimes|boolean',
         ]);
 
         // Prevent self-assignment (no id yet on create, so nothing to check)
+        $data['department'] = strtolower(trim($data['department']));
         $data['password'] = Hash::make($data['password']);
         $user = User::create($data);
 
@@ -47,11 +58,20 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        if ($request->filled('department')) {
+            $request->merge(['department' => strtolower(trim((string) $request->department))]);
+        }
+
         $data = $request->validate([
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
             'role'            => 'sometimes|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
-            'department'      => 'sometimes|in:cm,hm,pm,warranty,cm_intervention,admin',
+            'department'      => [
+                'sometimes',
+                Rule::exists('lookups', 'key')->where(
+                    fn ($query) => $query->where('type', 'department')->where('is_active', true)
+                ),
+            ],
             'is_active'       => 'sometimes|boolean',
             'is_team_manager' => 'sometimes|boolean',
             'manager_id'      => 'nullable|exists:users,id',
@@ -60,6 +80,10 @@ class UserController extends Controller
         // Prevent a user from assigning themselves as their own manager
         if (isset($data['manager_id']) && (int) $data['manager_id'] === $user->id) {
             return response()->json(['message' => 'A user cannot be their own manager.'], 422);
+        }
+
+        if (isset($data['department'])) {
+            $data['department'] = strtolower(trim($data['department']));
         }
 
         $user->update($data);
