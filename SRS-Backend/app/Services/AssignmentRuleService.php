@@ -110,8 +110,6 @@ class AssignmentRuleService
             ->get()
             ->all();
 
-        if (empty($rules)) return 0;
-
         $changed = 0;
         Employee::active()->chunkById(200, function ($employees) use ($rules, &$changed) {
             foreach ($employees as $emp) {

@@ -371,6 +371,7 @@ class Employee extends Model
         if (preg_match('/\bcm\b/', $pos)) return 'cm';
         if (preg_match('/\bpm\b/', $pos)) return 'pm';
         if (str_contains($pos, 'warranty')) return 'warranty';
+        if (preg_match('/\b(ehs|hse|safety)\b/', $pos)) return 'ehs';
         if (preg_match('/\b(workshop|admin|store|logistics|procurement|mmis|hr)\b/', $pos)) return 'admin';
         return null;
     }

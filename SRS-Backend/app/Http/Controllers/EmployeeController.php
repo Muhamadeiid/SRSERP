@@ -799,6 +799,7 @@ class EmployeeController extends Controller
         if (str_contains($pos, 'cm ') || str_starts_with($pos, 'cm ') || $pos === 'cm head') return 'cm';
         if (str_contains($pos, 'pm ') || str_starts_with($pos, 'pm ')) return 'pm';
         if (str_contains($pos, 'warranty')) return 'warranty';
+        if (preg_match('/\b(ehs|hse|safety)\b/', $pos)) return 'ehs';
         return 'admin';
     }
 

@@ -57,6 +57,9 @@ class PositionController extends Controller
 
         $data['sort']      = $data['sort']      ?? (Position::max('sort') + 1);
         $data['is_active'] = $data['is_active'] ?? true;
+        if (! empty($data['department_key'])) {
+            $data['department_key'] = strtolower(trim($data['department_key']));
+        }
 
         return response()->json(Position::create($data), 201);
     }
@@ -73,7 +76,14 @@ class PositionController extends Controller
             'sort'           => 'sometimes|integer',
         ]);
 
+        if (! empty($data['department_key'])) {
+            $data['department_key'] = strtolower(trim($data['department_key']));
+        }
+
         $position->update($data);
+        if (array_key_exists('department_key', $data) && $data['department_key']) {
+            $position->employees()->update(['department' => $data['department_key']]);
+        }
         return response()->json($position);
     }
 
@@ -101,8 +111,12 @@ class PositionController extends Controller
             'to_id'   => 'required|exists:positions,id',
         ]);
 
+        $target = Position::findOrFail($data['to_id']);
         \App\Models\Employee::where('position_id', $data['from_id'])
-            ->update(['position_id' => $data['to_id']]);
+            ->update([
+                'position_id' => $target->id,
+                'department' => $target->department_key,
+            ]);
 
         Position::where('id', $data['from_id'])->delete();
 

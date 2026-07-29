@@ -53,6 +53,7 @@ const DEPT = {
   cm_intervention: { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
   intervention:    { label: "CM (Intervention)",icon: Activity,   color: "text-secondary" },
   admin:           { label: "Admin",            icon: Settings,   color: "text-purple-600" },
+  ehs:             { label: "EHS",              icon: Shield,     color: "text-emerald-600" },
 };
 const STATUS = {
   on_site: {
@@ -1150,7 +1151,7 @@ export default function WorkforceTab() {
                               <Icon className={`w-3.5 h-3.5 ${dc.color}`} />
                             )}
                             <span className="text-sm text-secondary">
-                              {dc?.label}
+                              {dc?.label ?? emp.department}
                             </span>
                           </div>
                         </td>
