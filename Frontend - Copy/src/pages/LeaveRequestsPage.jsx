@@ -2354,6 +2354,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyStatus, setHistoryStatus] = useState('all')  // all | approved | rejected | cancelled | rescheduled
   const [historyPeriod, setHistoryPeriod] = useState('current_month')   // current_month | last_30 | last_90 | last_year | all
   const [historyPage,   setHistoryPage]   = useState(1)
+  const [approvalStage, setApprovalStage] = useState('all')
   const HISTORY_PER_PAGE = 25
 
   const openRequest = useCallback((request, options = {}) => {
@@ -2375,6 +2376,21 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     (r.status === 'manager_approved' && isHrApprover) ||
     (r.status === 'hr_approved' && isDepotAdmin)
   )
+  const approvalStageFor = (request) => {
+    if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'manager'
+    if (request.status === 'pending' || request.status === 'manager_approved') return 'hr'
+    if (request.status === 'hr_approved') return 'depot'
+    return null
+  }
+  const approvalStages = [
+    ['all', 'All Pending'],
+    ['manager', 'Direct Manager'],
+    ['hr', 'HR'],
+    ['depot', 'Depot Manager'],
+  ]
+  const pendingForStage = approvalStage === 'all'
+    ? pending
+    : pending.filter(request => approvalStageFor(request) === approvalStage)
 
   // Check if current user is the direct manager of a given request's employee
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
@@ -2629,8 +2645,29 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             <h2 className="text-sm font-bold text-amber-700">Pending Approvals</h2>
             <span className="ml-auto px-2 py-0.5 bg-amber-200 text-amber-800 text-xs font-bold rounded-full">{pending.length}</span>
           </div>
+          <div className="flex flex-wrap gap-2 border-b border-amber-100 bg-white px-6 py-3">
+            {approvalStages.map(([key, label]) => {
+              const count = key === 'all'
+                ? pending.length
+                : pending.filter(request => approvalStageFor(request) === key).length
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setApprovalStage(key)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                    approvalStage === key
+                      ? 'bg-amber-500 text-white'
+                      : 'border border-neutral-200 bg-white text-neutral-500 hover:bg-amber-50'
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              )
+            })}
+          </div>
           <div className="divide-y divide-neutral-50">
-            {pending.map(r => (
+            {pendingForStage.map(r => (
               <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-amber-50/40 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
@@ -2676,6 +2713,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 </div>
               </div>
             ))}
+            {pendingForStage.length === 0 && (
+              <div className="px-6 py-8 text-center text-sm font-semibold text-neutral-400">
+                No requests are waiting at this stage.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2683,8 +2725,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       {/* ═══ Active Requests — always visible (small count) ═══ */}
       {(() => {
         const active = typeFiltered.filter(r =>
-          ['pending', 'manager_approved', 'hr_approved'].includes(r.status) ||
-          (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
+          r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at
         )
         if (active.length === 0) return null
         return (
@@ -2697,7 +2738,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 </h2>
                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{active.length}</span>
               </div>
-              <p className="text-[11px] text-neutral-400">In-progress or upcoming</p>
+              <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
             <div className="divide-y divide-neutral-50">
               {active.map(r => renderRequestRow(r))}
@@ -2711,7 +2752,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         <div className="px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-secondary-700">
-              {showOnly === 'otr' ? 'Overtime History' : showOnly === 'lrf' ? 'Leave History' : 'Requests History'}
+              {showOnly === 'otr' ? 'Completed Overtime Requests' : showOnly === 'lrf' ? 'Completed Leave Requests' : 'Completed Requests'}
             </h2>
             <p className="text-xs text-neutral-400 mt-0.5">Closed, approved & past requests</p>
           </div>
