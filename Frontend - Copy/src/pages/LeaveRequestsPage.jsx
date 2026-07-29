@@ -2330,6 +2330,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const { user }      = useSelector(s => s.auth)
   const isDepotAdmin  = user?.role === 'admin' || user?.role === 'depot_manager'
   const isHrApprover  = user?.role === 'admin' || user?.role === 'hr'
+  const canManagePrintArchive = user?.role === 'admin' || user?.role === 'hr'
   const isManager     = isDepotAdmin  // keep for compat
   const location      = useLocation()
   const navigate      = useNavigate()
@@ -2779,13 +2780,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
             <div className="divide-y divide-neutral-50">
-              {active.map(r => renderRequestRow(r, { showArchiveAction: true }))}
+              {active.map(r => renderRequestRow(r, { showArchiveAction: canManagePrintArchive }))}
             </div>
           </div>
         )
       })()}
 
       {(() => {
+        if (!canManagePrintArchive) return null
         const archived = typeFiltered.filter(r => r.type === 'lrf' && r.archived_by_me)
         if (archived.length === 0) return null
         return (

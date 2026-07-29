@@ -131,7 +131,7 @@ class LeaveRequestController extends Controller
 
     public function archive(LeaveRequest $leaveRequest): JsonResponse
     {
-        $this->ensureRequestAccess($leaveRequest, auth()->user());
+        $this->ensureHrArchiveAccess(auth()->user());
 
         DB::table('leave_request_archives')->updateOrInsert(
             [
@@ -150,11 +150,10 @@ class LeaveRequestController extends Controller
 
     public function unarchive(LeaveRequest $leaveRequest): JsonResponse
     {
-        $this->ensureRequestAccess($leaveRequest, auth()->user());
+        $this->ensureHrArchiveAccess(auth()->user());
 
         DB::table('leave_request_archives')
             ->where('leave_request_id', $leaveRequest->id)
-            ->where('user_id', auth()->id())
             ->delete();
 
         return response()->json(['success' => true]);
@@ -833,27 +832,17 @@ class LeaveRequestController extends Controller
             && (int) $leaveRequest->user_id === (int) $user->id;
     }
 
-    private function ensureRequestAccess(LeaveRequest $leaveRequest, User $user): void
-    {
-        if (in_array($user->role, ['admin', 'depot_manager', 'hr'], true)) {
-            return;
-        }
-
-        if ((int) $leaveRequest->user_id === (int) $user->id || $this->isDirectManager($leaveRequest, $user->id)) {
-            return;
-        }
-
-        abort(403, 'Unauthorized');
-    }
-
     private function attachArchiveStatus($requests, User $user): void
     {
-        if (!Schema::hasTable('leave_request_archives') || $requests->isEmpty()) {
+        if (
+            !in_array($user->role, ['admin', 'hr'], true)
+            || !Schema::hasTable('leave_request_archives')
+            || $requests->isEmpty()
+        ) {
             return;
         }
 
         $archivedIds = DB::table('leave_request_archives')
-            ->where('user_id', $user->id)
             ->whereIn('leave_request_id', $requests->pluck('id'))
             ->pluck('leave_request_id')
             ->map(fn ($id) => (int) $id)
@@ -862,6 +851,11 @@ class LeaveRequestController extends Controller
         foreach ($requests as $leaveRequest) {
             $leaveRequest->setAttribute('archived_by_me', $archivedIds->has((int) $leaveRequest->id));
         }
+    }
+
+    private function ensureHrArchiveAccess(User $user): void
+    {
+        abort_unless(in_array($user->role, ['admin', 'hr'], true), 403, 'Only HR or Super Admin can archive printed requests.');
     }
 
     private function hideConfidentialBalances($requests, User $user): void
