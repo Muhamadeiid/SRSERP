@@ -227,7 +227,9 @@ class LeaveRequestController extends Controller
                 ? $available['sick']
                 : $available['annual'];
         } else {
-            $data['available_balance'] = null;
+            // Overtime requests do not use leave balance. Keep zero for
+            // compatibility with older databases where the column is NOT NULL.
+            $data['available_balance'] = 0;
         }
         if (empty($data['direct_manager_name']) && $employee?->direct_manager_id) {
             $manager = Employee::active()->with('user:id,role')->find($employee->direct_manager_id);
