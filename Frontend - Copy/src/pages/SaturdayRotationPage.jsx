@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Plus, Printer, RefreshCw, Save, Search, Trash2, Users } from 'lucide-react'
 import { bulkUpdateSaturdayGroup, getEmployees } from '../services/employeeService'
 import { getSettings, saveSetting } from '../services/settingsService'
+import { listProjects } from '../services/projectService'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const TEAM_STYLE = {
@@ -27,6 +28,7 @@ const DEFAULT_POLICY = {
 }
 
 const CENTER_ITEMS_SETTING = 'saturday_rotation_center_items'
+const centerItemsSetting = (projectCode) => `${CENTER_ITEMS_SETTING}_${String(projectCode || 'default').toLowerCase()}`
 const DEFAULT_CENTER_ITEMS = [
   { title: 'PM', names: 'Mohamed Samy' },
   { title: 'PM Doc.', names: 'A. Elshaker' },
@@ -292,6 +294,9 @@ export default function SaturdayRotationPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [employees, setEmployees] = useState([])
+  const [projects, setProjects] = useState([])
+  const [selectedProjectCode, setSelectedProjectCode] = useState('')
+  const [settings, setSettings] = useState({})
   const [policy, setPolicy] = useState(DEFAULT_POLICY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -306,14 +311,25 @@ export default function SaturdayRotationPage() {
     setLoading(true)
     setError('')
     try {
-      const [empRes, settingsRes] = await Promise.all([
+      const [empRes, settingsRes, projectsRes] = await Promise.all([
         getEmployees({ view: 'active', per_page: 500 }),
         getSettings(),
+        listProjects(),
       ])
       setEmployees(empRes.data ?? [])
-      const settings = settingsRes.data ?? {}
-      setPolicy({ ...DEFAULT_POLICY, ...settings })
-      setCenterItems(parseCenterItems(settings[CENTER_ITEMS_SETTING]))
+      const loadedSettings = settingsRes.data ?? {}
+      const activeProjects = (projectsRes.data ?? projectsRes ?? []).filter(project => project.is_active !== false)
+      const nextProjectCode = activeProjects.some(project => project.code === selectedProjectCode)
+        ? selectedProjectCode
+        : (activeProjects.find(project => project.is_default)?.code ?? activeProjects[0]?.code ?? '')
+      setProjects(activeProjects)
+      setSelectedProjectCode(nextProjectCode)
+      setSettings(loadedSettings)
+      setPolicy({ ...DEFAULT_POLICY, ...loadedSettings })
+      setCenterItems(parseCenterItems(
+        loadedSettings[centerItemsSetting(nextProjectCode)]
+          ?? (nextProjectCode === 'EG1' ? loadedSettings[CENTER_ITEMS_SETTING] : null)
+      ))
       setSelectedIds([])
     } catch (e) {
       setError(e.message || 'Unable to load Saturday rotation plan')
@@ -324,11 +340,27 @@ export default function SaturdayRotationPage() {
 
   useEffect(() => { load() }, [])
 
+  const selectedProject = projects.find(project => project.code === selectedProjectCode) ?? null
+  const visibleEmployees = useMemo(
+    () => employees.filter(emp => !selectedProjectCode || emp.project_code === selectedProjectCode),
+    [employees, selectedProjectCode]
+  )
+
+  useEffect(() => {
+    if (!selectedProjectCode) return
+    setCenterItems(parseCenterItems(
+      settings[centerItemsSetting(selectedProjectCode)]
+        ?? (selectedProjectCode === 'EG1' ? settings[CENTER_ITEMS_SETTING] : null)
+    ))
+    setSelectedIds([])
+    setEmployeeSearch('')
+  }, [selectedProjectCode, settings])
+
   const grouped = useMemo(() => ({
-    A: employees.filter(emp => emp.saturday_group === 'A'),
-    B: employees.filter(emp => emp.saturday_group === 'B'),
-    unset: employees.filter(emp => !emp.saturday_group),
-  }), [employees])
+    A: visibleEmployees.filter(emp => emp.saturday_group === 'A'),
+    B: visibleEmployees.filter(emp => emp.saturday_group === 'B'),
+    unset: visibleEmployees.filter(emp => !emp.saturday_group),
+  }), [visibleEmployees])
 
   const searchResults = useMemo(() => {
     const query = employeeSearch.trim().toLowerCase()
@@ -405,7 +437,9 @@ export default function SaturdayRotationPage() {
         }))
         .filter(item => item.title || item.names)
       const next = cleaned.length ? cleaned : DEFAULT_CENTER_ITEMS
-      await saveSetting(CENTER_ITEMS_SETTING, JSON.stringify(next))
+      const key = centerItemsSetting(selectedProjectCode)
+      await saveSetting(key, JSON.stringify(next))
+      setSettings(prev => ({ ...prev, [key]: JSON.stringify(next) }))
       setCenterItems(next)
     } catch (e) {
       setError(e.message || 'Unable to save middle names')
@@ -477,6 +511,23 @@ export default function SaturdayRotationPage() {
           <p className="text-sm text-neutral-400 mt-0.5">Grouped from Workforce Saturday Group A/B</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <div className="inline-flex h-9 items-center rounded-lg border border-neutral-200 bg-white p-1">
+            {projects.map(project => {
+              const active = project.code === selectedProjectCode
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => setSelectedProjectCode(project.code)}
+                  className={`h-7 px-3 text-xs font-bold transition-colors ${
+                    active ? 'bg-primary text-white' : 'text-neutral-500 hover:bg-neutral-50'
+                  }`}
+                >
+                  {project.name || project.code}
+                </button>
+              )
+            })}
+          </div>
           <button onClick={prevMonth} className="p-2 rounded-lg bg-white border border-neutral-200 text-neutral-500 hover:bg-neutral-50">
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -694,7 +745,7 @@ export default function SaturdayRotationPage() {
       <div className="saturday-plan-print bg-white border border-neutral-200 overflow-x-auto print:border-0">
         <div className="saturday-plan-sheet min-w-[1120px] p-4 font-sans text-black">
           <div className="mx-auto mb-1 w-[610px] border border-black py-1 text-center text-3xl leading-tight">
-            CML1 Saturday Rotation Plan - {MONTHS[month]}
+            {selectedProject?.name || selectedProjectCode || 'Project'} Saturday Rotation Plan - {MONTHS[month]}
           </div>
 
           <div className="grid grid-cols-[1fr_70px_1fr] gap-6">

@@ -7,7 +7,7 @@
  *   const products = await api.products.list({ site: "SC-01" });
  */
 
-const BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000/api";
+const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────
 async function request(method, path, body = null) {

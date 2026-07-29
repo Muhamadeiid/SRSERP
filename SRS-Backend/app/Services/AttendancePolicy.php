@@ -16,6 +16,7 @@ class AttendancePolicy
         'attendance_late_grace_minutes' => '15',
         'attendance_single_punch_gap_minutes' => '30',
         'attendance_absent_deduction_minutes' => '540',
+        'attendance_salary_daily_hours' => '8',
         'attendance_regular_weekly_off_day' => '5',
         'attendance_saturday_rotation_enabled' => '1',
         'attendance_group_a_off_even_week' => '1',

@@ -52,6 +52,9 @@ class UserController extends Controller
         $data['department'] = strtolower(trim($data['department']));
         $data['password'] = Hash::make($data['password']);
         $user = User::create($data);
+        if (array_key_exists('manager_id', $data)) {
+            \App\Services\ManagerHierarchyService::syncFromUser($user);
+        }
 
         return response()->json($user->load('manager:id,name'), 201);
     }
@@ -87,6 +90,9 @@ class UserController extends Controller
         }
 
         $user->update($data);
+        if (array_key_exists('manager_id', $data)) {
+            \App\Services\ManagerHierarchyService::syncFromUser($user->fresh());
+        }
 
         return response()->json($user->load('manager:id,name'));
     }
@@ -198,6 +204,8 @@ class UserController extends Controller
 
         if ($data['employee_id']) {
             Employee::active()->where('id', $data['employee_id'])->update(['user_id' => $user->id]);
+            $employee = Employee::active()->findOrFail($data['employee_id']);
+            \App\Services\ManagerHierarchyService::reconcileLinkedEmployee($user->fresh(), $employee);
         }
 
         $linked = $data['employee_id']
@@ -219,8 +227,28 @@ class UserController extends Controller
             'assign'      => 'required|boolean',
         ]);
 
-        Employee::active()->where('id', $data['employee_id'])
-            ->update(['user_manager_id' => $data['assign'] ? $user->id : null]);
+        $employee = Employee::active()->findOrFail($data['employee_id']);
+        $managerEmployee = Employee::active()->where('user_id', $user->id)->first();
+
+        if ($data['assign'] && !$managerEmployee) {
+            return response()->json([
+                'message' => 'Link this manager account to its Workforce employee first.',
+            ], 422);
+        }
+        if ($data['assign'] && \App\Services\ManagerHierarchyService::wouldCreateCycle(
+            $employee->id,
+            $managerEmployee->id
+        )) {
+            return response()->json([
+                'message' => 'This manager selection would create a loop in the organization chart.',
+            ], 422);
+        }
+
+        $employee->update([
+            'direct_manager_id' => $data['assign'] ? $managerEmployee->id : null,
+            'manager_manual' => (bool) $data['assign'],
+        ]);
+        \App\Services\ManagerHierarchyService::syncFromEmployee($employee->fresh());
 
         return response()->json(['success' => true]);
     }

@@ -25,7 +25,7 @@ const fmtTime = (d) => {
 }
 
 // Roles that have full HR module access (workforce, attendance, assets, etc.)
-const HR_FULL_ROLES_NAV = ['admin', 'depot_manager']
+const HR_FULL_ROLES_NAV = ['admin', 'depot_manager', 'hr']
 
 // ── nav definition (grouped) ──────────────────────────────────────
 // hrOnly: true  → visible only to HR Full (admin / depot_manager / HR dept)

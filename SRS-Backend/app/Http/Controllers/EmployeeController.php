@@ -151,6 +151,7 @@ class EmployeeController extends Controller
             \App\Services\AssignmentRuleService::applyToEmployee($employee->fresh());
         }
 
+        \App\Services\ManagerHierarchyService::syncFromEmployee($employee->fresh());
         $employee->refresh()->load('directManager:id,name,position,user_id,e_signature');
 
         return response()->json($employee);
@@ -240,6 +241,7 @@ class EmployeeController extends Controller
             ]);
         }
 
+        \App\Services\ManagerHierarchyService::syncFromEmployee($employee->fresh());
         return response()->json($employee->fresh(), 201);
     }
 
@@ -271,6 +273,7 @@ class EmployeeController extends Controller
             ]);
         }
 
+        \App\Services\ManagerHierarchyService::syncFromEmployee($employee->fresh());
         return response()->json($employee->fresh());
     }
 
@@ -333,6 +336,7 @@ class EmployeeController extends Controller
             'updated_at' => now(),
         ]);
 
+        \App\Services\ManagerHierarchyService::syncEmployeeIds($ids);
         return response()->json([
             'success' => true,
             'updated' => count($ids),

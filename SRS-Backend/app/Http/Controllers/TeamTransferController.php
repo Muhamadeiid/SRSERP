@@ -38,29 +38,24 @@ class TeamTransferController extends Controller
                 : null;
             $affectedIds = collect();
 
-            if (in_array($data['mode'], ['direct', 'both'])) {
-                $q = Employee::active()->where('direct_manager_id', $fromManager->id);
-                if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
-                $ids = (clone $q)->pluck('id');
-                $q->update([
-                    'direct_manager_id' => $toManager?->id,
-                    'manager_manual' => true,
-                ]);
-                $affectedIds = $affectedIds->merge($ids);
-            }
-
-            if (in_array($data['mode'], ['user', 'both'])) {
-                if (!$fromManager->user_id || ($toManager && !$toManager->user_id)) {
-                    return response()->json([
-                        'message' => 'Manager Account transfer requires both managers to have active user accounts.',
-                    ], 422);
+            $q = Employee::active()->where('direct_manager_id', $fromManager->id);
+            if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
+            $ids = (clone $q)->pluck('id');
+            if ($toManager) {
+                foreach ($ids as $employeeId) {
+                    if (\App\Services\ManagerHierarchyService::wouldCreateCycle((int) $employeeId, $toManager->id)) {
+                        return response()->json([
+                            'message' => 'This transfer would create a loop in the organization chart.',
+                        ], 422);
+                    }
                 }
-                $q = Employee::active()->where('user_manager_id', $fromManager->user_id);
-                if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
-                $ids = (clone $q)->pluck('id');
-                $q->update(['user_manager_id' => $toManager?->user_id]);
-                $affectedIds = $affectedIds->merge($ids);
             }
+            $q->update([
+                'direct_manager_id' => $toManager?->id,
+                'manager_manual' => (bool) $toManager,
+            ]);
+            $affectedIds = $affectedIds->merge($ids);
+            \App\Services\ManagerHierarchyService::syncEmployeeIds($affectedIds);
 
             return response()->json(['ok' => true, 'affected' => $affectedIds->unique()->count()]);
         });

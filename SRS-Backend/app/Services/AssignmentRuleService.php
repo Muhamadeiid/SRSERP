@@ -92,6 +92,7 @@ class AssignmentRuleService
 
         if ($dirty) {
             $emp->save();
+            ManagerHierarchyService::syncFromEmployee($emp);
             return true;
         }
 

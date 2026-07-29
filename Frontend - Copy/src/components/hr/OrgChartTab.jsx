@@ -3,7 +3,7 @@ import { Search, UserCheck, X, Loader2,
          RefreshCw, Users, ShieldCheck, Plus, AlertCircle,
          ChevronRight, ChevronDown } from 'lucide-react'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
+const BASE = import.meta.env.VITE_API_URL ?? '/api'
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('srs_token')
   const res = await fetch(`${BASE}${path}`, {

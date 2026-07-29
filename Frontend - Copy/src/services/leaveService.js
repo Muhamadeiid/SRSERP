@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
+const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
@@ -29,7 +29,7 @@ export const getLeaveRequests  = (params = {}) => {
 export const getLeaveRequest   = (id) => request(`/leave-requests/${id}`)
 export const getCalendarLeaves = () => request('/leave-requests/calendar')
 export const createLeaveRequest = (data)     => request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
-export const managerApproveLeave = (id)          => request(`/leave-requests/${id}/manager-approve`, { method: 'POST' })
+export const managerApproveLeave = (id, data = {}) => request(`/leave-requests/${id}/manager-approve`, { method: 'POST', body: JSON.stringify(data) })
 export const hrApproveLeave      = (id, data = {}) => request(`/leave-requests/${id}/hr-approve`,    { method: 'POST', body: JSON.stringify(data) })
 export const approveLeave        = (id, data = {}) => request(`/leave-requests/${id}/approve`,       { method: 'POST', body: JSON.stringify(data) })
 export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })

@@ -89,8 +89,18 @@ class SettingsController extends Controller
             'employee_id' => 'required|exists:employees,id',
             'manager_id'  => 'nullable|exists:employees,id',
         ]);
-        Employee::active()->where('id', $request->employee_id)
-            ->update(['direct_manager_id' => $request->manager_id]);
+        if (\App\Services\ManagerHierarchyService::wouldCreateCycle(
+            (int) $request->employee_id,
+            $request->manager_id ? (int) $request->manager_id : null
+        )) {
+            return response()->json(['message' => 'This manager selection would create a loop in the organization chart.'], 422);
+        }
+        $employee = Employee::active()->findOrFail($request->employee_id);
+        $employee->update([
+            'direct_manager_id' => $request->manager_id,
+            'manager_manual' => (bool) $request->manager_id,
+        ]);
+        \App\Services\ManagerHierarchyService::syncFromEmployee($employee->fresh());
         return response()->json(['success' => true]);
     }
 }

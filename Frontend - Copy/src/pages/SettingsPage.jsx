@@ -21,6 +21,7 @@ const ATTENDANCE_POLICY_DEFAULTS = {
   attendance_late_grace_minutes: 15,
   attendance_single_punch_gap_minutes: 30,
   attendance_absent_deduction_minutes: 540,
+  attendance_salary_daily_hours: 8,
   attendance_regular_weekly_off_day: 5,
   attendance_saturday_rotation_enabled: '1',
   attendance_group_a_off_even_week: '1',
@@ -441,6 +442,7 @@ export default function SettingsPage() {
               ['attendance_late_grace_minutes', 'Late Grace Min', 0, 240],
               ['attendance_single_punch_gap_minutes', 'Full Day Gap Min', 1, 240],
               ['attendance_absent_deduction_minutes', 'Absent Deduction Min', 0, 1440],
+              ['attendance_salary_daily_hours', 'Salary Daily Hours', 1, 24],
             ].map(([key, label, min, max]) => (
               <div key={key}>
                 <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">{label}</label>
@@ -737,7 +739,6 @@ function TeamTransferPanel() {
   const [managers, setManagers]  = useState([])
   const [fromMgr,  setFromMgr]   = useState(null)
   const [toMgr,    setToMgr]     = useState(null)
-  const [mode,     setMode]      = useState('direct')  // 'direct' | 'user' | 'both'
   const [busy,     setBusy]      = useState(false)
   const [result,   setResult]    = useState(null)
 
@@ -750,11 +751,11 @@ function TeamTransferPanel() {
 
   const run = async () => {
     if (!fromMgr) return
-    if (!confirm(`Move ALL employees from ${fromMgr.name} to ${toMgr ? toMgr.name : '(un-assigned)'}?\nMode: ${mode}`)) return
+    if (!confirm(`Move ALL employees from ${fromMgr.name} to ${toMgr ? toMgr.name : '(un-assigned)'}?`)) return
     setBusy(true); setResult(null)
     try {
       const r = await teamTransfer({
-        mode,
+        mode: 'both',
         from_id: fromMgr.id,
         to_id:   toMgr?.id ?? null,
       })
@@ -850,37 +851,6 @@ function TeamTransferPanel() {
             >
               Un-assign
             </button>
-          </div>
-        </div>
-
-        {/* Which link */}
-        <div>
-          <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Which link to move</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {[
-              { key: 'user',   label: 'Manager Account',  sub: 'Access & visibility (user_manager_id)' },
-              { key: 'direct', label: 'Direct Manager',   sub: 'Leaves & Org chart (direct_manager_id)' },
-              { key: 'both',   label: 'Both',             sub: 'Complete handover' },
-            ].map(o => {
-              const on = mode === o.key
-              return (
-                <button
-                  key={o.key}
-                  onClick={() => setMode(o.key)}
-                  className={`text-left p-3 rounded-xl border-2 transition-all ${
-                    on ? 'bg-primary/5 text-secondary-700 border-primary shadow-sm' : 'bg-white text-secondary-700 border-neutral-100 hover:border-primary/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${on ? 'border-primary bg-primary' : 'border-neutral-300'}`}>
-                      {on && <Check className="w-2.5 h-2.5 text-white" />}
-                    </div>
-                    <p className="text-sm font-bold">{o.label}</p>
-                  </div>
-                  <p className="text-[10px] text-neutral-400 mt-1 ml-6">{o.sub}</p>
-                </button>
-              )
-            })}
           </div>
         </div>
 

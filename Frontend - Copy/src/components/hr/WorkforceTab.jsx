@@ -668,7 +668,7 @@ export default function WorkforceTab() {
     if ((!formOpen && !bulkMode) || optionsLoaded.current) return;
     optionsLoaded.current = true;
     const token = localStorage.getItem('srs_token');
-    const base  = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api';
+    const base  = import.meta.env.VITE_API_URL ?? '/api';
     const hdrs  = { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
     // Employees list for "Direct Manager" dropdown

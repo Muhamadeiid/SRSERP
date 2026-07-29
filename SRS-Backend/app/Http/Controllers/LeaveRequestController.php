@@ -192,6 +192,20 @@ class LeaveRequestController extends Controller
             }
             $data['days'] = $earlyDays;
         }
+        if ($data['type'] === 'otr') {
+            $hours = $this->overtimeHours(
+                $data['ot_date'] ?? null,
+                $data['start_time'] ?? null,
+                $data['end_time'] ?? null
+            );
+            if ($hours === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Overtime end time must be after start time and within 24 hours.',
+                ], 422);
+            }
+            $data['hours'] = $hours;
+        }
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
@@ -356,14 +370,15 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not pending'], 422);
         }
 
+        $changes = $this->validatedApprovalRequestChanges($request, $leaveRequest);
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
 
-        $leaveRequest->update([
+        $leaveRequest->update(array_merge($changes, [
             'status' => 'manager_approved',
             'manager_approved_by' => $user->id,
             'manager_approved_at' => now(),
             'manager_signature' => $user->e_signature ?? null,
-        ]);
+        ]));
 
         $this->notifyHr($leaveRequest, $leaveRequest->type . '_manager_approved', "{$typeLabel} - HR Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by {$user->name}. Awaiting HR approval.");
         if ($leaveRequest->user_id) {
@@ -390,7 +405,7 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not awaiting HR approval'], 422);
         }
 
-        $changes = $this->validatedApprovalLeaveChanges($request, $leaveRequest);
+        $changes = $this->validatedApprovalRequestChanges($request, $leaveRequest);
 
         DB::transaction(function () use ($leaveRequest, $changes, $user) {
             $leaveRequest->update(array_merge($changes, [
@@ -421,7 +436,7 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request is not awaiting approval'], 422);
         }
 
-        $changes = $this->validatedApprovalLeaveChanges($request, $leaveRequest);
+        $changes = $this->validatedApprovalRequestChanges($request, $leaveRequest);
 
         // Depot Manager and Super Admin may finalize an outstanding request directly.
         // Skipped approval stages remain unsigned so the printed form stays truthful.
@@ -812,8 +827,36 @@ class LeaveRequestController extends Controller
         $leaveRequest->setAttribute('casual_available_balance', $available['casual']);
     }
 
-    private function validatedApprovalLeaveChanges(Request $request, LeaveRequest $leaveRequest): array
+    private function validatedApprovalRequestChanges(Request $request, LeaveRequest $leaveRequest): array
     {
+        if ($leaveRequest->type === 'otr') {
+            if (!$request->hasAny(['ot_date', 'start_time', 'end_time'])) {
+                return [];
+            }
+
+            $validated = $request->validate([
+                'ot_date' => 'sometimes|required|date',
+                'start_time' => 'sometimes|required|date_format:H:i',
+                'end_time' => 'sometimes|required|date_format:H:i',
+            ]);
+            $date = $validated['ot_date'] ?? $leaveRequest->ot_date?->format('Y-m-d');
+            $start = $validated['start_time'] ?? substr((string) $leaveRequest->start_time, 0, 5);
+            $end = $validated['end_time'] ?? substr((string) $leaveRequest->end_time, 0, 5);
+            $hours = $this->overtimeHours($date, $start, $end);
+            if ($hours === null) {
+                throw ValidationException::withMessages([
+                    'end_time' => 'Overtime end time must be after start time and within 24 hours.',
+                ]);
+            }
+
+            return [
+                'ot_date' => $date,
+                'start_time' => $start,
+                'end_time' => $end,
+                'hours' => $hours,
+            ];
+        }
+
         if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'early_from', 'early_to'])) {
             return [];
         }
@@ -894,5 +937,23 @@ class LeaveRequestController extends Controller
             $minutes >= 241 && $minutes <= 360 => 0.75,
             default => null,
         };
+    }
+
+    private function overtimeHours(?string $date, ?string $start, ?string $end): ?float
+    {
+        if (!$date || !$start || !$end) {
+            return null;
+        }
+
+        $startAt = \Carbon\Carbon::parse("{$date} {$start}");
+        $endAt = \Carbon\Carbon::parse("{$date} {$end}");
+        if ($endAt->lte($startAt)) {
+            $endAt->addDay();
+        }
+        $minutes = $startAt->diffInMinutes($endAt);
+
+        return $minutes > 0 && $minutes <= 24 * 60
+            ? round($minutes / 60, 2)
+            : null;
     }
 }

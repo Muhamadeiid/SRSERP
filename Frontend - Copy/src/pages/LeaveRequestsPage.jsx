@@ -260,14 +260,14 @@ const LBL = 'block text-xs font-semibold text-neutral-500 uppercase tracking-wid
 
 // ── helpers ───────────────────────────────────────────────────
 const diffDays  = (s, e) => (!s || !e) ? 0 : Math.max(0, Math.round((new Date(e) - new Date(s)) / 86400000) + 1)
-// OTR: round to nearest whole hour, .5+ rounds up. Handles midnight crossover.
+// OTR: preserve minute-based fractions and handle midnight crossover.
 const diffHours = (s, e) => {
   if (!s || !e) return 0
   const [sh, sm] = s.split(':').map(Number)
   const [eh, em] = e.split(':').map(Number)
   let m = (eh * 60 + em) - (sh * 60 + sm)
   if (m < 0) m += 24 * 60   // crosses midnight (e.g. 23:00 → 02:00)
-  return m === 0 ? 0 : Math.round(m / 60)
+  return m === 0 ? 0 : Math.round((m / 60) * 100) / 100
 }
 // Early leave uses fixed company bands, not proportional fractions.
 const normalizeTime = (value) => {
@@ -1883,6 +1883,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     early_from: normalizeTime(req?.early_from),
     early_to: normalizeTime(req?.early_to),
   })
+  const [otrDraft, setOtrDraft] = useState({
+    ot_date: req?.ot_date ? String(req.ot_date).slice(0, 10) : '',
+    start_time: normalizeTime(req?.start_time),
+    end_time: normalizeTime(req?.end_time),
+  })
   const approvalActionsRef = useRef(null)
 
   useEffect(() => {
@@ -1898,6 +1903,14 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
       early_to: normalizeTime(req?.early_to),
     })
   }, [req?.id, req?.leave_type, req?.paid, req?.early_from, req?.early_to])
+
+  useEffect(() => {
+    setOtrDraft({
+      ot_date: req?.ot_date ? String(req.ot_date).slice(0, 10) : '',
+      start_time: normalizeTime(req?.start_time),
+      end_time: normalizeTime(req?.end_time),
+    })
+  }, [req?.id, req?.ot_date, req?.start_time, req?.end_time])
 
   useEffect(() => {
     if (!focusApproval || !req) return
@@ -1923,6 +1936,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
     && ['hr', 'depot_manager', 'admin'].includes(userRole)
+  const canEditOtr = !isLRF
+    && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
+    && (isDirectManager || ['hr', 'depot_manager', 'admin'].includes(userRole))
   const canViewLeaveBalance = isLRF
     && req.available_balance !== null
     && req.available_balance !== undefined
@@ -1934,6 +1950,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     ? `${fmtShort(req.start_date)} · From ${normalizeTime(req.early_from)} to ${normalizeTime(req.early_to)} (${fmtDays(req.days)} days)`
     : `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`
   const submitHrApproval = () => {
+    if (!isLRF) {
+      onHrApprove(req.id, otrDraft)
+      return
+    }
     if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
       alert('Enter a valid Early Leave From and To time.')
       return
@@ -1946,6 +1966,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     })
   }
   const submitFinalApproval = () => {
+    if (!isLRF) {
+      onApprove(req.id, otrDraft)
+      return
+    }
     if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
       alert('Enter a valid Early Leave From and To time.')
       return
@@ -1956,6 +1980,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
       early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
       early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
     })
+  }
+  const submitManagerApproval = () => {
+    onManagerApprove(req.id, isLRF ? {} : otrDraft)
   }
   const signatureParties = req.signature_parties || req.signatureParties || {}
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
@@ -2132,6 +2159,32 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         )}
 
+        {canEditOtr && (
+          <div className="mx-6 mb-4 rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+            <div className="mb-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">OTR Timing Review</p>
+              <p className="mt-1 text-xs text-neutral-500">Review or correct the approved overtime date and hours.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="block">
+                <span className={LBL}>Date</span>
+                <input type="date" value={otrDraft.ot_date} onChange={e => setOtrDraft(d => ({ ...d, ot_date: e.target.value }))} className={INP} />
+              </label>
+              <label className="block">
+                <span className={LBL}>From</span>
+                <input type="time" value={otrDraft.start_time} onChange={e => setOtrDraft(d => ({ ...d, start_time: e.target.value }))} className={INP} />
+              </label>
+              <label className="block">
+                <span className={LBL}>To</span>
+                <input type="time" value={otrDraft.end_time} onChange={e => setOtrDraft(d => ({ ...d, end_time: e.target.value }))} className={INP} />
+              </label>
+            </div>
+            <p className="mt-3 text-xs font-semibold text-blue-700">
+              Total: {diffHours(otrDraft.start_time, otrDraft.end_time) || 0} hours
+            </p>
+          </div>
+        )}
+
         {/* Signatures strip (show when approved) */}
         {['hr_approved','approved'].includes(req.status) && (
           <div className="px-6 pb-4 border-t border-neutral-100">
@@ -2187,7 +2240,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                   className="flex items-center justify-center w-10 h-10 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all">
                   <XCircle className="w-4 h-4" />
                 </button>
-                <button onClick={() => onManagerApprove(req.id)}
+                <button onClick={submitManagerApproval}
                   title="Approve"
                   className="flex items-center justify-center w-10 h-10 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all">
                   <CheckCircle className="w-4 h-4" />
@@ -2448,9 +2501,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     }
   }
 
-  const handleManagerApprove = async (id) => {
+  const handleManagerApprove = async (id, changes = {}) => {
     try {
-      await managerApproveLeave(id)
+      await managerApproveLeave(id, changes)
       setViewReq(null)
       fetchRequests()
     } catch (e) { alert(e.message) }

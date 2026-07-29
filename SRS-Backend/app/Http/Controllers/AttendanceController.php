@@ -1223,6 +1223,8 @@ class AttendanceController extends Controller
         };
 
         $nightStartMin = 19 * 60;
+        $dailyHours = AttendancePolicy::float('attendance_salary_daily_hours');
+        $monthlyLateGraceMinutes = AttendancePolicy::int('attendance_late_grace_minutes');
         $totalDayOT    = 0;
         $totalNightOT  = 0;
         $doublePayOT   = 0;
@@ -1282,14 +1284,14 @@ class AttendanceController extends Controller
         foreach ($empOTRs as $otr) {
             $startM = $timeToMin($otr->start_time);
             $endM   = $timeToMin($otr->end_time);
-            if ($startM === null || $endM === null || $endM <= $startM) continue;
+            if ($startM === null || $endM === null) continue;
+            if ($endM <= $startM) $endM += 24 * 60;
 
             $dayMins   = max(0, min($endM, $nightStartMin) - max($startM, 17 * 60));
             $nightMins = max(0, $endM - max($startM, $nightStartMin));
-            if ($dayMins < 0) $dayMins = 0;
 
-            $totalDayOT   += (int) round($dayMins / 60);
-            $totalNightOT += (int) round($nightMins / 60);
+            $totalDayOT   += round($dayMins / 60, 2);
+            $totalNightOT += round($nightMins / 60, 2);
         }
 
         // Double Pay: hours worked on public holidays
@@ -1303,7 +1305,11 @@ class AttendanceController extends Controller
 
         // Deductions: absences that aren't on holidays and aren't on approved leave
         $onLeaveDates = [];
+        $unpaidDays = 0.0;
         foreach ($approvedLeaves as $lv) {
+            if ($lv->paid === false) {
+                $unpaidDays += (float) $lv->days;
+            }
             $s = is_string($lv->start_date) ? substr($lv->start_date, 0, 10) : ($lv->start_date?->format('Y-m-d') ?? '');
             $e = is_string($lv->end_date)   ? substr($lv->end_date,   0, 10) : ($lv->end_date?->format('Y-m-d')   ?? $s);
             $cur = \Carbon\Carbon::parse($s);
@@ -1317,7 +1323,16 @@ class AttendanceController extends Controller
             if (isset($onLeaveDates[$d])) continue;
             $absentCount++;
         }
-        $deductionHrs = $absentCount * 9;
+        $lateMinutes = (int) $attendances->sum('late_minutes');
+        $deductibleLateMinutes = max(0, $lateMinutes - $monthlyLateGraceMinutes);
+        $absenceHours = $absentCount * $dailyHours;
+        $unpaidHours = $unpaidDays * $dailyHours;
+        $lateHours = $deductibleLateMinutes / 60;
+        $deductionHrs = round($absenceHours + $unpaidHours + $lateHours, 2);
+        $remarks = [];
+        if ($absenceHours > 0) $remarks[] = "Absence: {$absenceHours}h";
+        if ($unpaidHours > 0) $remarks[] = "Unpaid leave: {$unpaidHours}h";
+        if ($deductibleLateMinutes > 0) $remarks[] = "Late: {$deductibleLateMinutes}m";
 
         return [
             'id'              => $employee->id,
@@ -1328,7 +1343,7 @@ class AttendanceController extends Controller
             'night_ot'        => $totalNightOT,
             'double_pay_ot'   => $doublePayOT,
             'deduction_hours' => $deductionHrs,
-            'remarks'         => '',
+            'remarks'         => implode(' | ', $remarks),
         ];
     }
 
