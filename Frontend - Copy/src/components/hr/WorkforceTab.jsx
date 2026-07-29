@@ -147,7 +147,6 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
           casual: d.casual ?? 7,
           casual_remaining: d.casual_remaining ?? d.casual ?? 7,
           sick: d.sick ?? 90,
-          early: d.early ?? 0,
         });
       })
       .catch(() => setBal({}));
@@ -410,7 +409,7 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                     />
                   </div>
                 ))}
-                {[['sick','Sick Total',90],['early','Early Leave',0]].map(([k, label, def]) => (
+                {[['sick','Sick Total',90]].map(([k, label, def]) => (
                   <div key={k} className="flex items-center justify-between">
                     <span className="text-xs text-secondary-700 w-36">{label}</span>
                     <input
@@ -437,7 +436,6 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                   { label: 'Annual', total: bal.annual ?? 21, rem: bal.annual_remaining_effective ?? bal.annual ?? 21, color: 'bg-blue-500' },
                   { label: 'Casual', total: bal.casual ?? 7,  rem: bal.casual_remaining_effective  ?? bal.casual  ?? 7,  color: 'bg-purple-500' },
                   { label: 'Sick',   total: bal.sick   ?? 90, rem: bal.sick_remaining_effective   ?? bal.sick   ?? 90, color: 'bg-amber-500' },
-                  { label: 'Early',  total: bal.early  ?? 0,  rem: bal.early_remaining_effective  ?? bal.early  ?? 0,  color: 'bg-green-500' },
                 ].map(({ label, total, rem, color }) => (
                   <div key={label} className="bg-neutral-50 rounded-xl p-3 border border-neutral-100">
                     <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide mb-1">{label}</p>
