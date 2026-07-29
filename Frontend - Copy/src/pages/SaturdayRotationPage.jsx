@@ -319,10 +319,20 @@ export default function SaturdayRotationPage() {
       setEmployees(empRes.data ?? [])
       const loadedSettings = settingsRes.data ?? {}
       const activeProjects = (projectsRes.data ?? projectsRes ?? []).filter(project => project.is_active !== false)
-      const nextProjectCode = activeProjects.some(project => project.code === selectedProjectCode)
+      const requiredProjects = [
+        { id: 'rotation-EG1', code: 'EG1', name: 'Line 1' },
+        { id: 'rotation-GZ', code: 'GZ', name: 'Ganz' },
+      ]
+      const rotationProjects = [
+        ...requiredProjects.map(fallback => (
+          activeProjects.find(project => project.code === fallback.code) ?? fallback
+        )),
+        ...activeProjects.filter(project => !requiredProjects.some(required => required.code === project.code)),
+      ]
+      const nextProjectCode = rotationProjects.some(project => project.code === selectedProjectCode)
         ? selectedProjectCode
-        : (activeProjects.find(project => project.is_default)?.code ?? activeProjects[0]?.code ?? '')
-      setProjects(activeProjects)
+        : (rotationProjects.find(project => project.is_default)?.code ?? 'EG1')
+      setProjects(rotationProjects)
       setSelectedProjectCode(nextProjectCode)
       setSettings(loadedSettings)
       setPolicy({ ...DEFAULT_POLICY, ...loadedSettings })
