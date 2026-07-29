@@ -369,7 +369,7 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             {[
-              { key: 'default_annual_days', label: 'Annual Days',        sub: 'Total leave pool per employee' },
+              { key: 'default_annual_days', label: 'Total Leave Days',   sub: 'Includes Annual, Casual and Early Leave' },
               { key: 'default_casual_days', label: 'Casual Sub-limit',   sub: 'Max casual from annual pool' },
               { key: 'default_sick_days',   label: 'Sick Days',          sub: 'Independent sick balance' },
             ].map(({ key, label, sub }) => (

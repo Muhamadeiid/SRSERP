@@ -108,9 +108,11 @@ class LeaveRequestController extends Controller
             $perPage = min(200, max(1, (int) $request->per_page));
             $page = max(1, (int) $request->input('page', 1));
             $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+            $items = collect($paginated->items());
+            $this->hideConfidentialBalances($items, $user);
             return response()->json([
                 'success'    => true,
-                'data'       => $paginated->items(),
+                'data'       => $items,
                 'pagination' => [
                     'current_page' => $paginated->currentPage(),
                     'last_page'    => $paginated->lastPage(),
@@ -120,7 +122,9 @@ class LeaveRequestController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'data' => $query->get()]);
+        $items = $query->get();
+        $this->hideConfidentialBalances($items, $user);
+        return response()->json(['success' => true, 'data' => $items]);
     }
 
     public function store(Request $request): JsonResponse
@@ -212,6 +216,19 @@ class LeaveRequestController extends Controller
                 'message' => 'The employee does not have enough available leave balance for this request.',
             ], 422);
         }
+        if (
+            $data['type'] === 'lrf'
+            && $employee
+            && ($data['paid'] ?? true)
+            && in_array($data['leave_type'] ?? null, ['annual', 'casual', 'sick', 'early'], true)
+        ) {
+            $available = $this->availableLeaveBalances($employee->id);
+            $data['available_balance'] = $data['leave_type'] === 'sick'
+                ? $available['sick']
+                : $available['annual'];
+        } else {
+            $data['available_balance'] = null;
+        }
         if (empty($data['direct_manager_name']) && $employee?->direct_manager_id) {
             $manager = Employee::active()->with('user:id,role')->find($employee->direct_manager_id);
             if ($manager?->user?->role !== 'depot_manager') {
@@ -230,11 +247,23 @@ class LeaveRequestController extends Controller
         $leave = LeaveRequest::create($data);
         $this->notifyNewRequest($leave, $employee);
 
+        if (!$this->canViewConfidentialBalance($leave, auth()->user())) {
+            $leave->makeHidden('available_balance');
+        }
         return response()->json(['success' => true, 'data' => $leave], 201);
     }
 
     public function show(LeaveRequest $leaveRequest): JsonResponse
     {
+        $user = auth()->user();
+        if (
+            !in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
+            && (int) $leaveRequest->user_id !== (int) $user->id
+            && !$this->isDirectManager($leaveRequest, $user->id)
+        ) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $leave = $leaveRequest->load([
             'approver:id,name,e_signature,role',
             'managerApprover:id,name,e_signature,role',
@@ -303,6 +332,9 @@ class LeaveRequestController extends Controller
             ] : null,
         ]);
 
+        if (!$this->canViewConfidentialBalance($leave, $user)) {
+            $leave->makeHidden('available_balance');
+        }
         return response()->json(['success' => true, 'data' => $leave]);
     }
 
@@ -673,7 +705,7 @@ class LeaveRequestController extends Controller
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 
-    private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days, ?int $excludeRequestId = null): bool
+    private function availableLeaveBalances(int $employeeId, ?int $excludeRequestId = null): array
     {
         $this->leaveYears->refreshDue($employeeId);
         $balance = LeaveBalance::firstOrCreate(
@@ -709,12 +741,46 @@ class LeaveRequestController extends Controller
         $casualLeft = $balance->getEffectiveRemaining('casual') - (float) ($reserved['casual'] ?? 0);
         $sickLeft   = $balance->getEffectiveRemaining('sick') - (float) ($reserved['sick'] ?? 0);
 
+        return [
+            'annual' => max(0, $annualLeft),
+            'casual' => max(0, min($annualLeft, $casualLeft)),
+            'sick' => max(0, $sickLeft),
+        ];
+    }
+
+    private function hasAvailableLeaveBalance(int $employeeId, string $type, float $days, ?int $excludeRequestId = null): bool
+    {
+        $available = $this->availableLeaveBalances($employeeId, $excludeRequestId);
+
         return match ($type) {
-            'annual', 'early' => $annualLeft >= $days,
-            'casual' => $annualLeft >= $days && $casualLeft >= $days,
-            'sick' => $sickLeft >= $days,
+            'annual', 'early' => $available['annual'] >= $days,
+            'casual' => $available['casual'] >= $days,
+            'sick' => $available['sick'] >= $days,
             default => true,
         };
+    }
+
+    private function canViewConfidentialBalance(LeaveRequest $leaveRequest, User $user): bool
+    {
+        if (in_array($user->role, ['admin', 'depot_manager', 'hr'], true)) {
+            return true;
+        }
+
+        if ($this->isDirectManager($leaveRequest, $user->id)) {
+            return true;
+        }
+
+        return $leaveRequest->status === 'approved'
+            && (int) $leaveRequest->user_id === (int) $user->id;
+    }
+
+    private function hideConfidentialBalances($requests, User $user): void
+    {
+        foreach ($requests as $leaveRequest) {
+            if (!$this->canViewConfidentialBalance($leaveRequest, $user)) {
+                $leaveRequest->makeHidden('available_balance');
+            }
+        }
     }
 
     private function validatedApprovalLeaveChanges(Request $request, LeaveRequest $leaveRequest): array

@@ -1242,8 +1242,8 @@ export default function AttendanceTab() {
                 <InfoRow label="Warning Letters"  value={employee.no_warning_letters ?? 0} />
 
                 <SectionHeader>Leave Balance</SectionHeader>
-                <InfoRow label="Annual Balance"   value={annualTotal} />
-                <InfoRow label="Remain Annual"    value={annualRemain} />
+                <InfoRow label="Total Balance"    value={annualTotal} />
+                <InfoRow label="Remain Total"     value={annualRemain} />
                 <InfoRow label="Casual Balance"   value={casualTotal} />
                 <InfoRow label="Remain Casual"    value={casualRemain} />
 

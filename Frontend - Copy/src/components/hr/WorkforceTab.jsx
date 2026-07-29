@@ -390,8 +390,8 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                   <span className="text-[9px] font-bold text-neutral-400 uppercase text-center">Current</span>
                 </div>
                 {[
-                  ['annual', 'annual_remaining', 'Annual Pool (includes Casual)', 21],
-                  ['casual', 'casual_remaining', 'Casual Sub-limit', 7],
+                  ['annual', 'annual_remaining', 'Total Leave', 21],
+                  ['casual', 'casual_remaining', 'Casual', 7],
                 ].map(([totalKey, remainingKey, label, def]) => (
                   <div key={totalKey} className="grid grid-cols-[1fr_82px_82px] gap-2 items-center">
                     <span className="text-xs text-secondary-700">{label}</span>
@@ -421,7 +421,7 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                   </div>
                 ))}
                 <p className="text-[10px] leading-relaxed text-neutral-400">
-                  Annual Pool already includes Casual. Current is the real balance before open requests are reserved.
+                  Total Leave already includes Casual. Annual and Early Leave deduct from Total; Casual deducts from both.
                 </p>
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveBalance} disabled={balSaving} className="flex-1 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-50">
@@ -433,7 +433,7 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Annual', total: bal.annual ?? 21, rem: bal.annual_remaining_effective ?? bal.annual ?? 21, color: 'bg-blue-500' },
+                  { label: 'Total',  total: bal.annual ?? 21, rem: bal.annual_remaining_effective ?? bal.annual ?? 21, color: 'bg-blue-500' },
                   { label: 'Casual', total: bal.casual ?? 7,  rem: bal.casual_remaining_effective  ?? bal.casual  ?? 7,  color: 'bg-purple-500' },
                   { label: 'Sick',   total: bal.sick   ?? 90, rem: bal.sick_remaining_effective   ?? bal.sick   ?? 90, color: 'bg-amber-500' },
                 ].map(({ label, total, rem, color }) => (

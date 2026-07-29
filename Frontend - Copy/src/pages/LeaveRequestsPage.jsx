@@ -11,7 +11,7 @@ import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  getLeaveBalance, updateLeaveTrackingNo,
+  updateLeaveTrackingNo,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
 
@@ -881,30 +881,8 @@ function RadioBox({ name, value, checked, onChange }) {
 
 function LRFForm({ onSubmit, saving }) {
   const [form, setForm]         = useState({ ...LRF_EMPTY })
-  const [balances, setBalances] = useState(null)   // null=no employee, {}=loaded
-  const [balLoading, setBalLoading] = useState(false)
   const set  = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const days = lrfDays(form)
-
-  // Use effective remaining (after deductions). Annual can overflow into casual.
-  const effectiveRemaining = (type) => {
-    if (!balances) return null
-    const key = type + '_remaining_effective'
-    const val = balances[key] ?? balances[type] ?? null
-    return val !== null ? parseFloat(val) : null
-  }
-  const annualPoolRemaining = balances
-    ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
-    : null
-  const availableBalance = balances
-    ? (form.leave_type === 'annual' || form.leave_type === 'early'
-        ? annualPoolRemaining
-        : effectiveRemaining(form.leave_type))
-    : null
-  const displayedBalance = ['annual', 'casual', 'early'].includes(form.leave_type)
-    ? annualPoolRemaining
-    : availableBalance
-  const casualRemaining  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -924,13 +902,7 @@ function LRFForm({ onSubmit, saving }) {
         : '',
       tracking_no:      previewTracking,
     }))
-    setBalances(null)
     if (emp.id) {
-      setBalLoading(true)
-      getLeaveBalance(emp.id)
-        .then(r => setBalances(r.data ?? {}))
-        .catch(() => setBalances({}))
-        .finally(() => setBalLoading(false))
       // fetch direct manager
       getEmployeeFormProfile(emp.id)
         .then(res => {
@@ -994,7 +966,7 @@ function LRFForm({ onSubmit, saving }) {
 
       <form onSubmit={e => {
         e.preventDefault()
-        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: displayedBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
       }}>
         {/* ══ MAIN TABLE ══ */}
         <table className="w-full border-collapse border-2 border-neutral-800 mx-[1px]" style={{width:'calc(100% - 2px)'}}>
@@ -1116,49 +1088,9 @@ function LRFForm({ onSubmit, saving }) {
                 <span className={L_AR}>الرصيد المتاح</span>
               </td>
               <td className={TD_VAL}>
-                {!form.employee_name ? (
-                  <span className="text-xs text-neutral-400 italic">Select an employee first</span>
-                ) : balLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />
-                    <span className="text-xs text-neutral-400">Loading balance…</span>
-                  </div>
-                ) : availableBalance === null ? (
-                  <span className="text-xs text-neutral-400 italic">No balance record found</span>
-                ) : (
-                  <div className="space-y-1.5">
-                    {/* Annual + Casual breakdown */}
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Total Pool</span>
-                        <span className="text-base font-black text-blue-600">{formatBalance(annualPoolRemaining)}</span>
-                        <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.annual ?? 21)} d</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Casual</span>
-                        <span className="text-base font-black text-purple-600">{formatBalance(casualRemaining)}</span>
-                        <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.casual ?? 7)} d</span>
-                      </div>
-                    </div>
-                    {/* Available for selected type */}
-                    {form.leave_type && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl font-black text-primary">
-                          {formatBalance(displayedBalance)}
-                          {['annual', 'casual', 'early'].includes(form.leave_type) && casualRemaining !== null && (
-                            <span className="text-base font-bold text-purple-500 ml-1">({formatBalance(casualRemaining)} Casual)</span>
-                          )}
-                        </span>
-                        <span className="text-xs text-neutral-400">days available</span>
-                        {days > 0 && (
-                          <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${days > availableBalance ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                            Requesting {days}d → {availableBalance - days} left
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <span className="text-xs font-semibold text-neutral-400 italic">
+                  Confidential — available to approvers after submission
+                </span>
               </td>
             </tr>
 
@@ -1387,8 +1319,6 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     }
   }
   const [form, setForm] = useState(buildInitial)
-  const [balances, setBalances] = useState(null)
-  const [balLoading, setBalLoading] = useState(false)
   const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
@@ -1401,35 +1331,9 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         if (dm?.name) setDepotManagerName(twoName(dm.name))
       })
       .catch(() => {})
-    // Fetch balance for the pre-filled employee (skipped on empty form).
-    if (prefill?.employee_id) {
-      setBalLoading(true)
-      getLeaveBalance(prefill.employee_id)
-        .then(r => setBalances(r.data ?? {}))
-        .catch(() => setBalances({}))
-        .finally(() => setBalLoading(false))
-    }
     if (prefill && onPrefillDone) onPrefillDone()
   }, [])
 
-  const effectiveRemaining = (type) => {
-    if (!balances) return null
-    const val = balances[`${type}_remaining_effective`] ?? balances[type] ?? null
-    return val !== null ? parseFloat(val) : null
-  }
-
-  const annualPoolRemaining2 = balances
-    ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
-    : null
-  const availableBalance = balances
-    ? (form.leave_type === 'annual' || form.leave_type === 'early'
-        ? annualPoolRemaining2
-        : effectiveRemaining(form.leave_type))
-    : null
-  const displayedBalance2 = ['annual', 'casual', 'early'].includes(form.leave_type)
-    ? annualPoolRemaining2
-    : availableBalance
-  const casualRem2  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
     const selectedManager = emp?.form_direct_manager || emp?.direct_manager || emp?.directManager
@@ -1445,10 +1349,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         ? twoName(selectedManager.name)
         : '',
     }))
-    setBalances(null)
     if (!emp.id) return
-    setBalLoading(true)
-    getLeaveBalance(emp.id).then(r => setBalances(r.data ?? {})).catch(() => setBalances({})).finally(() => setBalLoading(false))
     getEmployeeFormProfile(emp.id).then(res => {
       const full = unwrapData(res)
       const fullDept = deptValue(full) || selectedDept
@@ -1490,7 +1391,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
   const submit = (e) => {
     e.preventDefault()
-    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: displayedBalance2 ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1544,7 +1445,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               </div>
             </td></tr>
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
-            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(displayedBalance2)}{['annual', 'casual', 'early'].includes(form.leave_type) && casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
+            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2"><span className="text-xs font-semibold italic text-neutral-400">Confidential — available to approvers after submission</span></td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>
             <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} /></td></tr>
@@ -2016,6 +1917,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
     && ['hr', 'depot_manager', 'admin'].includes(userRole)
+  const canViewLeaveBalance = isLRF
+    && req.available_balance !== null
+    && req.available_balance !== undefined
+    && (isHR || isDirectManager || req.status === 'approved')
   const hrEarlyDays = hrLeaveDraft.leave_type === 'early'
     ? earlyDays(hrLeaveDraft.early_from, hrLeaveDraft.early_to)
     : ''
@@ -2148,6 +2053,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
             isLRF ? ['Period', leavePeriod] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
             isLRF ? ['Paid', req.paid ? 'Paid' : 'Unpaid'] : ['Explanation', req.explanation],
+            canViewLeaveBalance ? ['Available Balance', `${formatBalance(req.available_balance)} days`] : null,
             isLRF ? ['Purpose', req.purpose] : (req.overtime_results ? ['Overtime Results', req.overtime_results] : null),
             req.rejection_reason  ? ['Rejection Reason',  req.rejection_reason]  : null,
             req.reschedule_reason ? ['Reschedule Reason', req.reschedule_reason] : null,

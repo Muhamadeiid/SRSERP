@@ -83,17 +83,16 @@ class LeaveBalanceController extends Controller
     public function show(Employee $employee): JsonResponse
     {
         $user = auth()->user();
-        $isOwnBalance = (int) $employee->user_id === (int) $user->id;
         $isAssignedManager = (int) $employee->user_manager_id === (int) $user->id;
         $isEmployeeManager = $employee->direct_manager_id
             && Employee::whereKey($employee->direct_manager_id)
                 ->where('user_id', $user->id)
                 ->exists();
 
-        if (!$user->isHR() && !$isOwnBalance && !$isAssignedManager && !$isEmployeeManager) {
+        if (!$user->isHR() && !$isAssignedManager && !$isEmployeeManager) {
             return response()->json([
                 'success' => false,
-                'message' => 'You can only view your own balance or the balance of an assigned employee.',
+                'message' => 'Leave balances are confidential and only available to authorized approvers.',
             ], 403);
         }
 
