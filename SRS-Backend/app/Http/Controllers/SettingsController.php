@@ -4,11 +4,17 @@ namespace App\Http\Controllers;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
+use App\Services\LeaveYearService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SettingsController extends Controller
 {
+    public function __construct(private LeaveYearService $leaveYears)
+    {
+    }
+
     /** GET /api/settings */
     public function index(): JsonResponse
     {
@@ -21,6 +27,16 @@ class SettingsController extends Controller
     {
         $request->validate(['key' => 'required|string', 'value' => 'nullable|string']);
         SystemSetting::updateOrCreate(['key' => $request->key], ['value' => $request->value]);
+
+        // Changing the configured month/day is not itself a new leave year.
+        // Re-anchor existing balances to the newly configured current cycle
+        // without changing any employee's totals or remaining values.
+        if ($request->key === 'leave_year_start') {
+            LeaveBalance::query()->update([
+                'leave_cycle_started_on' => $this->leaveYears->currentCycleStart()->toDateString(),
+            ]);
+        }
+
         return response()->json(['success' => true]);
     }
 

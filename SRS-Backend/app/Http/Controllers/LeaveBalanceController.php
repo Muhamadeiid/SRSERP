@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Services\LeaveDeductionService;
 use App\Services\LeaveYearService;
+use Illuminate\Support\Facades\DB;
 
 class LeaveBalanceController extends Controller
 {
@@ -130,39 +131,45 @@ class LeaveBalanceController extends Controller
             'casual_remaining' => 'nullable|numeric|min:0|max:365',
         ]);
 
-        $balance = LeaveBalance::firstOrNew(['employee_id' => $employee->id]);
-        foreach (['annual', 'casual', 'sick', 'early'] as $type) {
-            if (!array_key_exists($type, $v) || $v[$type] === null) {
-                continue;
+        $balance = DB::transaction(function () use ($employee, $v) {
+            $balance = LeaveBalance::where('employee_id', $employee->id)
+                ->lockForUpdate()
+                ->first() ?? new LeaveBalance(['employee_id' => $employee->id]);
+
+            foreach (['annual', 'casual', 'sick', 'early'] as $type) {
+                if (!array_key_exists($type, $v) || $v[$type] === null) {
+                    continue;
+                }
+
+                $oldTotal = (float) ($balance->{$type} ?? $v[$type]);
+                $oldRemaining = $balance->{$type . '_remaining'};
+                $newTotal = (float) $v[$type];
+
+                $balance->{$type} = $newTotal;
+                if ($oldRemaining !== null) {
+                    $used = max(0, $oldTotal - (float) $oldRemaining);
+                    $balance->{$type . '_remaining'} = max(0, $newTotal - $used);
+                }
             }
 
-            $oldTotal = (float) ($balance->{$type} ?? $v[$type]);
-            $oldRemaining = $balance->{$type . '_remaining'};
-            $newTotal = (float) $v[$type];
+            foreach (['annual', 'casual'] as $type) {
+                $remainingKey = $type . '_remaining';
+                if (!array_key_exists($remainingKey, $v) || $v[$remainingKey] === null) {
+                    continue;
+                }
 
-            $balance->{$type} = $newTotal;
-            if ($oldRemaining !== null) {
-                $used = max(0, $oldTotal - (float) $oldRemaining);
-                $balance->{$type . '_remaining'} = max(0, $newTotal - $used);
-            }
-        }
-
-        foreach (['annual', 'casual'] as $type) {
-            $remainingKey = $type . '_remaining';
-            if (!array_key_exists($remainingKey, $v) || $v[$remainingKey] === null) {
-                continue;
+                $total = (float) ($balance->{$type} ?? 0);
+                if ((float) $v[$remainingKey] > $total) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        $remainingKey => ucfirst($type) . ' current remaining cannot be greater than its total entitlement.',
+                    ]);
+                }
+                $balance->{$remainingKey} = (float) $v[$remainingKey];
             }
 
-            $total = (float) ($balance->{$type} ?? 0);
-            if ((float) $v[$remainingKey] > $total) {
-                return response()->json([
-                    'success' => false,
-                    'message' => ucfirst($type) . ' current remaining cannot be greater than its total entitlement.',
-                ], 422);
-            }
-            $balance->{$remainingKey} = (float) $v[$remainingKey];
-        }
-        $balance->save();
+            $balance->save();
+            return $balance->fresh();
+        });
 
         return response()->json(['success' => true, 'data' => $this->enriched($balance)]);
     }
