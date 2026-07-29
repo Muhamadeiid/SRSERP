@@ -149,10 +149,14 @@ export function updateEmployee(id, data) {
     .then(result => { invalidateEmployeeReads(); return result })
 }
 
-export function bulkUpdateSaturdayGroup(employeeIds, saturdayGroup) {
+export function bulkUpdateSaturdayGroup(employeeIds, saturdayGroup, saturdayPlanCode = null) {
   return request('/employees/bulk-saturday-group', {
     method: 'POST',
-    body: JSON.stringify({ employee_ids: employeeIds, saturday_group: saturdayGroup }),
+    body: JSON.stringify({
+      employee_ids: employeeIds,
+      saturday_group: saturdayGroup,
+      saturday_plan_code: saturdayPlanCode,
+    }),
   }).then(result => { invalidateEmployeeReads(); return result })
 }
 

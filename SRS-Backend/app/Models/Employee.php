@@ -57,6 +57,7 @@ class Employee extends Model
         // Manager User Account (link to users.id — set from User Management / OrgChart)
         'user_manager_id',
         // Schedule
+        'saturday_plan_code',
         'saturday_group',   // 'A' or 'B' — for regular employees, which Saturday they're off
         'weekly_off_day',   // 0-6 — for intervention employees, their weekly day off
     ];

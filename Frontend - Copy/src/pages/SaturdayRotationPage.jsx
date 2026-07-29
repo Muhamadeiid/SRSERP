@@ -351,10 +351,7 @@ export default function SaturdayRotationPage() {
   useEffect(() => { load() }, [])
 
   const selectedProject = projects.find(project => project.code === selectedProjectCode) ?? null
-  const visibleEmployees = useMemo(
-    () => employees.filter(emp => !selectedProjectCode || emp.project_code === selectedProjectCode),
-    [employees, selectedProjectCode]
-  )
+  const visibleEmployees = employees
 
   useEffect(() => {
     if (!selectedProjectCode) return
@@ -367,10 +364,10 @@ export default function SaturdayRotationPage() {
   }, [selectedProjectCode, settings])
 
   const grouped = useMemo(() => ({
-    A: visibleEmployees.filter(emp => emp.saturday_group === 'A'),
-    B: visibleEmployees.filter(emp => emp.saturday_group === 'B'),
-    unset: visibleEmployees.filter(emp => !emp.saturday_group),
-  }), [visibleEmployees])
+    A: visibleEmployees.filter(emp => emp.saturday_plan_code === selectedProjectCode && emp.saturday_group === 'A'),
+    B: visibleEmployees.filter(emp => emp.saturday_plan_code === selectedProjectCode && emp.saturday_group === 'B'),
+    unset: visibleEmployees.filter(emp => emp.saturday_plan_code !== selectedProjectCode || !emp.saturday_group),
+  }), [visibleEmployees, selectedProjectCode])
 
   const searchResults = useMemo(() => {
     const query = employeeSearch.trim().toLowerCase()
@@ -412,7 +409,7 @@ export default function SaturdayRotationPage() {
     setAssigning(true)
     setError('')
     try {
-      const res = await bulkUpdateSaturdayGroup(selectedIds, group)
+      const res = await bulkUpdateSaturdayGroup(selectedIds, group, group ? selectedProjectCode : null)
       const updated = res.data ?? []
       const byId = Object.fromEntries(updated.map(emp => [emp.id, emp]))
       setEmployees(prev => prev.map(emp => byId[emp.id] ? { ...emp, ...byId[emp.id] } : emp))
@@ -640,7 +637,9 @@ export default function SaturdayRotationPage() {
                         </span>
                       </span>
                       <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-black text-neutral-500">
-                        {emp.saturday_group ? `Group ${emp.saturday_group}` : 'Not set'}
+                        {emp.saturday_group
+                          ? `${emp.saturday_plan_code === 'GZ' ? 'Ganz' : 'Line 1'} - Group ${emp.saturday_group}`
+                          : 'Not set'}
                       </span>
                     </label>
                   ))}

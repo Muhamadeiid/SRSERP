@@ -283,13 +283,17 @@ class EmployeeController extends Controller
             'employee_ids' => 'required|array|min:1',
             'employee_ids.*' => 'integer|exists:employees,id',
             'saturday_group' => 'nullable|in:A,B',
+            'saturday_plan_code' => 'nullable|string|max:50',
         ]);
 
         $ids = array_values(array_unique($data['employee_ids']));
+        $group = $data['saturday_group'] ?? null;
+        $planCode = $group ? ($data['saturday_plan_code'] ?? 'EG1') : null;
 
         $ids = Employee::active()->whereIn('id', $ids)->pluck('id')->all();
         Employee::active()->whereIn('id', $ids)->update([
-            'saturday_group' => $data['saturday_group'] ?? null,
+            'saturday_group' => $group,
+            'saturday_plan_code' => $planCode,
             'updated_at' => now(),
         ]);
 
@@ -867,6 +871,7 @@ class EmployeeController extends Controller
             'department'   => 'nullable|string|max:50',
             'work_location'=> 'nullable|string|max:100',
             'saturday_group' => 'nullable|in:A,B',
+            'saturday_plan_code' => 'nullable|string|max:50',
             'weekly_off_day' => 'nullable|integer|min:0|max:6',
             'hiring_date'  => 'nullable|date',
             'birth_date'   => 'nullable|date',
