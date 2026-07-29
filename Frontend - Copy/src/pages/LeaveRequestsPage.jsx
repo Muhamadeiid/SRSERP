@@ -4,14 +4,14 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
-  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download
+  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  updateLeaveTrackingNo,
+  updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
 
@@ -2400,7 +2400,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
 
   // Single row renderer used by both Active and History sections
-  const renderRequestRow = (r) => (
+  const renderRequestRow = (r, { showArchiveAction = false, showRestoreAction = false } = {}) => (
     <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-neutral-50 transition-colors">
       <div className="flex items-center gap-3">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
@@ -2432,6 +2432,26 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             onClick={() => downloadRequestWord(r)}
             className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">
             <Download className="w-4 h-4" />
+          </button>
+        )}
+        {showArchiveAction && (
+          <button
+            onClick={() => handleArchive(r.id)}
+            className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+            title="Printed / handled - move to archive"
+            aria-label="Archive request"
+          >
+            <CheckCircle className="w-4 h-4" />
+          </button>
+        )}
+        {showRestoreAction && (
+          <button
+            onClick={() => handleUnarchive(r.id)}
+            className="p-1.5 rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 transition-colors"
+            title="Restore to active requests"
+            aria-label="Restore request"
+          >
+            <ArchiveRestore className="w-4 h-4" />
           </button>
         )}
         {['pending','manager_approved','hr_approved','approved'].includes(r.status) && (isDepotAdmin || r.user_id === user?.id) && (
@@ -2538,6 +2558,24 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       await approveLeave(id, changes)
       setViewReq(null)
       fetchRequests()
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleArchive = async (id) => {
+    try {
+      await archiveLeaveRequest(id)
+      setRequests(current => current.map(request =>
+        request.id === id ? { ...request, archived_by_me: true } : request
+      ))
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleUnarchive = async (id) => {
+    try {
+      await unarchiveLeaveRequest(id)
+      setRequests(current => current.map(request =>
+        request.id === id ? { ...request, archived_by_me: false } : request
+      ))
     } catch (e) { alert(e.message) }
   }
 
@@ -2725,7 +2763,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       {/* ═══ Active Requests — always visible (small count) ═══ */}
       {(() => {
         const active = typeFiltered.filter(r =>
-          r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at
+          r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at && !r.archived_by_me
         )
         if (active.length === 0) return null
         return (
@@ -2741,7 +2779,27 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
             <div className="divide-y divide-neutral-50">
-              {active.map(r => renderRequestRow(r))}
+              {active.map(r => renderRequestRow(r, { showArchiveAction: true }))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {(() => {
+        const archived = typeFiltered.filter(r => r.type === 'lrf' && r.archived_by_me)
+        if (archived.length === 0) return null
+        return (
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50">
+              <div className="flex items-center gap-2">
+                <ArchiveRestore className="h-4 w-4 text-neutral-500" />
+                <h2 className="text-sm font-bold text-secondary-700">Archived Leave Requests</h2>
+                <span className="px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs font-bold rounded-full">{archived.length}</span>
+              </div>
+              <p className="text-[11px] text-neutral-400">Printed or handled by you</p>
+            </div>
+            <div className="divide-y divide-neutral-50">
+              {archived.map(request => renderRequestRow(request, { showRestoreAction: true }))}
             </div>
           </div>
         )

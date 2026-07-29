@@ -35,6 +35,8 @@ export const approveLeave        = (id, data = {}) => request(`/leave-requests/$
 export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const rescheduleLeave     = (id, reason)  => request(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
+export const archiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'POST' })
+export const unarchiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'DELETE' })
 
 // HR-only — manually set the tracking number before printing
 export const updateLeaveTrackingNo = (id, tracking_no) =>

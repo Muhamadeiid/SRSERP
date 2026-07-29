@@ -62,6 +62,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leave-requests/{leaveRequest}/reject',          [LeaveRequestController::class, 'reject']);
     Route::post('/leave-requests/{leaveRequest}/cancel',          [LeaveRequestController::class, 'cancel']);
     Route::post('/leave-requests/{leaveRequest}/reschedule',      [LeaveRequestController::class, 'reschedule']);
+    Route::post('/leave-requests/{leaveRequest}/archive',         [LeaveRequestController::class, 'archive']);
+    Route::delete('/leave-requests/{leaveRequest}/archive',       [LeaveRequestController::class, 'unarchive']);
     Route::put('/leave-requests/{leaveRequest}/tracking-no',      [LeaveRequestController::class, 'updateTrackingNo']);
 
     // ── Notifications — every authenticated user ──────────────────────────────

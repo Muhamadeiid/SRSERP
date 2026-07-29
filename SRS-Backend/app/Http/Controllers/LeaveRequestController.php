@@ -109,6 +109,7 @@ class LeaveRequestController extends Controller
             $page = max(1, (int) $request->input('page', 1));
             $paginated = $query->paginate($perPage, ['*'], 'page', $page);
             $items = collect($paginated->items());
+            $this->attachArchiveStatus($items, $user);
             $this->hideConfidentialBalances($items, $user);
             return response()->json([
                 'success'    => true,
@@ -123,8 +124,40 @@ class LeaveRequestController extends Controller
         }
 
         $items = $query->get();
+        $this->attachArchiveStatus($items, $user);
         $this->hideConfidentialBalances($items, $user);
         return response()->json(['success' => true, 'data' => $items]);
+    }
+
+    public function archive(LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->ensureRequestAccess($leaveRequest, auth()->user());
+
+        DB::table('leave_request_archives')->updateOrInsert(
+            [
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => auth()->id(),
+            ],
+            [
+                'archived_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        return response()->json(['success' => true]);
+    }
+
+    public function unarchive(LeaveRequest $leaveRequest): JsonResponse
+    {
+        $this->ensureRequestAccess($leaveRequest, auth()->user());
+
+        DB::table('leave_request_archives')
+            ->where('leave_request_id', $leaveRequest->id)
+            ->where('user_id', auth()->id())
+            ->delete();
+
+        return response()->json(['success' => true]);
     }
 
     public function store(Request $request): JsonResponse
@@ -798,6 +831,37 @@ class LeaveRequestController extends Controller
 
         return $leaveRequest->status === 'approved'
             && (int) $leaveRequest->user_id === (int) $user->id;
+    }
+
+    private function ensureRequestAccess(LeaveRequest $leaveRequest, User $user): void
+    {
+        if (in_array($user->role, ['admin', 'depot_manager', 'hr'], true)) {
+            return;
+        }
+
+        if ((int) $leaveRequest->user_id === (int) $user->id || $this->isDirectManager($leaveRequest, $user->id)) {
+            return;
+        }
+
+        abort(403, 'Unauthorized');
+    }
+
+    private function attachArchiveStatus($requests, User $user): void
+    {
+        if (!Schema::hasTable('leave_request_archives') || $requests->isEmpty()) {
+            return;
+        }
+
+        $archivedIds = DB::table('leave_request_archives')
+            ->where('user_id', $user->id)
+            ->whereIn('leave_request_id', $requests->pluck('id'))
+            ->pluck('leave_request_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        foreach ($requests as $leaveRequest) {
+            $leaveRequest->setAttribute('archived_by_me', $archivedIds->has((int) $leaveRequest->id));
+        }
     }
 
     private function hideConfidentialBalances($requests, User $user): void
