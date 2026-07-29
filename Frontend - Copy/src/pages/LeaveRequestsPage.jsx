@@ -893,15 +893,18 @@ function LRFForm({ onSubmit, saving }) {
     const val = balances[key] ?? balances[type] ?? null
     return val !== null ? parseFloat(val) : null
   }
-  // For annual: show the combined pool (annual + casual since overflow is allowed)
+  const annualPoolRemaining = balances
+    ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
+    : null
   const availableBalance = balances
     ? (form.leave_type === 'annual' || form.leave_type === 'early'
-        ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
+        ? annualPoolRemaining
         : effectiveRemaining(form.leave_type))
     : null
-  const annualRemaining  = balances ? parseFloat(balances.annual_remaining_effective ?? balances.annual ?? 0) : null
+  const displayedBalance = ['annual', 'casual', 'early'].includes(form.leave_type)
+    ? annualPoolRemaining
+    : availableBalance
   const casualRemaining  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
-  const casualUsed       = (balances && casualRemaining !== null) ? (parseFloat(balances.casual ?? 7) - casualRemaining) : 0
 
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -991,7 +994,7 @@ function LRFForm({ onSubmit, saving }) {
 
       <form onSubmit={e => {
         e.preventDefault()
-        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: displayedBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
       }}>
         {/* ══ MAIN TABLE ══ */}
         <table className="w-full border-collapse border-2 border-neutral-800 mx-[1px]" style={{width:'calc(100% - 2px)'}}>
@@ -1127,8 +1130,8 @@ function LRFForm({ onSubmit, saving }) {
                     {/* Annual + Casual breakdown */}
                     <div className="flex items-center gap-4 flex-wrap">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Annual</span>
-                        <span className="text-base font-black text-blue-600">{formatBalance(annualRemaining)}</span>
+                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Total Pool</span>
+                        <span className="text-base font-black text-blue-600">{formatBalance(annualPoolRemaining)}</span>
                         <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.annual ?? 21)} d</span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -1136,18 +1139,13 @@ function LRFForm({ onSubmit, saving }) {
                         <span className="text-base font-black text-purple-600">{formatBalance(casualRemaining)}</span>
                         <span className="text-[10px] text-neutral-400">/ {parseFloat(balances?.casual ?? 7)} d</span>
                       </div>
-                      {form.leave_type === 'annual' && annualRemaining === 0 && casualRemaining > 0 && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
-                          Annual exhausted — using Casual days
-                        </span>
-                      )}
                     </div>
                     {/* Available for selected type */}
                     {form.leave_type && (
                       <div className="flex items-center gap-2">
                         <span className="text-xl font-black text-primary">
-                          {formatBalance(availableBalance)}
-                          {casualRemaining !== null && (
+                          {formatBalance(displayedBalance)}
+                          {['annual', 'casual', 'early'].includes(form.leave_type) && casualRemaining !== null && (
                             <span className="text-base font-bold text-purple-500 ml-1">({formatBalance(casualRemaining)} Casual)</span>
                           )}
                         </span>
@@ -1420,11 +1418,17 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     return val !== null ? parseFloat(val) : null
   }
 
+  const annualPoolRemaining2 = balances
+    ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
+    : null
   const availableBalance = balances
     ? (form.leave_type === 'annual' || form.leave_type === 'early'
-        ? parseFloat(balances.annual_pool_remaining ?? effectiveRemaining('annual') ?? 0)
+        ? annualPoolRemaining2
         : effectiveRemaining(form.leave_type))
     : null
+  const displayedBalance2 = ['annual', 'casual', 'early'].includes(form.leave_type)
+    ? annualPoolRemaining2
+    : availableBalance
   const casualRem2  = balances ? parseFloat(balances.casual_remaining_effective ?? balances.casual ?? 0) : null
   const handleEmployeeSelect = (emp) => {
     const selectedDept = deptValue(emp)
@@ -1486,7 +1490,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
   const submit = (e) => {
     e.preventDefault()
-    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: availableBalance ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, available_balance: displayedBalance2 ?? undefined, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1540,7 +1544,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               </div>
             </td></tr>
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
-            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(availableBalance)}{['annual', 'casual'].includes(form.leave_type) && casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
+            <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2">{balLoading ? <span className="text-xs text-neutral-500">Loading...</span> : <span className="font-bold text-primary">{formatBalance(displayedBalance2)}{['annual', 'casual', 'early'].includes(form.leave_type) && casualRem2 !== null && <span className="text-purple-500 ml-1 font-bold">({formatBalance(casualRem2)} Casual)</span>}</span>}</td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>
             <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} /></td></tr>

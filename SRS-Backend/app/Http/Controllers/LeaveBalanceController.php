@@ -56,7 +56,10 @@ class LeaveBalanceController extends Controller
 
         $annualCommitted = $reserved['annual'] + $reserved['casual'] + $reserved['early'];
         $annualEff = max(0, $annualBase - $annualCommitted);
-        $casualEff = max(0, $casualBase - $reserved['casual']);
+        $casualEff = min(
+            $annualEff,
+            max(0, $casualBase - $reserved['casual'])
+        );
         $sickEff   = max(0, $sickBase - $reserved['sick']);
         $earlyEff  = $annualEff;
 
