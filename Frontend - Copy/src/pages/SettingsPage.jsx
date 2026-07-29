@@ -821,16 +821,28 @@ function TeamTransferPanel() {
               </option>
             ))}
           </select>
-          <select
-            value={toMgr?.id ?? ''}
-            onChange={e => setToMgr(managers.find(m => String(m.id) === e.target.value) ?? null)}
-            className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary bg-white"
-          >
-            <option value="">— Un-assign / no target —</option>
-            {managers.filter(m => m.id !== fromMgr?.id).map(m => (
-              <option key={m.id} value={m.id}>{m.name} · {m.role}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <ManagerPicker
+                value={toMgr?.id ?? null}
+                valueName={toMgr?.name ?? ''}
+                onSelect={employee => {
+                  if (employee.id !== fromMgr?.id) setToMgr(employee)
+                }}
+                onInputChange={() => setToMgr(null)}
+                placeholder="Search any employee as the new manager..."
+                direction="up"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setToMgr(null)}
+              className="shrink-0 px-3 py-2 text-xs font-semibold text-neutral-500 border border-neutral-200 rounded-lg hover:border-primary/40 hover:text-primary"
+              title="Leave employees without a manager"
+            >
+              Un-assign
+            </button>
+          </div>
         </div>
 
         {/* Which link */}
@@ -888,7 +900,7 @@ function TeamTransferPanel() {
 // ─────────────────────────────────────────────────────────────────────
 // Manager picker — searchable employee dropdown
 // ─────────────────────────────────────────────────────────────────────
-function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manager…', direction = 'down' }) {
+function ManagerPicker({ value, valueName, onSelect, onInputChange, placeholder = 'Search manager…', direction = 'down' }) {
   const [q, setQ]       = useState(valueName || '')
   const [results, setR] = useState([])
   const [open, setOpen] = useState(false)
@@ -898,7 +910,7 @@ function ManagerPicker({ value, valueName, onSelect, placeholder = 'Search manag
   useEffect(() => { setQ(valueName || '') }, [valueName])
 
   const onChange = (v) => {
-    setQ(v); setOpen(true)
+    setQ(v); setOpen(true); onInputChange?.(v)
     if (timer.current) clearTimeout(timer.current)
     if (!v || v.length < 2) { setR([]); return }
     timer.current = setTimeout(async () => {
