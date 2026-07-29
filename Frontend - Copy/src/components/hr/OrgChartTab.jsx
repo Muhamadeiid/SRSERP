@@ -16,6 +16,39 @@ const api = async (path, opts = {}) => {
 
 const initials = name => name?.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase() ?? '?'
 
+const normalizeOrgHierarchy = rows => {
+  const employees = rows.map(emp => ({ ...emp, hierarchy_issue: null }))
+  const byId = new Map(employees.map(emp => [emp.id, emp]))
+
+  employees.forEach(emp => {
+    if (emp.direct_manager_id && (!byId.has(emp.direct_manager_id) || emp.direct_manager_id === emp.id)) {
+      emp.direct_manager_id = null
+      emp.hierarchy_issue = 'Invalid manager link'
+    }
+  })
+
+  const state = new Map()
+  const visit = emp => {
+    if (state.get(emp.id) === 2) return
+    if (state.get(emp.id) === 1) return
+    state.set(emp.id, 1)
+
+    const manager = emp.direct_manager_id ? byId.get(emp.direct_manager_id) : null
+    if (manager) {
+      if (state.get(manager.id) === 1) {
+        emp.direct_manager_id = null
+        emp.hierarchy_issue = 'Circular manager link'
+      } else {
+        visit(manager)
+      }
+    }
+    state.set(emp.id, 2)
+  }
+
+  employees.forEach(visit)
+  return employees
+}
+
 const hasValidManager = (emp, all) => Boolean(emp.direct_manager_id && all.some(e => e.id === emp.direct_manager_id))
 const isDepotManager = emp => emp?.user_role === 'depot_manager'
 const wouldCreateCycle = (employeeId, managerId, all) => {
@@ -573,7 +606,8 @@ export default function OrgChartTab() {
     if (!silent) setLoading(true)
     try {
       const data = await api('/employees/org-chart')
-      setEmployees(Array.isArray(data) ? data : (data.data ?? []))
+      const rows = Array.isArray(data) ? data : (data.data ?? [])
+      setEmployees(normalizeOrgHierarchy(rows))
     } catch { if (!silent) setEmployees([]) }
     finally { if (!silent) setLoading(false) }
   }, [])
@@ -596,6 +630,7 @@ export default function OrgChartTab() {
 
   const withManager    = employees.filter(e => e.direct_manager_id || (depotManager && e.id !== depotManager.id)).length
   const uniqueManagers = new Set(employees.map(e => e.direct_manager_id).filter(Boolean)).size
+  const hierarchyIssues = employees.filter(e => e.hierarchy_issue)
 
   const filteredSearch = search.trim()
     ? employees.filter(e =>
@@ -634,6 +669,16 @@ export default function OrgChartTab() {
           </div>
         ))}
       </div>
+
+      {hierarchyIssues.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-semibold">
+            {hierarchyIssues.length} invalid manager relationship{hierarchyIssues.length > 1 ? 's were' : ' was'} found.
+            These employees are still shown under the Depot Manager until reassigned.
+          </p>
+        </div>
+      )}
 
       {/* Search */}
       <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
