@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Users, Settings, Search, X, Check, UserCheck, Loader2, Plus, Tag, Trash2, ShieldCheck, ArrowRight, GripVertical, Layers, GitBranch, Zap } from 'lucide-react'
+import { Users, Settings, Search, X, Check, UserCheck, Loader2, Plus, Tag, Trash2, ShieldCheck, ArrowRight, GripVertical, Layers, GitBranch, Zap, Eye, EyeOff } from 'lucide-react'
 import { getSettings, saveSetting, getManagers, getManagerEmps, assignEmployee } from '../services/settingsService'
 import { getEmployees, searchEmployees } from '../services/employeeService'
 import { listLookupsAll, createLookup, updateLookup, deleteLookup, invalidateLookups } from '../services/lookupService'
@@ -1537,6 +1537,22 @@ function LookupsPanel() {
                   <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? 'bg-green-500' : 'bg-neutral-400'}`} />
                   {item.is_active ? 'ACTIVE' : 'HIDDEN'}
                 </button>
+                {(active === 'department' || active === 'location') && (
+                  <button
+                    onClick={() => handleUpdate(item, { show_in_filter: item.show_in_filter === false })}
+                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-all ${
+                      item.show_in_filter !== false
+                        ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                    }`}
+                    title="Controls whether this item appears as a Workforce filter. It remains available in employee data."
+                  >
+                    {item.show_in_filter !== false
+                      ? <Eye className="w-3 h-3" />
+                      : <EyeOff className="w-3 h-3" />}
+                    {item.show_in_filter !== false ? 'FILTER ON' : 'FILTER OFF'}
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(item)}
                   disabled={saving === item.id}

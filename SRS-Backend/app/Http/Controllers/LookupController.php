@@ -44,6 +44,7 @@ class LookupController extends Controller
             'color'     => 'nullable|string|max:30',
             'sort'      => 'nullable|integer',
             'is_active' => 'nullable|boolean',
+            'show_in_filter' => 'nullable|boolean',
         ]);
 
         if (Lookup::where('type', $data['type'])->where('key', $data['key'])->exists()) {
@@ -52,6 +53,7 @@ class LookupController extends Controller
 
         $data['sort']      = $data['sort']      ?? (Lookup::ofType($data['type'])->max('sort') + 1);
         $data['is_active'] = $data['is_active'] ?? true;
+        $data['show_in_filter'] = $data['show_in_filter'] ?? true;
 
         return response()->json(Lookup::create($data), 201);
     }
@@ -64,6 +66,7 @@ class LookupController extends Controller
             'color'     => 'nullable|string|max:30',
             'sort'      => 'sometimes|integer',
             'is_active' => 'sometimes|boolean',
+            'show_in_filter' => 'sometimes|boolean',
         ]);
 
         $lookup->update($data);

@@ -761,7 +761,9 @@ export default function WorkforceTab() {
   // Location cards — pulled from lookups (dynamic)
   const locCards = [
     { key: 'all', label: 'All Locations', value: total },
-    ...lookupLocs.map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0 })),
+    ...lookupLocs
+      .filter(loc => loc.show_in_filter !== false)
+      .map(loc => ({ key: loc.key, label: loc.label_en, value: byLocation[loc.key] ?? 0 })),
   ];
   const pageNums = () => {
     const T = pagination.last_page,
@@ -827,7 +829,9 @@ export default function WorkforceTab() {
       <div className="flex flex-wrap gap-2">
         {[
           { key: '', label: 'All Departments' },
-          ...lookupDepts.map(d => ({ key: d.key, label: d.label_en })),
+          ...lookupDepts
+            .filter(d => d.show_in_filter !== false)
+            .map(d => ({ key: d.key, label: d.label_en })),
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -1076,7 +1080,11 @@ export default function WorkforceTab() {
                   ))
                 : employees.map((emp, i) => {
                     const sc = STATUS[emp.status] ?? STATUS.on_site;
-                    const dc = DEPT[emp.department];
+                    const dc = DEPT[emp.department] ?? { icon: Shield, color: "text-neutral-500" };
+                    const departmentLabel =
+                      lookupDepts.find(d => d.key === emp.department)?.label_en ??
+                      dc.label ??
+                      emp.department;
                     const Icon = dc?.icon;
                     const lc =
                       LOC_COLOR[emp.work_location] ??
@@ -1151,7 +1159,7 @@ export default function WorkforceTab() {
                               <Icon className={`w-3.5 h-3.5 ${dc.color}`} />
                             )}
                             <span className="text-sm text-secondary">
-                              {dc?.label ?? emp.department}
+                              {departmentLabel}
                             </span>
                           </div>
                         </td>

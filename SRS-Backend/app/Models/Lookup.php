@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Lookup extends Model
 {
-    protected $fillable = ['type', 'key', 'label_en', 'label_ar', 'color', 'sort', 'is_active'];
+    protected $fillable = ['type', 'key', 'label_en', 'label_ar', 'color', 'sort', 'is_active', 'show_in_filter'];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'show_in_filter' => 'boolean',
         'sort'      => 'integer',
     ];
 
