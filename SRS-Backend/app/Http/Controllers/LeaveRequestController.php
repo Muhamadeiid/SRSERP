@@ -240,6 +240,9 @@ class LeaveRequestController extends Controller
             $data['available_balance'] = $data['leave_type'] === 'sick'
                 ? $available['sick']
                 : $available['annual'];
+            if (Schema::hasColumn('leave_requests', 'casual_available_balance')) {
+                $data['casual_available_balance'] = $available['casual'];
+            }
         } else {
             // Overtime requests do not use leave balance. Keep zero for
             // compatibility with older databases where the column is NOT NULL.
@@ -799,17 +802,8 @@ class LeaveRequestController extends Controller
 
     private function hideConfidentialBalances($requests, User $user): void
     {
-        $balances = [];
-
         foreach ($requests as $leaveRequest) {
-            if ($this->canViewConfidentialBalance($leaveRequest, $user)) {
-                if ($leaveRequest->type === 'lrf' && $leaveRequest->employee_id) {
-                    $employeeId = (int) $leaveRequest->employee_id;
-                    $balances[$employeeId] ??= $this->availableLeaveBalances($employeeId);
-                    $leaveRequest->setAttribute('available_balance', $balances[$employeeId]['annual']);
-                    $leaveRequest->setAttribute('casual_available_balance', $balances[$employeeId]['casual']);
-                }
-            } else {
+            if (!$this->canViewConfidentialBalance($leaveRequest, $user)) {
                 $leaveRequest->makeHidden('available_balance');
                 $leaveRequest->makeHidden('casual_available_balance');
             }
@@ -818,13 +812,9 @@ class LeaveRequestController extends Controller
 
     private function attachCurrentBalance(LeaveRequest $leaveRequest): void
     {
-        if ($leaveRequest->type !== 'lrf' || !$leaveRequest->employee_id) {
-            return;
-        }
-
-        $available = $this->availableLeaveBalances((int) $leaveRequest->employee_id);
-        $leaveRequest->setAttribute('available_balance', $available['annual']);
-        $leaveRequest->setAttribute('casual_available_balance', $available['casual']);
+        // The request stores the balance snapshot from submission time.
+        // Never replace it with the employee's later live balance because
+        // approved documents must remain historically accurate.
     }
 
     private function validatedApprovalRequestChanges(Request $request, LeaveRequest $leaveRequest): array

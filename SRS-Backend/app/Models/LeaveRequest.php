@@ -11,7 +11,7 @@ class LeaveRequest extends Model
         'employee_name', 'job_title', 'department', 'department_label', 'direct_manager_name', 'alternate_employee_name',
         'type',
         // LRF
-        'leave_type', 'paid', 'available_balance',
+        'leave_type', 'paid', 'available_balance', 'casual_available_balance',
         'request_date', 'start_date', 'end_date', 'days', 'purpose',
         'early_from', 'early_to',
         // OTR
@@ -42,6 +42,7 @@ class LeaveRequest extends Model
         'balance_deducted_at' => 'datetime',
         'cancelled_at'        => 'datetime',
         'available_balance'   => 'decimal:2',
+        'casual_available_balance' => 'decimal:2',
         'days'                => 'decimal:2',
         'hours'               => 'float',
     ];
