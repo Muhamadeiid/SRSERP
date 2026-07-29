@@ -83,7 +83,8 @@ function earlyDays(from, to) {
   if (!start || !end) return ''
   const [fh, fm] = start.split(':').map(Number)
   const [th, tm] = end.split(':').map(Number)
-  const mins = (th * 60 + tm) - (fh * 60 + fm)
+  let mins = (th * 60 + tm) - (fh * 60 + fm)
+  if (mins <= 0) mins += 24 * 60
   if (mins <= 0) return ''
   if (mins <= 120) return '0.25'
   if (mins <= 240) return '0.5'

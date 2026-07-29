@@ -727,7 +727,7 @@ class LeaveRequestController extends Controller
             'leave_type' => 'sometimes|required|in:annual,casual,sick,early',
             'paid' => 'sometimes|required|boolean',
             'early_from' => 'nullable|required_if:leave_type,early|date_format:H:i',
-            'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i|after:early_from',
+            'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i',
         ]);
 
         $leaveType = $validated['leave_type'] ?? $leaveRequest->leave_type;
@@ -789,6 +789,9 @@ class LeaveRequestController extends Controller
         [$fromHour, $fromMinute] = array_map('intval', explode(':', substr($from, 0, 5)));
         [$toHour, $toMinute] = array_map('intval', explode(':', substr($to, 0, 5)));
         $minutes = ($toHour * 60 + $toMinute) - ($fromHour * 60 + $fromMinute);
+        if ($minutes <= 0) {
+            $minutes += 24 * 60;
+        }
 
         return match (true) {
             $minutes >= 1 && $minutes <= 120 => 0.25,
