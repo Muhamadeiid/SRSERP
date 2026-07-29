@@ -249,8 +249,11 @@ class LeaveRequestController extends Controller
         $leave = LeaveRequest::create($data);
         $this->notifyNewRequest($leave, $employee);
 
-        if (!$this->canViewConfidentialBalance($leave, auth()->user())) {
+        if ($this->canViewConfidentialBalance($leave, auth()->user())) {
+            $this->attachCurrentBalance($leave);
+        } else {
             $leave->makeHidden('available_balance');
+            $leave->makeHidden('casual_available_balance');
         }
         return response()->json(['success' => true, 'data' => $leave], 201);
     }
@@ -334,8 +337,11 @@ class LeaveRequestController extends Controller
             ] : null,
         ]);
 
-        if (!$this->canViewConfidentialBalance($leave, $user)) {
+        if ($this->canViewConfidentialBalance($leave, $user)) {
+            $this->attachCurrentBalance($leave);
+        } else {
             $leave->makeHidden('available_balance');
+            $leave->makeHidden('casual_available_balance');
         }
         return response()->json(['success' => true, 'data' => $leave]);
     }
@@ -778,11 +784,32 @@ class LeaveRequestController extends Controller
 
     private function hideConfidentialBalances($requests, User $user): void
     {
+        $balances = [];
+
         foreach ($requests as $leaveRequest) {
-            if (!$this->canViewConfidentialBalance($leaveRequest, $user)) {
+            if ($this->canViewConfidentialBalance($leaveRequest, $user)) {
+                if ($leaveRequest->type === 'lrf' && $leaveRequest->employee_id) {
+                    $employeeId = (int) $leaveRequest->employee_id;
+                    $balances[$employeeId] ??= $this->availableLeaveBalances($employeeId);
+                    $leaveRequest->setAttribute('available_balance', $balances[$employeeId]['annual']);
+                    $leaveRequest->setAttribute('casual_available_balance', $balances[$employeeId]['casual']);
+                }
+            } else {
                 $leaveRequest->makeHidden('available_balance');
+                $leaveRequest->makeHidden('casual_available_balance');
             }
         }
+    }
+
+    private function attachCurrentBalance(LeaveRequest $leaveRequest): void
+    {
+        if ($leaveRequest->type !== 'lrf' || !$leaveRequest->employee_id) {
+            return;
+        }
+
+        $available = $this->availableLeaveBalances((int) $leaveRequest->employee_id);
+        $leaveRequest->setAttribute('available_balance', $available['annual']);
+        $leaveRequest->setAttribute('casual_available_balance', $available['casual']);
     }
 
     private function validatedApprovalLeaveChanges(Request $request, LeaveRequest $leaveRequest): array

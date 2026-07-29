@@ -131,6 +131,13 @@ function depotManagerNameFor(d) {
   return twoName(depotParty?.name || d?.depot_manager_name || approvedDepotName || DEPOT_MGR_FALLBACK)
 }
 
+function formatBalanceDisplay(data = {}) {
+  const total = formatBalance(data.available_balance)
+  const casual = formatBalance(data.casual_available_balance)
+  if (!total) return ''
+  return casual ? `${total} (${casual} Casual)` : total
+}
+
 function para(text, opts = {}) {
   return new Paragraph({
     alignment: opts.align || AlignmentType.LEFT,
@@ -186,7 +193,7 @@ const DEPOT_MGR_FALLBACK  = 'Mohamed Awaad'
 
 // ── main export ────────────────────────────────────────────────────
 export async function generateLRF(d, { download = true } = {}) {
-  d = { ...lrfTwoNameData(d), available_balance: formatBalance(d.available_balance) }
+  d = { ...lrfTwoNameData(d), available_balance: formatBalanceDisplay(d) }
   const logoBytes = await loadLogoBytes()
 
   // ── Header (logo + title) — only bottom border + divider ──────
