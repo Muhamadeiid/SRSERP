@@ -2015,6 +2015,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const hrEarlyDays = hrLeaveDraft.leave_type === 'early'
     ? earlyDays(hrLeaveDraft.early_from, hrLeaveDraft.early_to)
     : ''
+  const leavePeriod = req.leave_type === 'early' && req.early_from && req.early_to
+    ? `${fmtShort(req.start_date)} · From ${normalizeTime(req.early_from)} to ${normalizeTime(req.early_to)} (${fmtDays(req.days)} days)`
+    : `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`
   const submitHrApproval = () => {
     if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
       alert('Enter a valid Early Leave From and To time.')
@@ -2139,7 +2142,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             ['Job Title',  req.job_title],
             ['Department', req.department_label || resolveDept(req.department)],
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
-            isLRF ? ['Period', `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
+            isLRF ? ['Period', leavePeriod] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
             isLRF ? ['Paid', req.paid ? 'Paid' : 'Unpaid'] : ['Explanation', req.explanation],
             isLRF ? ['Purpose', req.purpose] : (req.overtime_results ? ['Overtime Results', req.overtime_results] : null),
             req.rejection_reason  ? ['Rejection Reason',  req.rejection_reason]  : null,
