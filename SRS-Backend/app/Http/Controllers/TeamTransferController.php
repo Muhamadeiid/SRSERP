@@ -42,7 +42,10 @@ class TeamTransferController extends Controller
                 $q = Employee::active()->where('direct_manager_id', $fromManager->id);
                 if (!empty($data['employee_ids'])) $q->whereIn('id', $data['employee_ids']);
                 $ids = (clone $q)->pluck('id');
-                $q->update(['direct_manager_id' => $toManager?->id]);
+                $q->update([
+                    'direct_manager_id' => $toManager?->id,
+                    'manager_manual' => true,
+                ]);
                 $affectedIds = $affectedIds->merge($ids);
             }
 

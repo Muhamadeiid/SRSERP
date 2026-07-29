@@ -741,7 +741,12 @@ function TeamTransferPanel() {
   const [busy,     setBusy]      = useState(false)
   const [result,   setResult]    = useState(null)
 
-  useEffect(() => { getManagers().then(r => setManagers(r.data ?? r ?? [])) }, [])
+  const loadManagers = async () => {
+    const response = await getManagers()
+    setManagers(response.data ?? response ?? [])
+  }
+
+  useEffect(() => { loadManagers() }, [])
 
   const run = async () => {
     if (!fromMgr) return
@@ -753,7 +758,10 @@ function TeamTransferPanel() {
         from_id: fromMgr.id,
         to_id:   toMgr?.id ?? null,
       })
-      setResult(`Moved ${r.affected} employee${r.affected !== 1 ? 's' : ''}.`)
+      setResult(`Moved ${r.affected} employee${r.affected !== 1 ? 's' : ''}. Org Chart is now updated.`)
+      setFromMgr(null)
+      setToMgr(null)
+      await loadManagers()
     } catch (e) {
       setResult('Transfer failed: ' + (e.response?.data?.message ?? e.message))
     } finally { setBusy(false) }
