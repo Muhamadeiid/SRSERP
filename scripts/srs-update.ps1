@@ -16,8 +16,10 @@ Log "=== SRS UPDATE STARTED ==="
 
 $bd = 'C:\Users\RotemSRS_ERP\srs_stack\srserp'
 $backend = Join-Path $bd 'SRS-Backend'
+$frontend = Join-Path $bd 'Frontend - Copy'
 $php = 'C:\Users\RotemSRS_ERP\srs_stack\php\php.exe'
 $composer = 'C:\Users\RotemSRS_ERP\srs_stack\composer.phar'
+$nodeDir = 'C:\Users\RotemSRS_ERP\srs_stack\node_msi\PFiles64\nodejs'
 
 Set-Location $bd
 
@@ -72,24 +74,48 @@ if ($migrationsNeeded) {
 }
 
 if ($frontendNeeded) {
-    Log "Frontend source changed - downloading pre-built dist from Release..."
-    $zip = "$env:TEMP\srs-public.zip"
-    $tmp = "$env:TEMP\srs-public-tmp"
-    try {
-        Invoke-WebRequest -Uri 'https://github.com/Muhamadeiid/SRSERP/releases/latest/download/public-only.zip' -OutFile $zip -UseBasicParsing
-        Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-        Expand-Archive $zip -DestinationPath $tmp -Force
-        $publicSource = if (Test-Path (Join-Path $tmp 'public')) {
-            Join-Path $tmp 'public'
-        } else {
-            $tmp
+    $npm = Join-Path $nodeDir 'npm.cmd'
+    $dist = Join-Path $frontend 'dist'
+    $frontendBuilt = $false
+
+    if (Test-Path $npm) {
+        Log "Frontend source changed - building latest source..."
+        Set-Location $frontend
+        if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
+            Log "Installing frontend packages..."
+            & $npm install --no-audit --no-fund 2>&1 | Select-Object -Last 10 | ForEach-Object { Log "  $_" }
         }
+        $env:VITE_API_URL = '/api'
+        $env:VITE_API_BASE = '/api'
+        & $npm run build 2>&1 | Select-Object -Last 15 | ForEach-Object { Log "  $_" }
+        $frontendBuilt = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $dist 'index.html'))
+        Set-Location $bd
+    }
+
+    if ($frontendBuilt) {
         Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
-        Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
-        Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-        Log "Frontend replaced from Release"
-    } catch {
-        Log "Could not fetch frontend Release: $($_.Exception.Message)"
+        Copy-Item (Join-Path $dist '*') (Join-Path $backend 'public') -Recurse -Force
+        Log "Frontend built and deployed from latest source"
+    } else {
+        Log "Local frontend build unavailable - downloading pre-built Release fallback..."
+        $zip = "$env:TEMP\srs-public.zip"
+        $tmp = "$env:TEMP\srs-public-tmp"
+        try {
+            Invoke-WebRequest -Uri 'https://github.com/Muhamadeiid/SRSERP/releases/latest/download/public-only.zip' -OutFile $zip -UseBasicParsing
+            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+            Expand-Archive $zip -DestinationPath $tmp -Force
+            $publicSource = if (Test-Path (Join-Path $tmp 'public')) {
+                Join-Path $tmp 'public'
+            } else {
+                $tmp
+            }
+            Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
+            Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
+            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+            Log "Frontend replaced from Release fallback"
+        } catch {
+            Log "Could not deploy frontend: $($_.Exception.Message)"
+        }
     }
 }
 
