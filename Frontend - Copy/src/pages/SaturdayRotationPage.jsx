@@ -580,6 +580,13 @@ export default function SaturdayRotationPage() {
               {assigning ? 'Saving...' : 'Assign Group B'}
             </button>
             <button
+              onClick={() => assignSelected(null)}
+              disabled={!selectedIds.length || assigning}
+              className="px-4 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-sm font-bold hover:bg-red-50 disabled:opacity-40"
+            >
+              {assigning ? 'Saving...' : 'Remove from Plans'}
+            </button>
+            <button
               onClick={() => setSelectedIds([])}
               disabled={!selectedIds.length || assigning}
               className="px-4 py-2 rounded-lg bg-neutral-100 text-neutral-500 text-sm font-bold disabled:opacity-40"

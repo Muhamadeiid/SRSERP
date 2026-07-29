@@ -282,14 +282,14 @@ class EmployeeController extends Controller
         $data = $request->validate([
             'employee_ids' => 'required|array|min:1',
             'employee_ids.*' => 'integer|exists:employees,id',
-            'saturday_group' => 'required|in:A,B',
+            'saturday_group' => 'nullable|in:A,B',
         ]);
 
         $ids = array_values(array_unique($data['employee_ids']));
 
         $ids = Employee::active()->whereIn('id', $ids)->pluck('id')->all();
         Employee::active()->whereIn('id', $ids)->update([
-            'saturday_group' => $data['saturday_group'],
+            'saturday_group' => $data['saturday_group'] ?? null,
             'updated_at' => now(),
         ]);
 
