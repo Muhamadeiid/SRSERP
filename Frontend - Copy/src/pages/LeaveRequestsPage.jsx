@@ -1931,8 +1931,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     && currentUserId != null
     && String(req.user_id) === String(currentUserId)
     && !['admin', 'depot_manager', 'hr', 'manager'].includes(userRole)
-  const hasNoDirectManager = !req.employee?.user_manager_id && !req.employee?.direct_manager_id
-  const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
+  const hasNoDirectManager = req.manager_step_can_be_skipped
+    ?? (!req.employee?.user_manager_id && !req.employee?.direct_manager_id)
+  const awaitingHrApproval = req.can_approve_hr
+    || req.status === 'manager_approved'
+    || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
     && (canHrApprove || isDepotAdmin)
@@ -2381,6 +2384,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
   const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
   const pending = typeFiltered.filter(r =>
+    r.can_approve_manager ||
+    r.can_approve_hr ||
+    r.can_approve_depot ||
     (r.status === 'pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
     (r.status === 'manager_approved' && isHrApprover) ||
     (r.status === 'hr_approved' && isDepotAdmin)
@@ -2739,12 +2745,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve & Finalize</button>
                   )}
                   {/* Regular manager: pending → Approve (manager step) */}
-                  {r.status === 'pending' && isDirectManagerOf(r) && (
+                  {r.status === 'pending' && (r.can_approve_manager || isDirectManagerOf(r)) && (
                     <button onClick={() => handleManagerApprove(r.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
                   )}
                   {/* Depot/admin: manager_approved → Final Approve */}
-                  {(r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover && (
+                  {(r.can_approve_hr || ((r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover)) && (
                     <button onClick={() => handleHrApprove(r.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-all">HR Approve</button>
                   )}
@@ -2977,8 +2983,8 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           userRole={user?.role}
           userDepartment={user?.department}
           currentUserId={user?.id}
-          isDirectManager={isDirectManagerOf(viewReq)}
-          hasHrApprovalAccess={isHrApprover}
+          isDirectManager={Boolean(viewReq.is_direct_manager || viewReq.can_approve_manager || isDirectManagerOf(viewReq))}
+          hasHrApprovalAccess={Boolean(viewReq.can_approve_hr || isHrApprover)}
           onUpdated={fetchRequests}
           focusApproval={focusApproval}
         />

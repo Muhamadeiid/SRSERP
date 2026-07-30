@@ -55,15 +55,23 @@ class LeaveRequestController extends Controller
             // Full visibility.
         } else {
             $myEmp = Employee::active()->where('user_id', $user->id)->first();
-            $empIds = Employee::active()
+            $managedEmployees = Employee::active()
                 ->where(function ($employees) use ($user, $myEmp) {
                     $employees->where('user_manager_id', $user->id);
                     if ($myEmp) {
                         $employees->orWhere('direct_manager_id', $myEmp->id);
                     }
                 })
-                ->pluck('id');
-            $query->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('employee_id', $empIds));
+                ->get(['id', 'name']);
+            $empIds = $managedEmployees->pluck('id');
+            $empNames = $managedEmployees->pluck('name');
+            $query->where(function ($q) use ($user, $empIds, $empNames) {
+                $q->where('user_id', $user->id)
+                    ->orWhereIn('employee_id', $empIds)
+                    ->orWhere(function ($legacy) use ($empNames) {
+                        $legacy->whereNull('employee_id')->whereIn('employee_name', $empNames);
+                    });
+            });
         }
 
         if ($request->filled('status')) {
@@ -118,6 +126,7 @@ class LeaveRequestController extends Controller
             $paginated = $query->paginate($perPage, ['*'], 'page', $page);
             $items = collect($paginated->items());
             $this->attachArchiveStatus($items, $user);
+            $this->attachWorkflowAccess($items, $user);
             $this->hideConfidentialBalances($items, $user);
             return response()->json([
                 'success'    => true,
@@ -133,6 +142,7 @@ class LeaveRequestController extends Controller
 
         $items = $query->get();
         $this->attachArchiveStatus($items, $user);
+        $this->attachWorkflowAccess($items, $user);
         $this->hideConfidentialBalances($items, $user);
         return response()->json(['success' => true, 'data' => $items]);
     }
@@ -249,6 +259,22 @@ class LeaveRequestController extends Controller
         $data['user_id'] = auth()->id();
         $data['status'] = 'pending';
         $employee = !empty($data['employee_id']) ? Employee::active()->find($data['employee_id']) : null;
+        if (!$employee && !empty($data['employee_name'])) {
+            $matchingEmployees = Employee::active()
+                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim($data['employee_name']))])
+                ->limit(2)
+                ->get();
+            if ($matchingEmployees->count() === 1) {
+                $employee = $matchingEmployees->first();
+                $data['employee_id'] = $employee->id;
+            }
+        }
+        if (!$employee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Select the employee from the search results so the request reaches the correct direct manager and HR.',
+            ], 422);
+        }
         if ($employee) {
             $this->leaveYears->refreshDue($employee->id);
         }
@@ -401,6 +427,7 @@ class LeaveRequestController extends Controller
             $leave->makeHidden('available_balance');
             $leave->makeHidden('casual_available_balance');
         }
+        $this->attachWorkflowAccess(collect([$leave]), $user);
         return response()->json(['success' => true, 'data' => $leave]);
     }
 
@@ -731,11 +758,9 @@ class LeaveRequestController extends Controller
 
     private function isDirectManager(LeaveRequest $leaveRequest, int $userId): bool
     {
-        if (!$leaveRequest->employee_id) {
-            return false;
-        }
-
-        $employee = Employee::find($leaveRequest->employee_id);
+        $employee = $leaveRequest->employee_id
+            ? Employee::active()->find($leaveRequest->employee_id)
+            : $this->uniqueActiveEmployeeByName($leaveRequest->employee_name);
         if (!$employee) {
             return false;
         }
@@ -750,6 +775,55 @@ class LeaveRequestController extends Controller
         }
 
         return false;
+    }
+
+    private function uniqueActiveEmployeeByName(?string $name): ?Employee
+    {
+        $normalized = strtolower(trim((string) $name));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $matches = Employee::active()
+            ->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
+    private function attachWorkflowAccess($requests, User $user): void
+    {
+        $isDepotAdmin = in_array($user->role, ['admin', 'depot_manager'], true);
+        $isHr = in_array($user->role, ['admin', 'hr'], true)
+            || $user->hasPermission('leaves.approve_hr');
+
+        foreach ($requests as $request) {
+            $isDirectManager = $this->isDirectManager($request, $user->id);
+            $employee = $request->employee
+                ?: ($request->employee_id
+                    ? Employee::active()->find($request->employee_id)
+                    : $this->uniqueActiveEmployeeByName($request->employee_name));
+            $managerCanBeSkipped = $employee && !$this->directManagerUserId($employee);
+
+            $request->setAttribute(
+                'can_approve_manager',
+                $request->status === 'pending' && ($isDepotAdmin || $isDirectManager)
+            );
+            $request->setAttribute('is_direct_manager', $isDirectManager);
+            $request->setAttribute('manager_step_can_be_skipped', (bool) $managerCanBeSkipped);
+            $request->setAttribute(
+                'can_approve_hr',
+                $isHr && (
+                    $request->status === 'manager_approved'
+                    || ($request->status === 'pending' && $managerCanBeSkipped)
+                )
+            );
+            $request->setAttribute(
+                'can_approve_depot',
+                $isDepotAdmin && in_array($request->status, ['pending', 'manager_approved', 'hr_approved'], true)
+            );
+        }
     }
 
     private function generateTrackingNo(string $type, ?Employee $employee = null): string
