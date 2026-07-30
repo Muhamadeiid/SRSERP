@@ -2,6 +2,10 @@
 # Pulls latest code from GitHub, protects .env and machine lock, rebuilds if needed,
 # runs any new migrations, and restarts the PHP server.
 
+param(
+    [switch]$RefreshFrontend
+)
+
 $ErrorActionPreference = 'Continue'
 $log = "$env:USERPROFILE\Desktop\srs-update.log"
 
@@ -36,9 +40,9 @@ git fetch origin main 2>&1 | ForEach-Object { Log "  $_" }
 
 $local = (git rev-parse HEAD).Trim()
 $remote = (git rev-parse origin/main).Trim()
-$forceFrontendRefresh = $local -eq $remote
+$forceFrontendRefresh = $RefreshFrontend.IsPresent
 if ($local -eq $remote) {
-    Log "Source is already up to date ($local). Refreshing deployed frontend."
+    Log "Source is already up to date ($local)."
 }
 
 Log "Local:  $local"
