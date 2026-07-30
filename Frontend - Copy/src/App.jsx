@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { TrainFront } from 'lucide-react'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
 import { logout, refreshUser } from './store/slices/authSlice'
@@ -93,11 +92,7 @@ const PageFallback = () => (
     <div className="w-full">
       <div className="srs-loading-track" aria-hidden="true">
         <div className="srs-loading-train">
-          <div className="srs-loading-car"><span /><span /></div>
-          <div className="srs-loading-car"><span /><span /></div>
-          <div className="srs-loading-engine">
-            <TrainFront className="h-8 w-8" strokeWidth={1.8} />
-          </div>
+          <img src="/train-loader.png" alt="" className="srs-loading-train-image" />
         </div>
       </div>
       <p className="mt-4 text-center text-xs font-semibold text-neutral-400">Loading page...</p>

@@ -27,8 +27,8 @@
 .srs-loading-track {
   position: relative;
   width: 100%;
-  height: 58px;
-  border-bottom: 3px solid #cbd5e1;
+  height: clamp(76px, 9vw, 118px);
+  border-bottom: 2px solid #cbd5e1;
 }
 
 .srs-loading-track::after {
@@ -43,47 +43,23 @@
 
 .srs-loading-train {
   position: absolute;
-  right: -190px;
-  bottom: 2px;
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  color: #005782;
-  animation: srs-train-cross 2.8s linear infinite;
+  right: clamp(-310px, -22vw, -210px);
+  bottom: -1px;
+  width: clamp(230px, 28vw, 430px);
+  animation: srs-train-cross 3.8s linear infinite;
   will-change: transform;
 }
 
-.srs-loading-engine,
-.srs-loading-car {
-  height: 38px;
-  border: 2px solid #005782;
-  background: #ffffff;
-}
-
-.srs-loading-engine {
-  width: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.srs-loading-car {
-  width: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-evenly;
-}
-
-.srs-loading-car span {
-  width: 15px;
-  height: 13px;
-  border: 1px solid #005782;
-  background: #e0f2fe;
+.srs-loading-train-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 5px 4px rgb(15 23 42 / 18%));
 }
 
 @keyframes srs-train-cross {
   from { transform: translateX(0); }
-  to { transform: translateX(calc(-100vw - 380px)); }
+  to { transform: translateX(calc(-100vw - 720px)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
