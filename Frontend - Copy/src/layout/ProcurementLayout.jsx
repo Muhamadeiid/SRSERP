@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
+import { notificationRequestTarget } from '../utils/notificationRoute'
 
 // ── time formatter (matches HRLayout) ─────────────────────────────────────────
 const fmtTime = (d) => {
@@ -80,12 +81,9 @@ export default function ProcurementLayout() {
     setOpen(false)
     if (n.data?.prf_id) {
       navigate(`/procurement/${n.data.prf_id}`)
-    } else if (n.data?.leave_request_id) {
-      const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
-      const param = isReschedule ? 'resubmit' : 'req'
-      const isOvertime = /(^|_)otr(_|$)/i.test(n.event ?? '')
-      const requestPath = isOvertime ? '/human-resources/overtime' : '/human-resources/leave'
-      navigate(`${requestPath}?${param}=${n.data.leave_request_id}`)
+    } else {
+      const target = notificationRequestTarget(n)
+      if (target) navigate(`${target.path}?${target.query}`)
     }
   }
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
+import { notificationRequestTarget } from '../utils/notificationRoute'
 
 // ── time formatter ───────────────────────────────────────────────
 const fmtTime = (d) => {
@@ -148,14 +149,8 @@ export default function HRLayout() {
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     }
     setOpen(false)
-    if (n.data?.leave_request_id) {
-      const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
-      const param = isReschedule ? 'resubmit' : 'req'
-      const isOvertime = /(^|_)otr(_|$)/i.test(n.event ?? '')
-      const requestPath = isOvertime ? '/human-resources/overtime' : '/human-resources/leave'
-      const focus = isReschedule ? '' : '&focus=approval'
-      navigate(`${requestPath}?${param}=${n.data.leave_request_id}${focus}`)
-    }
+    const target = notificationRequestTarget(n)
+    if (target) navigate(`${target.path}?${target.query}`)
   }
 
   // ── filter nav by role ───────────────────────────────────────

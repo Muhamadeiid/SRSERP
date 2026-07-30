@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import { Bell, X, CheckCheck, Calendar, Clock } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../../services/leaveService'
+import { notificationRequestTarget } from '../../utils/notificationRoute'
 import { useNavigate } from 'react-router-dom'
 
 const fmtTime = (d) => {
@@ -80,14 +81,8 @@ export default function HRTopBar() {
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     }
     setOpen(false)
-    if (n.data?.leave_request_id) {
-      const isReschedule = n.event === 'lrf_rescheduled' || n.event === 'otr_rescheduled'
-      const param = isReschedule ? 'resubmit' : 'req'
-      const focus = isReschedule ? '' : '&focus=approval'
-      const isOvertime = /(^|_)otr(_|$)/i.test(n.event ?? '')
-      const requestPath = isOvertime ? '/human-resources/overtime' : '/human-resources/leave'
-      navigate(`${requestPath}?${param}=${n.data.leave_request_id}${focus}`)
-    }
+    const target = notificationRequestTarget(n)
+    if (target) navigate(`${target.path}?${target.query}`)
   }
 
   const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'

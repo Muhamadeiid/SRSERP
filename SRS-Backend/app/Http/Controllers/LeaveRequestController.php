@@ -674,6 +674,21 @@ class LeaveRequestController extends Controller
     public function notifications(): JsonResponse
     {
         $notifs = Notification::where('user_id', auth()->id())->orderByDesc('created_at')->limit(50)->get();
+        $requestIds = $notifs->pluck('data')
+            ->map(fn ($data) => $data['leave_request_id'] ?? null)
+            ->filter()
+            ->unique();
+        $requestTypes = LeaveRequest::whereIn('id', $requestIds)->pluck('type', 'id');
+
+        $notifs->each(function (Notification $notification) use ($requestTypes) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            $requestId = $data['leave_request_id'] ?? null;
+            if ($requestId && !isset($data['request_type']) && isset($requestTypes[$requestId])) {
+                $data['request_type'] = $requestTypes[$requestId];
+                $notification->setAttribute('data', $data);
+            }
+        });
+
         return response()->json([
             'success' => true,
             'data' => $notifs,
