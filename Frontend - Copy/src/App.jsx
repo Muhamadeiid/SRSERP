@@ -4,44 +4,65 @@ import { useDispatch, useSelector } from 'react-redux'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
 import { logout, refreshUser } from './store/slices/authSlice'
-const Login             = lazy(() => import('./pages/Login'))
-const DashboardPage     = lazy(() => import('./pages/Dashboard'))
-const ProductsPage      = lazy(() => import('./pages/Products'))
-const Users             = lazy(() => import('./pages/Users/Index'))
-const LeaveRequestsPage = lazy(() => import('./pages/LeaveRequestsPage'))
-const CalendarPage      = lazy(() => import('./pages/CalendarPage'))
-const HRLayout          = lazy(() => import('./layout/HRLayout'))
-const InventoryLayout   = lazy(() => import('./layout/InventoryLayout'))
-const MainLayout        = lazy(() => import('./layout/MainLayout'))
-const ProcurementLayout = lazy(() => import('./layout/ProcurementLayout'))
-const PrfDashboard      = lazy(() => import('./pages/PrfDashboard'))
-const PrfNewPage        = lazy(() => import('./pages/PrfNewPage'))
-const PrfDetail         = lazy(() => import('./pages/PrfDetail'))
-const PrfMasterList     = lazy(() => import('./pages/PrfMasterList'))
-const PoNewPage         = lazy(() => import('./pages/PoNewPage'))
-const PoDetail          = lazy(() => import('./pages/PoDetail'))
-const IgiNewPage        = lazy(() => import('./pages/IgiNewPage'))
-const IgiDetail         = lazy(() => import('./pages/IgiDetail'))
-const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
-const WeeklyLeaveReportPage = lazy(() => import('./pages/WeeklyLeaveReportPage'))
-const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
-const InternalSalaryPage = lazy(() => import('./pages/InternalSalaryPage'))
-const CcpAttendancePage = lazy(() => import('./pages/CcpAttendancePage'))
-const SaturdayRotationPage = lazy(() => import('./pages/SaturdayRotationPage'))
-const MaintenanceLayout    = lazy(() => import('./layout/MaintenanceLayout'))
-const MaintenanceDashboard = lazy(() => import('./pages/MaintenanceDashboard'))
-const MaintenanceTab       = lazy(() => import('./pages/MaintenanceTab'))
-const FleetChecksPage      = lazy(() => import('./pages/FleetChecksPage'))
-const WithdrawalsPage      = lazy(() => import('./pages/WithdrawalsPage'))
+
+const lazyWithRetry = importer => lazy(async () => {
+  try {
+    return await importer()
+  } catch (error) {
+    const message = String(error?.message || error)
+    const isChunkFailure = /dynamically imported module|module script|loading chunk|failed to fetch/i.test(message)
+    const lastRecovery = Number(sessionStorage.getItem('srs_chunk_recovery') || 0)
+
+    if (isChunkFailure && Date.now() - lastRecovery > 30000) {
+      sessionStorage.setItem('srs_chunk_recovery', String(Date.now()))
+      const url = new URL(window.location.href)
+      url.searchParams.set('_refresh', String(Date.now()))
+      window.location.replace(url.toString())
+      return new Promise(() => {})
+    }
+
+    throw error
+  }
+})
+
+const Login             = lazyWithRetry(() => import('./pages/Login'))
+const DashboardPage     = lazyWithRetry(() => import('./pages/Dashboard'))
+const ProductsPage      = lazyWithRetry(() => import('./pages/Products'))
+const Users             = lazyWithRetry(() => import('./pages/Users/Index'))
+const LeaveRequestsPage = lazyWithRetry(() => import('./pages/LeaveRequestsPage'))
+const CalendarPage      = lazyWithRetry(() => import('./pages/CalendarPage'))
+const HRLayout          = lazyWithRetry(() => import('./layout/HRLayout'))
+const InventoryLayout   = lazyWithRetry(() => import('./layout/InventoryLayout'))
+const MainLayout        = lazyWithRetry(() => import('./layout/MainLayout'))
+const ProcurementLayout = lazyWithRetry(() => import('./layout/ProcurementLayout'))
+const PrfDashboard      = lazyWithRetry(() => import('./pages/PrfDashboard'))
+const PrfNewPage        = lazyWithRetry(() => import('./pages/PrfNewPage'))
+const PrfDetail         = lazyWithRetry(() => import('./pages/PrfDetail'))
+const PrfMasterList     = lazyWithRetry(() => import('./pages/PrfMasterList'))
+const PoNewPage         = lazyWithRetry(() => import('./pages/PoNewPage'))
+const PoDetail          = lazyWithRetry(() => import('./pages/PoDetail'))
+const IgiNewPage        = lazyWithRetry(() => import('./pages/IgiNewPage'))
+const IgiDetail         = lazyWithRetry(() => import('./pages/IgiDetail'))
+const LeaveMasterList   = lazyWithRetry(() => import('./pages/LeaveMasterList'))
+const WeeklyLeaveReportPage = lazyWithRetry(() => import('./pages/WeeklyLeaveReportPage'))
+const ResignationsPage  = lazyWithRetry(() => import('./pages/ResignationsPage'))
+const InternalSalaryPage = lazyWithRetry(() => import('./pages/InternalSalaryPage'))
+const CcpAttendancePage = lazyWithRetry(() => import('./pages/CcpAttendancePage'))
+const SaturdayRotationPage = lazyWithRetry(() => import('./pages/SaturdayRotationPage'))
+const MaintenanceLayout    = lazyWithRetry(() => import('./layout/MaintenanceLayout'))
+const MaintenanceDashboard = lazyWithRetry(() => import('./pages/MaintenanceDashboard'))
+const MaintenanceTab       = lazyWithRetry(() => import('./pages/MaintenanceTab'))
+const FleetChecksPage      = lazyWithRetry(() => import('./pages/FleetChecksPage'))
+const WithdrawalsPage      = lazyWithRetry(() => import('./pages/WithdrawalsPage'))
 
 // HR tab components — each mounted at its own route
-const WorkforceTab      = lazy(() => import('./components/hr/WorkforceTab'))
-const AttendanceTab     = lazy(() => import('./components/hr/AttendanceTab'))
-const CertificationsTab = lazy(() => import('./components/hr/CertificationsTab'))
-const DisciplinaryTab   = lazy(() => import('./components/hr/DisciplinaryTab'))
-const AssetsTab         = lazy(() => import('./components/hr/AssetsTab'))
-const OrgChartTab       = lazy(() => import('./components/hr/OrgChartTab'))
-const SettingsPage      = lazy(() => import('./pages/SettingsPage'))
+const WorkforceTab      = lazyWithRetry(() => import('./components/hr/WorkforceTab'))
+const AttendanceTab     = lazyWithRetry(() => import('./components/hr/AttendanceTab'))
+const CertificationsTab = lazyWithRetry(() => import('./components/hr/CertificationsTab'))
+const DisciplinaryTab   = lazyWithRetry(() => import('./components/hr/DisciplinaryTab'))
+const AssetsTab         = lazyWithRetry(() => import('./components/hr/AssetsTab'))
+const OrgChartTab       = lazyWithRetry(() => import('./components/hr/OrgChartTab'))
+const SettingsPage      = lazyWithRetry(() => import('./pages/SettingsPage'))
 
 // ── Access rules ──────────────────────────────────────────────────────────────
 // HR Full: Admin, Depot Manager, or the dedicated HR role
@@ -67,7 +88,12 @@ const ComingSoon = ({ title }) => (
 )
 
 const PageFallback = () => (
-  <div className="min-h-screen bg-neutral-50" />
+  <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3 text-neutral-400">
+      <div className="h-8 w-8 rounded-full border-2 border-neutral-200 border-t-primary animate-spin" />
+      <p className="text-xs font-semibold">Loading page...</p>
+    </div>
+  </div>
 )
 
 const AttendanceByRole = () => {
