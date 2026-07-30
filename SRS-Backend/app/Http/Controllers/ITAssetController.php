@@ -300,7 +300,7 @@ class ITAssetController extends Controller
 
         $map = $this->buildColumnMap($headers);
 
-        $imported = 0; $updated = 0; $skipped = 0; $errors = [];
+        $imported = 0; $updated = 0; $skipped = 0; $errors = []; $skippedRows = [];
         $currentItem = null;   // forward-fill: the Item cell is only set on the first row of each group
 
         foreach ($rows as $idx => $row) {
@@ -316,7 +316,13 @@ class ITAssetController extends Controller
                 $payload = $this->rowToPayload($row, $map, $currentItem);
 
                 if (empty($payload['name']) && empty($payload['asset_no'])) {
-                    $skipped++; continue;
+                    $skipped++;
+                    $skippedRows[] = [
+                        'row' => $idx + 1,
+                        'reason' => 'Both Asset no. and Name (Des.) are empty.',
+                        'item' => $payload['item'] ?? null,
+                    ];
+                    continue;
                 }
 
                 $existing = null;
@@ -334,6 +340,10 @@ class ITAssetController extends Controller
                 }
             } catch (\Throwable $e) {
                 $errors[] = 'Row '.($idx + 1).': '.$e->getMessage();
+                $skippedRows[] = [
+                    'row' => $idx + 1,
+                    'reason' => $e->getMessage(),
+                ];
                 $skipped++;
             }
         }
@@ -343,6 +353,7 @@ class ITAssetController extends Controller
             'imported' => $imported,
             'updated'  => $updated,
             'skipped'  => $skipped,
+            'skipped_rows' => array_slice($skippedRows, 0, 50),
             'errors'   => array_slice($errors, 0, 20),
         ]);
     }

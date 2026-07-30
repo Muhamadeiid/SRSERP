@@ -518,6 +518,7 @@ function EmployeeAssetsTab({ hideHeader = false }) {
       setExcelResult({
         ok: true,
         message: `${result.imported ?? 0} added, ${result.updated ?? 0} updated, ${result.skipped ?? 0} skipped`,
+        skippedRows: result.skipped_rows ?? [],
       })
     } catch (error) {
       setExcelResult({ ok: false, message: error.message || 'Import failed' })
@@ -627,6 +628,15 @@ function EmployeeAssetsTab({ hideHeader = false }) {
         }`}>
           {excelResult.ok && <b className="mr-1">IT Asset import completed.</b>}
           {excelResult.message}
+          {Array.isArray(excelResult.skippedRows) && excelResult.skippedRows.length > 0 && (
+            <ul className="mt-2 list-disc list-inside text-xs">
+              {excelResult.skippedRows.map((entry, index) => (
+                <li key={`${entry.row}-${index}`}>
+                  Row {entry.row}: {entry.reason}{entry.item ? ` (Item: ${entry.item})` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

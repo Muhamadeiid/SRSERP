@@ -357,6 +357,15 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
               <>
                 <b>Import done.</b>{' '}
                 {importResult.imported ?? 0} added · {importResult.updated ?? 0} updated · {importResult.skipped ?? 0} skipped
+                {Array.isArray(importResult.skipped_rows) && importResult.skipped_rows.length > 0 && (
+                  <ul className="mt-2 list-disc list-inside text-xs">
+                    {importResult.skipped_rows.map((entry, i) => (
+                      <li key={`${entry.row}-${i}`}>
+                        Row {entry.row}: {entry.reason}{entry.item ? ` (Item: ${entry.item})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {Array.isArray(importResult.errors) && importResult.errors.length > 0 && (
                   <ul className="mt-1 list-disc list-inside text-xs">
                     {importResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
