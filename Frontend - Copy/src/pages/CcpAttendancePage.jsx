@@ -23,14 +23,18 @@ export default function CcpAttendancePage() {
     try {
       const response = await attendanceService.getCcpDaily(date)
       const rows = response.data ?? []
+      const selectedDay = new Date(`${date}T00:00:00`).getDay()
       setEmployees(rows)
       setDirtyIds([])
       setDrafts(Object.fromEntries(rows.map(employee => {
         const record = employee.attendance
+        const isWeeklyOff = employee.weekly_off_day !== null
+          && employee.weekly_off_day !== undefined
+          && Number(employee.weekly_off_day) === selectedDay
         return [employee.id, {
           check_in: timeValue(record?.check_in),
           check_out: timeValue(record?.check_out),
-          status: record?.status || 'present',
+          status: record?.status || (isWeeklyOff ? 'off' : 'present'),
           notes: record?.notes || '',
         }]
       })))
@@ -60,7 +64,9 @@ export default function CcpAttendancePage() {
   const updateDraft = (employeeId, key, value) => {
     setDrafts(current => ({
       ...current,
-      [employeeId]: { ...current[employeeId], [key]: value },
+      [employeeId]: key === 'status' && value === 'off'
+        ? { ...current[employeeId], status: value, check_in: '', check_out: '' }
+        : { ...current[employeeId], [key]: value },
     }))
     setDirtyIds(current => current.includes(employeeId) ? current : [...current, employeeId])
   }
@@ -93,6 +99,9 @@ export default function CcpAttendancePage() {
       permission: 'permission',
       permit: 'permission',
       permission_leave: 'permission',
+      off: 'off',
+      day_off: 'off',
+      dayoff: 'off',
     }
     return aliases[raw] || 'present'
   }
@@ -257,6 +266,7 @@ export default function CcpAttendancePage() {
                         <option value="absent">Absent</option>
                         <option value="late">Late</option>
                         <option value="permission">Permission</option>
+                        <option value="off">OFF - Day Off</option>
                       </select>
                     )}
                   </td>

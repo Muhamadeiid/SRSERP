@@ -245,7 +245,7 @@ class AttendanceController extends Controller
 
         $employees = $this->ccpEmployees()
             ->orderBy('name')
-            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location']);
+            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'weekly_off_day']);
 
         $records = \App\Models\Attendance::whereDate('date', $date)
             ->whereIn('employee_id', $employees->pluck('id'))
@@ -281,7 +281,7 @@ class AttendanceController extends Controller
             'date' => 'required|date',
             'check_in' => 'nullable|date_format:H:i',
             'check_out' => 'nullable|date_format:H:i',
-            'status' => 'required|in:present,absent,late,permission',
+            'status' => 'required|in:present,absent,late,permission,off',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -293,6 +293,10 @@ class AttendanceController extends Controller
 
         $data['check_in'] = $data['check_in'] ?: null;
         $data['check_out'] = $data['check_out'] ?: null;
+        if ($data['status'] === 'off') {
+            $data['check_in'] = null;
+            $data['check_out'] = null;
+        }
         $attendance = $this->attendanceService->createManualEntry($data, auth()->id());
 
         return response()->json([
@@ -311,7 +315,7 @@ class AttendanceController extends Controller
             'rows.*.employee_id' => 'required|integer|exists:employees,id',
             'rows.*.check_in' => 'nullable|date_format:H:i',
             'rows.*.check_out' => 'nullable|date_format:H:i',
-            'rows.*.status' => 'required|in:present,absent,late,permission',
+            'rows.*.status' => 'required|in:present,absent,late,permission,off',
             'rows.*.notes' => 'nullable|string|max:500',
         ]);
 
@@ -331,6 +335,10 @@ class AttendanceController extends Controller
                 $row['date'] = $data['date'];
                 $row['check_in'] = $row['check_in'] ?: null;
                 $row['check_out'] = $row['check_out'] ?: null;
+                if ($row['status'] === 'off') {
+                    $row['check_in'] = null;
+                    $row['check_out'] = null;
+                }
                 return $this->attendanceService->createManualEntry($row, auth()->id());
             });
         });
