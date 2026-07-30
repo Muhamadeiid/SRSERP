@@ -21,59 +21,32 @@
         background: #fafafa;
         font-family: Arial, sans-serif;
       }
-      .srs-boot-stage {
-        position: relative;
-        width: 100%;
-        height: clamp(130px, 18vw, 220px);
-        border-bottom: 2px solid #cbd5e1;
-        perspective: 900px;
-      }
-      .srs-boot-train {
-        position: absolute;
-        left: 50%;
-        bottom: 0;
-        width: clamp(280px, 38vw, 560px);
-        transform-origin: 88% 92%;
-        animation: srs-boot-approach 5.2s cubic-bezier(.42,.05,.22,1) infinite;
-        will-change: transform, opacity;
-      }
-      .srs-boot-train img {
-        display: block;
-        width: 100%;
-        height: auto;
-        filter: drop-shadow(0 6px 5px rgb(15 23 42 / 20%));
+      .srs-boot-content { text-align: center; }
+      .srs-boot-spinner {
+        width: 34px;
+        height: 34px;
+        margin: 0 auto;
+        border: 3px solid #dbe4ea;
+        border-top-color: #005782;
+        border-radius: 50%;
+        animation: srs-boot-spin .75s linear infinite;
       }
       .srs-boot-label {
-        position: absolute;
-        top: calc(50% + 130px);
-        width: 100%;
+        margin-top: 16px;
         color: #64748b;
         font-size: 12px;
         font-weight: 600;
-        text-align: center;
       }
-      @keyframes srs-boot-approach {
-        0% { opacity: .55; transform: translate3d(-50%,-42px,-160px) scale(.1); }
-        8% { opacity: .8; }
-        20%, 78% { opacity: 1; }
-        78% { transform: translate3d(calc(42vw + 220px),7px,0) scale(1.05); }
-        96% { opacity: 1; transform: translate3d(calc(70vw + 760px),18px,0) scale(1.35); }
-        100% { opacity: 0; transform: translate3d(calc(70vw + 760px),18px,0) scale(1.35); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .srs-boot-train { animation: none; transform: translateX(-50%) scale(.7); }
-      }
+      @keyframes srs-boot-spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
     <div id="root">
       <div class="srs-boot-loader" aria-label="Loading">
-        <div class="srs-boot-stage">
-          <div class="srs-boot-train">
-            <img src="/train-loader.png?v=f942be7" alt="" />
-          </div>
+        <div class="srs-boot-content">
+          <div class="srs-boot-spinner" aria-hidden="true"></div>
+          <div class="srs-boot-label">Loading...</div>
         </div>
-        <div class="srs-boot-label">Loading SRS ERP...</div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

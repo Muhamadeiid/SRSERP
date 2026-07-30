@@ -89,13 +89,9 @@ const ComingSoon = ({ title }) => (
 
 const PageFallback = () => (
   <div className="min-h-screen bg-neutral-50 flex items-center justify-center overflow-hidden">
-    <div className="w-full">
-      <div className="srs-loading-track" aria-hidden="true">
-        <div className="srs-loading-train">
-          <img src="/train-loader.png?v=17a2189" alt="" className="srs-loading-train-image" />
-        </div>
-      </div>
-      <p className="mt-4 text-center text-xs font-semibold text-neutral-400">Loading page...</p>
+    <div className="text-center">
+      <div className="srs-loading-spinner mx-auto" aria-hidden="true" />
+      <p className="mt-4 text-xs font-semibold text-neutral-400">Loading...</p>
     </div>
   </div>
 )
