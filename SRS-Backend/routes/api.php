@@ -78,6 +78,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/depot-manager', [UserController::class, 'depotManager']);
     Route::get('/users/hr-officer',    [UserController::class, 'hrOfficer']);
 
+    // CCP daily attendance: limited to Intervention/Mainline employees.
+    Route::get('/ccp/attendance',        [AttendanceController::class, 'ccpDaily']);
+    Route::post('/ccp/attendance/manual',[AttendanceController::class, 'ccpManual']);
+
     Route::get('/maintenance-tasks/options', [MaintenanceTaskController::class, 'options']);
     Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);
     Route::post('/maintenance-tasks', [MaintenanceTaskController::class, 'store']);

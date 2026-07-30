@@ -640,6 +640,7 @@ function PermissionMatrixPanel() {
     manager:       { label: 'Manager',       bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
     hr:            { label: 'HR',            bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' },
     staff:         { label: 'Staff',         bg: 'bg-neutral-50',text: 'text-neutral-600',dot: 'bg-neutral-400' },
+    ccp:           { label: 'CCP',           bg: 'bg-cyan-50',   text: 'text-cyan-700',  dot: 'bg-cyan-400' },
     procurement:   { label: 'Procurement',   bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500' },
     ehs:           { label: 'EHS',           bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
   }

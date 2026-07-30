@@ -238,6 +238,86 @@ class AttendanceController extends Controller
         }
     }
 
+    public function ccpDaily(Request $request)
+    {
+        $this->ensureCcpAccess();
+        $date = $request->validate(['date' => 'required|date'])['date'];
+
+        $employees = $this->ccpEmployees()
+            ->orderBy('name')
+            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location']);
+
+        $records = \App\Models\Attendance::whereDate('date', $date)
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->get()
+            ->keyBy('employee_id');
+
+        $leaveIds = LeaveRequest::query()
+            ->where('type', 'lrf')
+            ->where('status', 'approved')
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        return response()->json([
+            'success' => true,
+            'date' => $date,
+            'data' => $employees->map(function ($employee) use ($records, $leaveIds) {
+                $employee->setAttribute('attendance', $records->get($employee->id));
+                $employee->setAttribute('on_leave', $leaveIds->has((int) $employee->id));
+                return $employee;
+            })->values(),
+        ]);
+    }
+
+    public function ccpManual(Request $request)
+    {
+        $this->ensureCcpAccess();
+        $data = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'date' => 'required|date',
+            'check_in' => 'nullable|date_format:H:i',
+            'check_out' => 'nullable|date_format:H:i',
+            'status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        abort_unless(
+            $this->ccpEmployees()->whereKey($data['employee_id'])->exists(),
+            403,
+            'CCP can only manage CM Intervention or Mainline employees.'
+        );
+
+        $data['check_in'] = $data['check_in'] ?: null;
+        $data['check_out'] = $data['check_out'] ?: null;
+        $attendance = $this->attendanceService->createManualEntry($data, auth()->id());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Daily attendance saved.',
+            'data' => $attendance->load(['employee', 'creator']),
+        ]);
+    }
+
+    private function ensureCcpAccess(): void
+    {
+        abort_unless(auth()->user()?->role === 'ccp', 403, 'CCP access only.');
+    }
+
+    private function ccpEmployees()
+    {
+        return Employee::active()->where(function ($query) {
+            $query->whereRaw("LOWER(TRIM(COALESCE(department, ''))) IN (?, ?, ?)", [
+                'cm (intervention)',
+                'cm intervention',
+                'cm_intervention',
+            ])->orWhereRaw("LOWER(TRIM(COALESCE(work_location, ''))) = ?", ['mainline']);
+        });
+    }
+
     /**
      * Get attendance summary for an employee
      *

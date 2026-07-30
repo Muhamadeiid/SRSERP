@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 const Login             = lazy(() => import('./pages/Login'))
 const DashboardPage     = lazy(() => import('./pages/Dashboard'))
@@ -23,6 +24,7 @@ const LeaveMasterList   = lazy(() => import('./pages/LeaveMasterList'))
 const WeeklyLeaveReportPage = lazy(() => import('./pages/WeeklyLeaveReportPage'))
 const ResignationsPage  = lazy(() => import('./pages/ResignationsPage'))
 const InternalSalaryPage = lazy(() => import('./pages/InternalSalaryPage'))
+const CcpAttendancePage = lazy(() => import('./pages/CcpAttendancePage'))
 const SaturdayRotationPage = lazy(() => import('./pages/SaturdayRotationPage'))
 const MaintenanceLayout    = lazy(() => import('./layout/MaintenanceLayout'))
 const MaintenanceDashboard = lazy(() => import('./pages/MaintenanceDashboard'))
@@ -65,6 +67,11 @@ const ComingSoon = ({ title }) => (
 const PageFallback = () => (
   <div className="min-h-screen bg-neutral-50" />
 )
+
+const AttendanceByRole = () => {
+  const role = useSelector(state => state.auth.user?.role)
+  return role === 'ccp' ? <CcpAttendancePage /> : <AttendanceTab />
+}
 
 export default function App() {
   return (
@@ -157,8 +164,8 @@ export default function App() {
 
           {/* HR Full only */}
           <Route path="attendance" element={
-            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
-              <AttendanceTab />
+            <ProtectedRoute roles={[...HR_FULL_ROLES, 'ccp']} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <AttendanceByRole />
             </ProtectedRoute>
           } />
           <Route path="saturday-rotation" element={

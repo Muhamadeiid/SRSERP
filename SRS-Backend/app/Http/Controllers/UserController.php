@@ -37,7 +37,7 @@ class UserController extends Controller
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users',
             'password'        => 'required|string|min:8',
-            'role'            => 'required|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'role'            => 'required|in:admin,depot_manager,manager,staff,ccp,hr,procurement,ehs',
             'department'      => [
                 'required',
                 Rule::exists('lookups', 'key')->where(
@@ -68,7 +68,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
-            'role'            => 'sometimes|in:admin,depot_manager,manager,staff,hr,procurement,ehs',
+            'role'            => 'sometimes|in:admin,depot_manager,manager,staff,ccp,hr,procurement,ehs',
             'department'      => [
                 'sometimes',
                 Rule::exists('lookups', 'key')->where(

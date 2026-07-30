@@ -50,9 +50,9 @@ const NAV_GROUPS = [
     ],
   },
   {
-    key: 'attendance', label: 'Attendance', icon: ClipboardList, hrOnly: true,
+    key: 'attendance', label: 'Attendance', icon: ClipboardList,
     items: [
-      { label: 'Attendance',        path: '/human-resources/attendance',         icon: Clock,           hrOnly: true },
+      { label: 'Attendance',        path: '/human-resources/attendance',         icon: Clock,           roles: ['admin','depot_manager','hr','ccp'] },
       { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,    hrOnly: true },
       { label: 'Internal Salary',   path: '/human-resources/internal-salary',   icon: FileSpreadsheet, hrOnly: true },
       { label: 'Calendar',          path: '/human-resources/calendar',           icon: Calendar,        roles: ['admin','depot_manager','manager','hr'] },

@@ -21,6 +21,14 @@ api.interceptors.request.use((config) => {
 })
 
 export const attendanceService = {
+  getCcpDaily: async (date) => {
+    const response = await api.get('/ccp/attendance', { params: { date } })
+    return response.data
+  },
+  saveCcpDaily: async (data) => {
+    const response = await api.post('/ccp/attendance/manual', data)
+    return response.data
+  },
   /**
    * Upload biometric file
    */
