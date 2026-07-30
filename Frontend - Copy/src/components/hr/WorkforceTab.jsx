@@ -369,20 +369,30 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
               <div className="flex items-center gap-2 text-xs text-neutral-400"><Loader2 className="w-3 h-3 animate-spin" /> Loading…</div>
             ) : balEdit ? (
               <div className="space-y-2">
-                <div className="flex gap-2 pb-1">
+                <div className="grid grid-cols-3 gap-2 pb-1">
                   <button
                     type="button"
                     onClick={() => setBalForm(f => ({ ...f, annual: 15, annual_remaining: 15, casual: 7, casual_remaining: 7 }))}
-                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                    className="px-2 py-1.5 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
                   >
-                    First year 15d
+                    15 days
+                    <span className="block mt-0.5 text-[8px] font-medium opacity-70">6+ months</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setBalForm(f => ({ ...f, annual: 21, annual_remaining: 21, casual: 7, casual_remaining: 7 }))}
-                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-neutral-50 text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
+                    className="px-2 py-1.5 text-[10px] font-bold rounded-lg bg-neutral-50 text-neutral-600 border border-neutral-200 hover:bg-neutral-100"
                   >
-                    Standard 21/7
+                    21 days
+                    <span className="block mt-0.5 text-[8px] font-medium opacity-70">1+ year</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBalForm(f => ({ ...f, annual: 30, annual_remaining: 30, casual: 7, casual_remaining: 7 }))}
+                    className="px-2 py-1.5 text-[10px] font-bold rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                  >
+                    30 days
+                    <span className="block mt-0.5 text-[8px] font-medium opacity-70">10+ years / age 50</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-[1fr_82px_82px] gap-2 items-end px-1">
@@ -397,10 +407,12 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
                   <div key={totalKey} className="grid grid-cols-[1fr_82px_82px] gap-2 items-center">
                     <span className="text-xs text-secondary-700">{label}</span>
                     <input
-                      type="number" min={0} max={365} step={0.25}
+                      type={totalKey === 'annual' ? 'text' : 'number'}
+                      min={0} max={365} step={0.25}
                       value={balForm[totalKey] ?? def}
+                      readOnly={totalKey === 'annual'}
                       onChange={e => setBalForm(f => ({ ...f, [totalKey]: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-sm text-center border border-neutral-200 rounded-lg px-2 py-1 outline-none focus:border-primary/50"
+                      className={`w-full text-sm text-center border border-neutral-200 rounded-lg px-2 py-1 outline-none focus:border-primary/50 ${totalKey === 'annual' ? 'bg-neutral-50 cursor-default' : ''}`}
                     />
                     <input
                       type="number" min={0} max={balForm[totalKey] ?? def} step={0.25}

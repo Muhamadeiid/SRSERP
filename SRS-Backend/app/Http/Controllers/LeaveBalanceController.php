@@ -125,7 +125,7 @@ class LeaveBalanceController extends Controller
         }
 
         $v = $request->validate([
-            'annual' => 'nullable|numeric|min:0|max:365',
+            'annual' => 'nullable|numeric|in:15,21,30',
             'casual' => 'nullable|numeric|min:0|max:365',
             'sick'   => 'nullable|numeric|min:0|max:365',
             'early'  => 'nullable|numeric|min:0|max:365',
