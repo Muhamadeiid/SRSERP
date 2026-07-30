@@ -255,14 +255,26 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user)
     {
-        $request->validate([
+        $data = $request->validate([
             'password'              => 'required|string|min:8|confirmed',
             'password_confirmation' => 'required',
+            'target_user_id'         => 'required|integer',
+            'target_email'           => 'required|email',
         ]);
 
-        $user->update(['password' => Hash::make($request->password)]);
+        if ((int) $data['target_user_id'] !== (int) $user->id
+            || strtolower(trim($data['target_email'])) !== strtolower(trim($user->email))) {
+            return response()->json([
+                'message' => 'The selected account changed. No password was updated. Please reopen the account and try again.',
+            ], 409);
+        }
 
-        return response()->json(['message' => 'Password reset successfully']);
+        $user->update(['password' => Hash::make($data['password'])]);
+
+        return response()->json([
+            'message' => 'Password reset successfully',
+            'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+        ]);
     }
 
     public function destroy(User $user)

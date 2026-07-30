@@ -98,7 +98,15 @@ export default function Users() {
 
   const handleReset = async e => {
     e.preventDefault(); setSaving(true); setError(null)
-    try { await api.post(`/users/${selected.id}/reset-password`, form); closeModal() }
+    const target = selected
+    try {
+      await api.post(`/users/${target.id}/reset-password`, {
+        ...form,
+        target_user_id: target.id,
+        target_email: target.email,
+      })
+      closeModal()
+    }
     catch (err) { setError(err.response?.data?.message || 'Failed to reset password') }
     finally { setSaving(false) }
   }
@@ -393,7 +401,7 @@ export default function Users() {
 
       {/* Reset Password */}
       {modal === 'reset' && (
-        <Modal title="Reset Password" subtitle={selected?.name} onClose={closeModal}>
+        <Modal title="Reset Password" subtitle={`${selected?.name} - ${selected?.email}`} onClose={closeModal}>
           <form onSubmit={handleReset} className="space-y-4">
             {error && <Alert>{error}</Alert>}
             <Field label="New Password">
