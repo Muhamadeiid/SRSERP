@@ -99,6 +99,7 @@ if ($frontendNeeded) {
 
     if ($frontendBuilt) {
         Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
+        Remove-Item (Join-Path $backend 'public\train-loader.png') -Force -EA SilentlyContinue
         Copy-Item (Join-Path $dist '*') (Join-Path $backend 'public') -Recurse -Force
         Log "Frontend built and deployed from latest source"
     } else {
@@ -115,6 +116,7 @@ if ($frontendNeeded) {
                 $tmp
             }
             Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
+            Remove-Item (Join-Path $backend 'public\train-loader.png') -Force -EA SilentlyContinue
             Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
             Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
             Log "Frontend replaced from Release fallback"
