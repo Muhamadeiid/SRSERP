@@ -72,7 +72,7 @@ const PageFallback = () => (
 
 const AttendanceByRole = () => {
   const role = useSelector(state => state.auth.user?.role)
-  return role === 'ccp' ? <CcpAttendancePage /> : <AttendanceTab />
+  return String(role ?? '').trim().toLowerCase() === 'ccp' ? <CcpAttendancePage /> : <AttendanceTab />
 }
 
 const AuthSync = () => {

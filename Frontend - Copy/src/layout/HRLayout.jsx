@@ -159,7 +159,7 @@ export default function HRLayout() {
   }
 
   // ── filter nav by role ───────────────────────────────────────
-  const role      = user?.role ?? 'staff'
+  const role      = String(user?.role ?? 'staff').trim().toLowerCase()
   const isHRFull  = HR_FULL_ROLES_NAV.includes(role) || role === 'hr'
 
   const canSee = (item) => {

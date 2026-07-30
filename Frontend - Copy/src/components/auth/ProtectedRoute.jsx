@@ -14,7 +14,8 @@ import { Navigate }    from 'react-router-dom'
  */
 export function canAccess(user, roles, departments) {
   if (!user) return false
-  const roleOk = !roles || roles.length === 0 || roles.includes(user.role)
+  const userRole = String(user.role ?? '').trim().toLowerCase()
+  const roleOk = !roles || roles.length === 0 || roles.some(role => String(role).toLowerCase() === userRole)
   const deptOk = !departments || departments.length === 0 || departments.includes(user.department)
   // if both arrays provided → user must satisfy at least one
   if (roles?.length && departments?.length) return roleOk || deptOk
