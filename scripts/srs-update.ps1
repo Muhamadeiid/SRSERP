@@ -138,14 +138,16 @@ if ($frontendNeeded) {
         Log "Frontend source changed - building latest source..."
         $env:PATH = "$nodeDir;$env:PATH"
         Set-Location $frontend
-        if (-not (Test-Path (Join-Path $frontend 'node_modules'))) {
-            Log "Installing frontend packages..."
-            & $npm install --no-audit --no-fund 2>&1 | Select-Object -Last 10 | ForEach-Object { Log "  $_" }
+        Log "Synchronizing frontend packages..."
+        & $npm install --no-audit --no-fund 2>&1 | Select-Object -Last 10 | ForEach-Object { Log "  $_" }
+        if ($LASTEXITCODE -ne 0) {
+            Log "ERROR: npm install failed; frontend build will not run."
+        } else {
+            $env:VITE_API_URL = '/api'
+            $env:VITE_API_BASE = '/api'
+            & $npm run build 2>&1 | Select-Object -Last 15 | ForEach-Object { Log "  $_" }
+            $frontendBuilt = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $dist 'index.html'))
         }
-        $env:VITE_API_URL = '/api'
-        $env:VITE_API_BASE = '/api'
-        & $npm run build 2>&1 | Select-Object -Last 15 | ForEach-Object { Log "  $_" }
-        $frontendBuilt = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $dist 'index.html'))
         Set-Location $bd
     }
 
