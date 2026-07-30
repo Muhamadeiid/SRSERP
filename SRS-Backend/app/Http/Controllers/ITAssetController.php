@@ -287,6 +287,7 @@ class ITAssetController extends Controller
         $sheet   = $spreadsheet->getActiveSheet();
         $rows    = $sheet->toArray(null, true, true, false); // 0-indexed
         $headers = [];
+        $subHeaders = [];
         $dataStart = 0;
 
         // Auto-detect header row (looks for the row that contains "Asset no." + "Name")
@@ -295,6 +296,18 @@ class ITAssetController extends Controller
             if (in_array('asset no.', $normalized, true) || in_array('asset no', $normalized, true)) {
                 $headers   = $row;
                 $dataStart = $idx + 1;
+                $candidateSubHeaders = $rows[$dataStart] ?? [];
+                $hasGroupedHeaders = collect($row)->contains(
+                    fn ($value) => in_array(strtolower(trim((string) $value)), ['quarter check', 'scrap'], true)
+                );
+                $hasSubHeaderLabels = collect($candidateSubHeaders)->contains(
+                    fn ($value) => in_array(strtolower(trim((string) $value)), ['date', 'report'], true)
+                        || str_contains(strtolower(trim((string) $value)), '2026')
+                );
+                if ($hasGroupedHeaders && $hasSubHeaderLabels) {
+                    $subHeaders = $candidateSubHeaders;
+                    $dataStart++;
+                }
                 break;
             }
         }
@@ -306,7 +319,7 @@ class ITAssetController extends Controller
             ], 422);
         }
 
-        $map = $this->buildColumnMap($headers);
+        $map = $this->buildColumnMap($headers, $subHeaders);
 
         $imported = 0; $updated = 0; $skipped = 0; $errors = []; $skippedRows = [];
         $currentItem = null;   // forward-fill: the Item cell is only set on the first row of each group
@@ -417,7 +430,7 @@ class ITAssetController extends Controller
 
     // ── helpers ──────────────────────────────────────────────────────
 
-    private function buildColumnMap(array $headers): array
+    private function buildColumnMap(array $headers, array $subHeaders = []): array
     {
         $key = fn ($h) => is_string($h) ? strtolower(preg_replace('/\s+/', ' ', trim($h))) : '';
         $lookup = [];
@@ -426,6 +439,15 @@ class ITAssetController extends Controller
         $find = function (...$candidates) use ($lookup) {
             foreach ($candidates as $c) {
                 if (array_key_exists(strtolower($c), $lookup)) return $lookup[strtolower($c)];
+            }
+            return null;
+        };
+        $quarterGroup = $find('quarter check');
+        $scrapGroup = $find('scrap');
+        $findSubAfter = function (?int $start, string $label) use ($subHeaders): ?int {
+            if ($start === null) return null;
+            for ($i = $start; $i < count($subHeaders); $i++) {
+                if (strtolower(trim((string) ($subHeaders[$i] ?? ''))) === $label) return $i;
             }
             return null;
         };
@@ -441,13 +463,14 @@ class ITAssetController extends Controller
             'reg_date'      => $find('registration date', 'reg. date', 'reg date'),
             'account_reg'   => $find('account register', 'acct. reg.', 'account registration'),
             'user'          => $find('user'),
-            'frequency'     => $find('m frequency', 'maintenance frequency', 'frequency'),
-            'activity'      => $find('activity'),
-            'iq'            => $find('2026 iq', '2025 iq', 'iq'),
-            'check_date'    => $find('date', 'check date'),
-            'report'        => $find('report'),
+            'frequency'     => $find('m frequency', 'pm frequency', 'maintenance frequency', 'frequency'),
+            'activity'      => $find('activity', 'activty'),
+            'iq'            => $find('2026 iq', '2025 iq', 'iq', 'quarter check'),
+            'check_date'    => $find('date', 'check date') ?? $findSubAfter($quarterGroup, 'date'),
+            'report'        => $find('report') ?? $findSubAfter($quarterGroup, 'report'),
             'quarter_date'  => $find('quarter check date'),
-            'scrap_report'  => $find('scrap report'),
+            'scrap_date'    => $findSubAfter($scrapGroup, 'date'),
+            'scrap_report'  => $find('scrap report') ?? $findSubAfter($scrapGroup, 'report'),
         ];
     }
 
@@ -478,10 +501,13 @@ class ITAssetController extends Controller
         $reportStr = strtolower((string) $report);
         $scrapStr  = trim((string) $scrapRep);
         $isScrap   = $scrapStr !== '' || str_contains($reportStr, 'scrap');
+        $iqMarker  = strtolower(trim((string) $iq));
+        $isFailedCheck = in_array($iqMarker, ['x', '✗', '×', 'no', 'fail', 'failed'], true)
+            || str_contains($iqMarker, '✗');
 
         if ($isScrap) {
             $condition = 'Lost'; $status = 'Lost';
-        } elseif ($iq !== null && str_contains((string) $iq, '✗')) {
+        } elseif ($isFailedCheck) {
             $condition = 'Damaged'; $status = 'Damaged';
         } elseif (!empty($user)) {
             $condition = 'Good'; $status = 'Assigned';
@@ -492,6 +518,7 @@ class ITAssetController extends Controller
         if (($cell('check_date') ?? '') !== '') $noteBits[] = 'Last check: '.trim((string) $cell('check_date'));
         if (($report ?? '') !== '')             $noteBits[] = 'Report: '.trim((string) $report);
         if (($cell('quarter_date') ?? '') !== '') $noteBits[] = 'Quarter check: '.trim((string) $cell('quarter_date'));
+        if (($cell('scrap_date') ?? '') !== '')   $noteBits[] = 'Scrap date: '.trim((string) $cell('scrap_date'));
         if ($scrapStr !== '')                    $noteBits[] = 'Scrap report: '.$scrapStr;
 
         return [
