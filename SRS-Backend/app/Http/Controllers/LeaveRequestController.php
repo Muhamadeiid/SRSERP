@@ -48,14 +48,22 @@ class LeaveRequestController extends Controller
             'employee.userManager:id,name',
         ]);
 
-        if (in_array($user->role, ['admin', 'depot_manager', 'hr'])) {
+        if (
+            in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
+            || $user->hasPermission('leaves.approve_hr')
+        ) {
             // Full visibility.
-        } elseif ($user->role === 'manager') {
-            $myEmp = Employee::active()->where('user_id', $user->id)->first();
-            $empIds = $myEmp ? Employee::active()->where('direct_manager_id', $myEmp->id)->pluck('id') : collect();
-            $query->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('employee_id', $empIds));
         } else {
-            $query->where('user_id', $user->id);
+            $myEmp = Employee::active()->where('user_id', $user->id)->first();
+            $empIds = Employee::active()
+                ->where(function ($employees) use ($user, $myEmp) {
+                    $employees->where('user_manager_id', $user->id);
+                    if ($myEmp) {
+                        $employees->orWhere('direct_manager_id', $myEmp->id);
+                    }
+                })
+                ->pluck('id');
+            $query->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('employee_id', $empIds));
         }
 
         if ($request->filled('status')) {
@@ -312,6 +320,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         if (
             !in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
+            && !$user->hasPermission('leaves.approve_hr')
             && (int) $leaveRequest->user_id !== (int) $user->id
             && !$this->isDirectManager($leaveRequest, $user->id)
         ) {
@@ -426,7 +435,7 @@ class LeaveRequestController extends Controller
     public function hrApprove(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();
-        if (!in_array($user->role, ['admin', 'hr'])) {
+        if (!in_array($user->role, ['admin', 'hr'], true) && !$user->hasPermission('leaves.approve_hr')) {
             return response()->json(['success' => false, 'message' => 'Only HR can approve this step'], 403);
         }
         $employee = $leaveRequest->employee_id
@@ -497,7 +506,8 @@ class LeaveRequestController extends Controller
     public function reject(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();
-        $canHrAct = $user->role === 'hr' && $leaveRequest->status === 'manager_approved';
+        $canHrAct = ($user->role === 'hr' || $user->hasPermission('leaves.approve_hr'))
+            && $leaveRequest->status === 'manager_approved';
         if (!in_array($user->role, ['admin', 'depot_manager']) && !$this->isDirectManager($leaveRequest, $user->id) && !$canHrAct) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }

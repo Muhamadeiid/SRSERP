@@ -1867,7 +1867,7 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, onUpdated, focusApproval = false }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
   const { departments } = useLookups()
   const resolveDept = (raw) => {
     if (!raw) return ''
@@ -1924,7 +1924,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   if (!req) return null
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
-  const canHrApprove = userRole === 'admin' || userRole === 'hr'
+  const canHrApprove = userRole === 'admin' || userRole === 'hr' || hasHrApprovalAccess
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status)
     && req.user_id != null
@@ -1935,10 +1935,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const awaitingHrApproval = req.status === 'manager_approved' || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
-    && ['hr', 'depot_manager', 'admin'].includes(userRole)
+    && (canHrApprove || isDepotAdmin)
   const canEditOtr = !isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
-    && (isDirectManager || ['hr', 'depot_manager', 'admin'].includes(userRole))
+    && (isDirectManager || canHrApprove || isDepotAdmin)
   const canViewLeaveBalance = isLRF
     && req.available_balance !== null
     && req.available_balance !== undefined
@@ -2328,8 +2328,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
 // ── main page ─────────────────────────────────────────────────
 export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const { user }      = useSelector(s => s.auth)
+  const permissions   = Array.isArray(user?.permissions) ? user.permissions : []
   const isDepotAdmin  = user?.role === 'admin' || user?.role === 'depot_manager'
-  const isHrApprover  = user?.role === 'admin' || user?.role === 'hr'
+  const isHrApprover  = user?.role === 'admin'
+    || user?.role === 'hr'
+    || permissions.includes('leaves.approve_hr')
   const canManagePrintArchive = user?.role === 'admin' || user?.role === 'hr'
   const isManager     = isDepotAdmin  // keep for compat
   const location      = useLocation()
@@ -2371,9 +2374,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   // Pending actions: each role sees the stage it can move forward.
   const requestHasNoDirectManager = (req) =>
     !req.employee?.user_manager_id && !req.employee?.direct_manager_id
+  const isDirectManagerOf = (req) => {
+    if (String(req.employee?.user_manager_id || '') === String(user?.id || '')) return true
+    const mgr = req.employee?.direct_manager || req.employee?.directManager
+    return String(mgr?.user_id || '') === String(user?.id || '')
+  }
   const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
   const pending = typeFiltered.filter(r =>
-    (r.status === 'pending' && (isDepotAdmin || user?.role === 'manager' || (isHrApprover && requestHasNoDirectManager(r)))) ||
+    (r.status === 'pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
     (r.status === 'manager_approved' && isHrApprover) ||
     (r.status === 'hr_approved' && isDepotAdmin)
   )
@@ -2395,11 +2403,6 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
   // Check if current user is the direct manager of a given request's employee
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
-  const isDirectManagerOf = (req) => {
-    const mgr = req.employee?.direct_manager || req.employee?.directManager
-    return mgr?.user_id === user?.id
-  }
-
   // Single row renderer used by both Active and History sections
   const renderRequestRow = (r, { showArchiveAction = false, showRestoreAction = false } = {}) => (
     <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-neutral-50 transition-colors">
@@ -2677,7 +2680,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       }
 
       {/* Pending approvals — manager / depot_manager only */}
-      {(isDepotAdmin || isHrApprover || user?.role === 'manager') && pending.length > 0 && (
+      {pending.length > 0 && (
         <div id="pending-approvals" className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden scroll-mt-6">
           <div className="px-6 py-4 border-b border-amber-100 bg-amber-50 flex items-center gap-2">
             <Bell className="w-4 h-4 text-amber-500" />
@@ -2736,7 +2739,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve & Finalize</button>
                   )}
                   {/* Regular manager: pending → Approve (manager step) */}
-                  {r.status === 'pending' && user?.role === 'manager' && isDirectManagerOf(r) && (
+                  {r.status === 'pending' && isDirectManagerOf(r) && (
                     <button onClick={() => handleManagerApprove(r.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
                   )}
@@ -2975,6 +2978,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           userDepartment={user?.department}
           currentUserId={user?.id}
           isDirectManager={isDirectManagerOf(viewReq)}
+          hasHrApprovalAccess={isHrApprover}
           onUpdated={fetchRequests}
           focusApproval={focusApproval}
         />
