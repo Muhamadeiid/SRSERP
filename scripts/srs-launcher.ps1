@@ -41,6 +41,12 @@ if ($mysqlRunning) {
     }
 }
 
+# Keep config, routes, events, and views cached after every Windows restart.
+# This generates cache files only and never changes database records.
+Log "Ensuring Laravel production caches are ready..."
+Set-Location $bd
+& $php artisan optimize 2>&1 | ForEach-Object { Log "  $_" }
+
 if ($phpRunning) {
     Log "PHP server already running - skipping"
 } else {

@@ -120,12 +120,12 @@ if ($frontendNeeded) {
     }
 }
 
-# Always clear Laravel caches so config/route changes take effect
+# Rebuild Laravel's production caches after every update. This only writes
+# generated files under bootstrap/cache; it does not modify application data.
 Set-Location $backend
-Log "Clearing Laravel caches..."
-& $php artisan config:clear 2>&1 | ForEach-Object { Log "  $_" }
-& $php artisan route:clear 2>&1 | ForEach-Object { Log "  $_" }
-& $php artisan cache:clear 2>&1 | ForEach-Object { Log "  $_" }
+Log "Rebuilding Laravel production caches..."
+& $php artisan optimize:clear 2>&1 | ForEach-Object { Log "  $_" }
+& $php artisan optimize 2>&1 | ForEach-Object { Log "  $_" }
 
 # Restart the PHP HTTP server
 Log "Restarting PHP server..."
