@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Check, ClipboardPaste, Loader2, RefreshCw, Save, Search, X } from 'lucide-react'
+import { CalendarDays, Check, Loader2, RefreshCw, Save, Search } from 'lucide-react'
 import { attendanceService } from '../services/Attendanceservice'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -14,8 +14,6 @@ export default function CcpAttendancePage() {
   const [savingId, setSavingId] = useState(null)
   const [dirtyIds, setDirtyIds] = useState([])
   const [bulkSaving, setBulkSaving] = useState(false)
-  const [pasteOpen, setPasteOpen] = useState(false)
-  const [pasteText, setPasteText] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -92,40 +90,36 @@ export default function CcpAttendancePage() {
     return aliases[raw] || 'present'
   }
 
-  const applyPaste = () => {
-    let rows = pasteText.split(/\r?\n/).map(line => line.split('\t').map(cell => cell.trim())).filter(row => row.some(Boolean))
+  const handleGridPaste = (event, startRow, startColumn) => {
+    event.preventDefault()
+    const rows = event.clipboardData.getData('text')
+      .split(/\r?\n/)
+      .map(line => line.split('\t'))
+      .filter((row, index, all) => index < all.length - 1 || row.some(Boolean))
     if (!rows.length) return
-    if (rows[0].some(cell => /employee|name|ibs|punch|check.?in/i.test(cell))) rows = rows.slice(1)
 
-    const employeeByKey = new Map()
-    employees.forEach(employee => {
-      ;[employee.id, employee.ibs_code, employee.punch_code, employee.name].filter(Boolean)
-        .forEach(key => employeeByKey.set(String(key).trim().toLowerCase(), employee))
-    })
-    const hasEmployeeColumn = rows.some(row => employeeByKey.has(String(row[0] ?? '').toLowerCase()))
+    const columns = ['check_in', 'check_out', 'status', 'notes']
     const changed = []
     const nextDrafts = { ...drafts }
 
-    rows.forEach((cells, index) => {
-      const employee = hasEmployeeColumn
-        ? employeeByKey.get(String(cells[0] ?? '').toLowerCase())
-        : filtered[index]
+    rows.forEach((cells, rowOffset) => {
+      const employee = filtered[startRow + rowOffset]
       if (!employee || employee.on_leave) return
-      const offset = hasEmployeeColumn ? 1 : 0
-      nextDrafts[employee.id] = {
-        check_in: parseTime(cells[offset]),
-        check_out: parseTime(cells[offset + 1]),
-        status: parseStatus(cells[offset + 2]),
-        notes: cells[offset + 3] || '',
-      }
+      const rowDraft = { ...(nextDrafts[employee.id] || {}) }
+      cells.forEach((cell, columnOffset) => {
+        const key = columns[startColumn + columnOffset]
+        if (!key) return
+        if (key === 'check_in' || key === 'check_out') rowDraft[key] = parseTime(cell)
+        else if (key === 'status') rowDraft[key] = parseStatus(cell)
+        else rowDraft[key] = String(cell ?? '').trim()
+      })
+      nextDrafts[employee.id] = rowDraft
       changed.push(employee.id)
     })
 
     setDrafts(nextDrafts)
     setDirtyIds(current => [...new Set([...current, ...changed])])
-    setMessage(`${changed.length} rows pasted. Review them, then click Save All.`)
-    setPasteOpen(false)
-    setPasteText('')
+    setMessage(`${changed.length} rows pasted into the table. Review, then click Save All.`)
   }
 
   const save = async employee => {
@@ -137,6 +131,9 @@ export default function CcpAttendancePage() {
         employee_id: employee.id,
         date,
         ...drafts[employee.id],
+        check_in: parseTime(drafts[employee.id]?.check_in),
+        check_out: parseTime(drafts[employee.id]?.check_out),
+        status: parseStatus(drafts[employee.id]?.status),
       })
       setMessage(`${employee.name} saved successfully.`)
       setDirtyIds(current => current.filter(id => id !== employee.id))
@@ -155,7 +152,13 @@ export default function CcpAttendancePage() {
     try {
       const result = await attendanceService.saveCcpDailyBulk({
         date,
-        rows: dirtyIds.map(employeeId => ({ employee_id: employeeId, ...drafts[employeeId] })),
+        rows: dirtyIds.map(employeeId => ({
+          employee_id: employeeId,
+          ...drafts[employeeId],
+          check_in: parseTime(drafts[employeeId]?.check_in),
+          check_out: parseTime(drafts[employeeId]?.check_out),
+          status: parseStatus(drafts[employeeId]?.status),
+        })),
       })
       setMessage(result.message || `${dirtyIds.length} attendance records saved.`)
       await load()
@@ -174,9 +177,6 @@ export default function CcpAttendancePage() {
           <p className="mt-0.5 text-sm text-neutral-400">CM Intervention and Mainline employees only</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setPasteOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-bold text-neutral-600">
-            <ClipboardPaste className="h-4 w-4" /> Paste from Excel
-          </button>
           <button type="button" onClick={saveAll} disabled={!dirtyIds.length || bulkSaving} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-bold text-white disabled:opacity-40">
             {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save All ({dirtyIds.length})
           </button>
@@ -185,23 +185,6 @@ export default function CcpAttendancePage() {
           </button>
         </div>
       </div>
-
-      {pasteOpen && (
-        <div className="border border-blue-200 bg-blue-50 p-4">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold text-secondary-700">Paste rows from Excel</p>
-              <p className="text-xs text-neutral-500">Use: Employee/IBS/Punch | Check In | Check Out | Status | Notes. You can also paste only Check In and Check Out in the same row order.</p>
-            </div>
-            <button type="button" onClick={() => setPasteOpen(false)} title="Close"><X className="h-4 w-4" /></button>
-          </div>
-          <textarea autoFocus value={pasteText} onChange={event => setPasteText(event.target.value)} rows={7} placeholder={'432558\t08:00\t17:00\tPresent\t\n1022\t08:10\t17:05\tLate\tTraffic'} className="w-full resize-y border border-blue-200 bg-white p-3 font-mono text-sm outline-none focus:border-primary" />
-          <div className="mt-3 flex justify-end gap-2">
-            <button type="button" onClick={() => setPasteOpen(false)} className="h-9 px-3 text-sm font-bold text-neutral-500">Cancel</button>
-            <button type="button" onClick={applyPaste} disabled={!pasteText.trim()} className="h-9 bg-primary px-4 text-sm font-bold text-white disabled:opacity-40">Apply to Table</button>
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-3 border-y border-neutral-200 bg-white px-4 py-3">
         <label className="flex items-center gap-2 text-sm font-bold text-secondary-700">
@@ -228,8 +211,8 @@ export default function CcpAttendancePage() {
       {error && <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
       {message && <div className="flex items-center gap-2 border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"><Check className="h-4 w-4" />{message}</div>}
 
-      <div className="overflow-x-auto border border-neutral-200 bg-white">
-        <table className="w-full min-w-[980px] table-fixed text-sm">
+      <div className="overflow-x-auto border border-neutral-300 bg-white">
+        <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
           <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
             <tr>
               <th className="w-[270px] px-4 py-3 text-left">Employee</th>
@@ -241,24 +224,28 @@ export default function CcpAttendancePage() {
               <th className="w-[70px] px-3 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {filtered.map(employee => {
+          <tbody>
+            {filtered.map((employee, rowIndex) => {
               const draft = drafts[employee.id] ?? {}
               const disabled = employee.on_leave || savingId === employee.id
               return (
-                <tr key={employee.id} className={employee.on_leave ? 'bg-violet-50/60' : 'hover:bg-neutral-50'}>
-                  <td className="px-4 py-3">
+                <tr key={employee.id} className={employee.on_leave ? 'bg-violet-50/60' : 'hover:bg-blue-50/30'}>
+                  <td className="border border-neutral-200 px-4 py-2">
                     <p className="truncate font-bold text-secondary-700">{employee.name}</p>
                     <p className="truncate text-xs text-neutral-400">{employee.position} · {employee.department}</p>
                   </td>
-                  <td className="px-3 py-3 font-semibold text-neutral-600">{employee.work_location || '-'}</td>
-                  <td className="px-3 py-3"><input type="time" value={draft.check_in || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'check_in', e.target.value)} className="h-9 w-full rounded border border-neutral-200 px-2 disabled:bg-neutral-100" /></td>
-                  <td className="px-3 py-3"><input type="time" value={draft.check_out || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'check_out', e.target.value)} className="h-9 w-full rounded border border-neutral-200 px-2 disabled:bg-neutral-100" /></td>
-                  <td className="px-3 py-3">
+                  <td className="border border-neutral-200 px-3 py-2 font-semibold text-neutral-600">{employee.work_location || '-'}</td>
+                  <td className="border border-neutral-200 p-0" onPaste={event => handleGridPaste(event, rowIndex, 0)}>
+                    <input type="text" inputMode="numeric" placeholder="08:00" value={draft.check_in || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'check_in', e.target.value)} onBlur={e => updateDraft(employee.id, 'check_in', parseTime(e.target.value))} className="h-10 w-full border-0 bg-transparent px-3 outline-none focus:bg-blue-50 disabled:bg-neutral-100" />
+                  </td>
+                  <td className="border border-neutral-200 p-0" onPaste={event => handleGridPaste(event, rowIndex, 1)}>
+                    <input type="text" inputMode="numeric" placeholder="17:00" value={draft.check_out || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'check_out', e.target.value)} onBlur={e => updateDraft(employee.id, 'check_out', parseTime(e.target.value))} className="h-10 w-full border-0 bg-transparent px-3 outline-none focus:bg-blue-50 disabled:bg-neutral-100" />
+                  </td>
+                  <td className="border border-neutral-200 p-0" onPaste={event => handleGridPaste(event, rowIndex, 2)}>
                     {employee.on_leave ? (
-                      <span className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-700">On Leave</span>
+                      <span className="mx-3 inline-flex rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-700">On Leave</span>
                     ) : (
-                      <select value={draft.status || 'present'} onChange={e => updateDraft(employee.id, 'status', e.target.value)} className="h-9 w-full rounded border border-neutral-200 bg-white px-2">
+                      <select value={draft.status || 'present'} onChange={e => updateDraft(employee.id, 'status', e.target.value)} className="h-10 w-full border-0 bg-transparent px-2 outline-none focus:bg-blue-50">
                         <option value="present">Present</option>
                         <option value="absent">Absent</option>
                         <option value="late">Late</option>
@@ -269,8 +256,8 @@ export default function CcpAttendancePage() {
                       </select>
                     )}
                   </td>
-                  <td className="px-3 py-3"><input value={draft.notes || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'notes', e.target.value)} placeholder="Optional" className="h-9 w-full rounded border border-neutral-200 px-2 disabled:bg-neutral-100" /></td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="border border-neutral-200 p-0" onPaste={event => handleGridPaste(event, rowIndex, 3)}><input value={draft.notes || ''} disabled={disabled} onChange={e => updateDraft(employee.id, 'notes', e.target.value)} placeholder="Optional" className="h-10 w-full border-0 bg-transparent px-3 outline-none focus:bg-blue-50 disabled:bg-neutral-100" /></td>
+                  <td className="border border-neutral-200 px-3 py-2 text-center">
                     <button type="button" onClick={() => save(employee)} disabled={disabled} title="Save attendance" className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white disabled:opacity-30">
                       {savingId === employee.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     </button>
