@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
+import { TrainFront } from 'lucide-react'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
 import { logout, refreshUser } from './store/slices/authSlice'
@@ -88,10 +89,18 @@ const ComingSoon = ({ title }) => (
 )
 
 const PageFallback = () => (
-  <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-    <div className="flex flex-col items-center gap-3 text-neutral-400">
-      <div className="h-8 w-8 rounded-full border-2 border-neutral-200 border-t-primary animate-spin" />
-      <p className="text-xs font-semibold">Loading page...</p>
+  <div className="min-h-screen bg-neutral-50 flex items-center justify-center overflow-hidden">
+    <div className="w-full">
+      <div className="srs-loading-track" aria-hidden="true">
+        <div className="srs-loading-train">
+          <div className="srs-loading-car"><span /><span /></div>
+          <div className="srs-loading-car"><span /><span /></div>
+          <div className="srs-loading-engine">
+            <TrainFront className="h-8 w-8" strokeWidth={1.8} />
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 text-center text-xs font-semibold text-neutral-400">Loading page...</p>
     </div>
   </div>
 )
