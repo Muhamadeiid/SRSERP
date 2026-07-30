@@ -24,6 +24,7 @@ $frontend = Join-Path $bd 'Frontend - Copy'
 $php = 'C:\Users\RotemSRS_ERP\srs_stack\php\php.exe'
 $composer = 'C:\Users\RotemSRS_ERP\srs_stack\composer.phar'
 $nodeDir = 'C:\Users\RotemSRS_ERP\srs_stack\node_msi\PFiles64\nodejs'
+$scriptHashBefore = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
 
 Set-Location $bd
 
@@ -57,11 +58,56 @@ Copy-Item $snapEnv "$backend\.env" -Force -EA SilentlyContinue
 Copy-Item $snapLock "$backend\storage\app\.machine_lock" -Force -EA SilentlyContinue
 Log ".env and machine_lock restored"
 
+# PowerShell keeps the running script in memory. If this update replaced the
+# updater itself, restart through powershell.exe so the new logic is used now.
+$scriptHashAfter = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+if ($scriptHashBefore -ne $scriptHashAfter) {
+    Log "Update script changed - re-executing the new version..."
+    $restartArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($RefreshFrontend.IsPresent) {
+        $restartArgs += '-RefreshFrontend'
+    }
+    & powershell.exe @restartArgs
+    exit $LASTEXITCODE
+}
+
 # What changed?
 $changed = git diff --name-only "$local..HEAD" 2>&1
 $composerNeeded = $changed -match 'composer\.(json|lock)|SRS-Backend/app/|SRS-Backend/routes/|SRS-Backend/config/'
 $migrationsNeeded = $forceFrontendRefresh -or ($changed -match 'SRS-Backend/database/migrations/')
-$frontendNeeded = $forceFrontendRefresh -or ($changed -match 'Frontend - Copy/')
+
+# Track what was actually deployed, independently from the Git working tree.
+# The source tree hash changes only when Frontend - Copy changes. The deployed
+# index hash also detects an old public folder copied manually over the site.
+$deployedMarker = Join-Path $backend 'storage\app\.last_deployed_frontend'
+$deployedIndexMarker = Join-Path $backend 'storage\app\.last_deployed_frontend_index'
+$publicIndex = Join-Path $backend 'public\index.html'
+$currentFrontendTree = (git rev-parse 'HEAD:Frontend - Copy').Trim()
+$deployedFrontendTree = if (Test-Path $deployedMarker) {
+    (Get-Content $deployedMarker -Raw).Trim()
+} else {
+    ''
+}
+$expectedIndexHash = if (Test-Path $deployedIndexMarker) {
+    (Get-Content $deployedIndexMarker -Raw).Trim()
+} else {
+    ''
+}
+$actualIndexHash = if (Test-Path $publicIndex) {
+    (Get-FileHash -LiteralPath $publicIndex -Algorithm SHA256).Hash
+} else {
+    ''
+}
+$frontendNeeded = $forceFrontendRefresh `
+    -or ($deployedFrontendTree -ne $currentFrontendTree) `
+    -or ($expectedIndexHash -eq '') `
+    -or ($actualIndexHash -ne $expectedIndexHash)
+
+if ($frontendNeeded) {
+    Log "Frontend deployment is stale or unverified - deployment required."
+} else {
+    Log "Frontend deployment matches source tree $currentFrontendTree."
+}
 
 if ($composerNeeded) {
     Log "Backend files changed - reinstalling composer packages..."
@@ -81,6 +127,7 @@ if ($frontendNeeded) {
     $npm = Join-Path $nodeDir 'npm.cmd'
     $dist = Join-Path $frontend 'dist'
     $frontendBuilt = $false
+    $frontendDeployed = $false
 
     if (Test-Path $npm) {
         Log "Frontend source changed - building latest source..."
@@ -101,6 +148,7 @@ if ($frontendNeeded) {
         Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
         Remove-Item (Join-Path $backend 'public\train-loader.png') -Force -EA SilentlyContinue
         Copy-Item (Join-Path $dist '*') (Join-Path $backend 'public') -Recurse -Force
+        $frontendDeployed = $true
         Log "Frontend built and deployed from latest source"
     } else {
         Log "Local frontend build unavailable - downloading pre-built Release fallback..."
@@ -119,10 +167,18 @@ if ($frontendNeeded) {
             Remove-Item (Join-Path $backend 'public\train-loader.png') -Force -EA SilentlyContinue
             Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
             Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
+            $frontendDeployed = $true
             Log "Frontend replaced from Release fallback"
         } catch {
             Log "Could not deploy frontend: $($_.Exception.Message)"
         }
+    }
+
+    if ($frontendDeployed -and (Test-Path $publicIndex)) {
+        $deployedIndexHash = (Get-FileHash -LiteralPath $publicIndex -Algorithm SHA256).Hash
+        Set-Content -Path $deployedMarker -Value $currentFrontendTree -Encoding ASCII
+        Set-Content -Path $deployedIndexMarker -Value $deployedIndexHash -Encoding ASCII
+        Log "Deployed frontend recorded: tree=$currentFrontendTree index=$deployedIndexHash"
     }
 }
 
