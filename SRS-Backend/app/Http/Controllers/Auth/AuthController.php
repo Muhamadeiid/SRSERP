@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -20,9 +21,20 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::whereRaw('LOWER(TRIM(email)) = ?', [$request->email])->first();
+        $password = (string) $request->password;
+        $passwordMatches = $user && Hash::check($password, $user->password);
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$passwordMatches && $user && trim($password) !== $password) {
+            $passwordMatches = Hash::check(trim($password), $user->password);
+        }
+
+        if (!$user || !$passwordMatches) {
+            Log::warning('Login failed', [
+                'email' => $request->email,
+                'user_found' => (bool) $user,
+                'ip' => $request->ip(),
+            ]);
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 

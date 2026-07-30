@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { loginStart, loginSuccess, loginFailure, clearError } from '../store/slices/authSlice'
 import { login } from '../services/authService'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function Login() {
   const dispatch        = useDispatch()
@@ -11,6 +12,8 @@ export default function Login() {
 
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) navigate('/', { replace: true })
@@ -22,6 +25,7 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (loading) return
     dispatch(loginStart())
     try {
       const data = await login(email.trim().toLowerCase(), password)
@@ -71,6 +75,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 autoCapitalize="none"
                 autoCorrect="off"
+                autoComplete="username"
                 spellCheck={false}
                 placeholder="you@srs.com"
                 required
@@ -83,17 +88,31 @@ export default function Login() {
               <label className="block text-xs font-semibold text-[#4a5073] uppercase tracking-wide mb-1.5">
                 Password
               </label>
+              <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+                onKeyDown={(e) => setCapsLock(e.getModifierState('CapsLock'))}
                 autoCapitalize="none"
                 autoCorrect="off"
+                autoComplete="current-password"
                 spellCheck={false}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2.5 text-sm bg-white border border-[#e2e4ea] rounded-lg text-[#1a1f36] placeholder-[#c0c4d0] outline-none focus:border-[#1e2d5a] focus:ring-2 focus:ring-[#1e2d5a]/10 transition-all"
+                className="w-full px-3 py-2.5 pr-10 text-sm bg-white border border-[#e2e4ea] rounded-lg text-[#1a1f36] placeholder-[#c0c4d0] outline-none focus:border-[#1e2d5a] focus:ring-2 focus:ring-[#1e2d5a]/10 transition-all"
               />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(value => !value)}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center text-[#8892ab] hover:text-[#1e2d5a]"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {capsLock && <p className="mt-1.5 text-xs font-semibold text-amber-600">Caps Lock is on</p>}
             </div>
 
             {/* Submit */}
