@@ -27,8 +27,9 @@
 .srs-loading-track {
   position: relative;
   width: 100%;
-  height: clamp(76px, 9vw, 118px);
+  height: clamp(105px, 14vw, 180px);
   border-bottom: 2px solid #cbd5e1;
+  perspective: 900px;
 }
 
 .srs-loading-track::after {
@@ -43,29 +44,44 @@
 
 .srs-loading-train {
   position: absolute;
-  right: clamp(-310px, -22vw, -210px);
+  left: -28vw;
   bottom: -1px;
-  width: clamp(230px, 28vw, 430px);
-  animation: srs-train-cross 3.8s linear infinite;
-  will-change: transform;
+  width: clamp(300px, 36vw, 560px);
+  opacity: 0;
+  transform-origin: 88% 92%;
+  animation: srs-train-approach 4.2s cubic-bezier(.42, .05, .22, 1) infinite;
+  will-change: transform, opacity;
 }
 
 .srs-loading-train-image {
   display: block;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 5px 4px rgb(15 23 42 / 18%));
+  filter: drop-shadow(0 6px 5px rgb(15 23 42 / 20%));
 }
 
-@keyframes srs-train-cross {
-  from { transform: translateX(0); }
-  to { transform: translateX(calc(-100vw - 720px)); }
+@keyframes srs-train-approach {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -28px, -120px) scale(.12);
+  }
+  14% {
+    opacity: .65;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(calc(128vw + 320px), 7px, 0) scale(1.18);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .srs-loading-train {
-    right: 50%;
-    transform: translateX(50%);
+    left: 50%;
+    opacity: 1;
+    transform: translateX(-50%) scale(.7);
     animation: none;
   }
 }
