@@ -281,7 +281,7 @@ class AttendanceController extends Controller
             'date' => 'required|date',
             'check_in' => 'nullable|date_format:H:i',
             'check_out' => 'nullable|date_format:H:i',
-            'status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
+            'status' => 'required|in:present,absent,late,permission',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -311,7 +311,7 @@ class AttendanceController extends Controller
             'rows.*.employee_id' => 'required|integer|exists:employees,id',
             'rows.*.check_in' => 'nullable|date_format:H:i',
             'rows.*.check_out' => 'nullable|date_format:H:i',
-            'rows.*.status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
+            'rows.*.status' => 'required|in:present,absent,late,permission',
             'rows.*.notes' => 'nullable|string|max:500',
         ]);
 

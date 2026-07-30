@@ -86,7 +86,14 @@ export default function CcpAttendancePage() {
 
   const parseStatus = value => {
     const raw = String(value ?? '').trim().toLowerCase().replace(/\s+/g, '_')
-    const aliases = { intervention: 'intervention', present: 'present', absent: 'absent', late: 'late', wfh: 'wfh', incomplete: 'incomplete', shortage: 'shortage' }
+    const aliases = {
+      present: 'present',
+      absent: 'absent',
+      late: 'late',
+      permission: 'permission',
+      permit: 'permission',
+      permission_leave: 'permission',
+    }
     return aliases[raw] || 'present'
   }
 
@@ -249,10 +256,7 @@ export default function CcpAttendancePage() {
                         <option value="present">Present</option>
                         <option value="absent">Absent</option>
                         <option value="late">Late</option>
-                        <option value="intervention">Intervention</option>
-                        <option value="wfh">WFH</option>
-                        <option value="incomplete">Incomplete</option>
-                        <option value="shortage">Shortage</option>
+                        <option value="permission">Permission</option>
                       </select>
                     )}
                   </td>
