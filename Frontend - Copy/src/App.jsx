@@ -92,7 +92,7 @@ const PageFallback = () => (
     <div className="w-full">
       <div className="srs-loading-track" aria-hidden="true">
         <div className="srs-loading-train">
-          <img src="/train-loader.png" alt="" className="srs-loading-train-image" />
+          <img src="/train-loader.png?v=17a2189" alt="" className="srs-loading-train-image" />
         </div>
       </div>
       <p className="mt-4 text-center text-xs font-semibold text-neutral-400">Loading page...</p>
