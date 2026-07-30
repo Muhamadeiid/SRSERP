@@ -1100,7 +1100,7 @@ class LeaveRequestController extends Controller
         $minutes = $startAt->diffInMinutes($endAt);
 
         return $minutes > 0 && $minutes <= 24 * 60
-            ? round($minutes / 60, 2)
+            ? (float) round($minutes / 60, 0, PHP_ROUND_HALF_UP)
             : null;
     }
 }

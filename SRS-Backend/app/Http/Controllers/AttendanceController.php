@@ -1417,9 +1417,31 @@ class AttendanceController extends Controller
 
             $dayMins   = max(0, min($endM, $nightStartMin) - max($startM, 17 * 60));
             $nightMins = max(0, $endM - max($startM, $nightStartMin));
+            $approvedHours = (int) round(
+                $otr->hours ?? (($endM - $startM) / 60),
+                0,
+                PHP_ROUND_HALF_UP
+            );
 
-            $totalDayOT   += round($dayMins / 60, 2);
-            $totalNightOT += round($nightMins / 60, 2);
+            // Split the approved whole-hour total without creating fractional salary hours.
+            $dayHours = intdiv($dayMins, 60);
+            $nightHours = intdiv($nightMins, 60);
+            $remaining = max(0, $approvedHours - $dayHours - $nightHours);
+            $dayRemainder = $dayMins % 60;
+            $nightRemainder = $nightMins % 60;
+            while ($remaining > 0) {
+                if ($nightRemainder > $dayRemainder) {
+                    $nightHours++;
+                    $nightRemainder = -1;
+                } else {
+                    $dayHours++;
+                    $dayRemainder = -1;
+                }
+                $remaining--;
+            }
+
+            $totalDayOT += $dayHours;
+            $totalNightOT += $nightHours;
         }
 
         // Double Pay: hours worked on public holidays

@@ -260,14 +260,18 @@ const LBL = 'block text-xs font-semibold text-neutral-500 uppercase tracking-wid
 
 // ── helpers ───────────────────────────────────────────────────
 const diffDays  = (s, e) => (!s || !e) ? 0 : Math.max(0, Math.round((new Date(e) - new Date(s)) / 86400000) + 1)
-// OTR: preserve minute-based fractions and handle midnight crossover.
+// OTR: 30 minutes or more counts as a full hour.
 const diffHours = (s, e) => {
   if (!s || !e) return 0
   const [sh, sm] = s.split(':').map(Number)
   const [eh, em] = e.split(':').map(Number)
   let m = (eh * 60 + em) - (sh * 60 + sm)
   if (m < 0) m += 24 * 60   // crosses midnight (e.g. 23:00 → 02:00)
-  return m === 0 ? 0 : Math.round((m / 60) * 100) / 100
+  return m === 0 ? 0 : Math.round(m / 60)
+}
+const displayOvertimeHours = value => {
+  const hours = Number(value)
+  return Number.isFinite(hours) ? Math.round(hours) : 0
 }
 // Early leave uses fixed company bands, not proportional fractions.
 const normalizeTime = (value) => {
@@ -790,7 +794,7 @@ function printOTR(d) {
     + '<td style="width:30%;padding:4px 7px;border-right:1px solid #000;vertical-align:top;"><span style="' + s_en + '">Overtime needed from</span><span style="' + s_ar + '">&#x627;&#x644;&#x639;&#x645;&#x644; &#x627;&#x644;&#x625;&#x636;&#x627;&#x641;&#x64A; &#x645;&#x646; :</span><span style="font-size:10.5pt;font-weight:700;display:block;margin-top:3px;">' + (d.start_time||'') + '</span></td>'
     + '<td style="width:14%;padding:4px 7px;border-right:1px solid #000;vertical-align:top;"><span style="' + s_en + '">To &nbsp;<span style="font-weight:400;font-size:7.5pt;">&#x625;&#x644;&#x64A;</span></span><span style="font-size:10.5pt;font-weight:700;display:block;margin-top:3px;">' + (d.end_time||'') + '</span></td>'
     + '<td style="width:38%;padding:4px 7px;border-right:1px solid #000;vertical-align:top;"><span style="' + s_en + '">Total overtime not to exceed</span><span style="' + s_ar + '">&#x625;&#x62C;&#x645;&#x627;&#x644;&#x64A; &#x633;&#x627;&#x639;&#x627;&#x62A; &#x627;&#x644;&#x639;&#x645;&#x644; &#x644;&#x627; &#x64A;&#x62A;&#x62E;&#x637;&#x649;</span></td>'
-    + '<td style="width:18%;padding:4px 7px;vertical-align:top;text-align:center;"><span style="font-size:9pt;font-weight:700;display:block;">Hours &nbsp;<span style="font-weight:400;font-size:7.5pt;">&#x633;&#x627;&#x639;&#x647;</span></span><span style="font-size:15pt;font-weight:900;display:block;margin-top:2px;text-align:center;">' + (d.hours!=null?d.hours:'') + '</span></td>'
+    + '<td style="width:18%;padding:4px 7px;vertical-align:top;text-align:center;"><span style="font-size:9pt;font-weight:700;display:block;">Hours &nbsp;<span style="font-weight:400;font-size:7.5pt;">&#x633;&#x627;&#x639;&#x647;</span></span><span style="font-size:15pt;font-weight:900;display:block;margin-top:2px;text-align:center;">' + (d.hours!=null?displayOvertimeHours(d.hours):'') + '</span></td>'
     + '</tr></table></td></tr>'
 
     // Explanation label
@@ -2087,7 +2091,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             ['Job Title',  req.job_title],
             ['Department', req.department_label || resolveDept(req.department)],
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
-            isLRF ? ['Period', leavePeriod] : ['Time', `${req.start_time} – ${req.end_time} (${req.hours}h)`],
+            isLRF ? ['Period', leavePeriod] : ['Time', `${req.start_time} – ${req.end_time} (${displayOvertimeHours(req.hours)}h)`],
             isLRF ? ['Paid', req.paid ? 'Paid' : 'Unpaid'] : ['Explanation', req.explanation],
             canViewLeaveBalance ? ['Available Balance', `${formatBalanceDisplay(req)} days`] : null,
             isLRF ? ['Purpose', req.purpose] : (req.overtime_results ? ['Overtime Results', req.overtime_results] : null),
@@ -2424,7 +2428,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           <p className="text-xs text-neutral-400">
             {r.employee_name} · {r.type==='lrf'
               ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${fmtDays(r.days)}d`
-              : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${r.hours}h`}
+              : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${displayOvertimeHours(r.hours)}h`}
           </p>
         </div>
       </div>
@@ -2729,7 +2733,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     <p className="text-xs text-neutral-400">
                       {r.type==='lrf'
                         ? `${r.leave_type} leave · ${fmtDays(r.days)} days (${fmtShort(r.start_date)}→${fmtShort(r.end_date)})`
-                        : `Overtime · ${r.hours}h · ${fmtShort(r.ot_date)}`}
+                        : `Overtime · ${displayOvertimeHours(r.hours)}h · ${fmtShort(r.ot_date)}`}
                     </p>
                   </div>
                 </div>

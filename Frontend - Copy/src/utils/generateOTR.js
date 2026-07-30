@@ -99,7 +99,9 @@ function normalizeOTRData(raw) {
     ot_date: raw?.ot_date || raw?.date || raw?.request_date || '',
     start_time: raw?.start_time || raw?.from_time || '',
     end_time: raw?.end_time || raw?.to_time || '',
-    hours: raw?.hours ?? raw?.overtime_hours ?? '',
+    hours: raw?.hours != null || raw?.overtime_hours != null
+      ? Math.round(Number(raw?.hours ?? raw?.overtime_hours))
+      : '',
     explanation: raw?.explanation || raw?.purpose || raw?.reason || '',
     overtime_results: raw?.overtime_results || raw?.results || '',
     manager_signature: raw?.manager_signature || employee?.manager_signature || null,
