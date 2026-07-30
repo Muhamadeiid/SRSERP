@@ -27,6 +27,10 @@ const authSlice = createSlice({
       localStorage.setItem('srs_token', action.payload.token)
       localStorage.setItem('srs_user',  JSON.stringify(action.payload.user))
     },
+    refreshUser(state, action) {
+      state.user = action.payload
+      localStorage.setItem('srs_user', JSON.stringify(action.payload))
+    },
     loginFailure(state, action) {
       state.loading = false
       state.error   = action.payload
@@ -44,5 +48,5 @@ const authSlice = createSlice({
   },
 })
 
-export const { loginStart, loginSuccess, loginFailure, logout, clearError } = authSlice.actions
+export const { loginStart, loginSuccess, refreshUser, loginFailure, logout, clearError } = authSlice.actions
 export default authSlice.reducer

@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
+import { getMe } from './services/authService'
+import { logout, refreshUser } from './store/slices/authSlice'
 const Login             = lazy(() => import('./pages/Login'))
 const DashboardPage     = lazy(() => import('./pages/Dashboard'))
 const ProductsPage      = lazy(() => import('./pages/Products'))
@@ -73,9 +75,27 @@ const AttendanceByRole = () => {
   return role === 'ccp' ? <CcpAttendancePage /> : <AttendanceTab />
 }
 
+const AuthSync = () => {
+  const dispatch = useDispatch()
+  const token = useSelector(state => state.auth.token)
+
+  useEffect(() => {
+    if (!token) return
+
+    getMe()
+      .then(user => dispatch(refreshUser(user)))
+      .catch(error => {
+        if (error?.response?.status === 401) dispatch(logout())
+      })
+  }, [dispatch, token])
+
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthSync />
       <Suspense fallback={<PageFallback />}>
       <Routes>
         {/* Public */}
