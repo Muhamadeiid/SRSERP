@@ -3,6 +3,7 @@ import { itAssetService } from '../../services/assetService'
 import { assignItAssetToEmployee } from '../../services/issuingSourceService'
 import {
   Search, Plus, X, Pencil, Loader2, RefreshCw, Trash2, Monitor, UserPlus,
+  Upload, Download, FileDown,
 } from 'lucide-react'
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -247,6 +248,10 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
   const [showForm,   setShowForm]   = useState(false)
   const [editRec,    setEditRec]    = useState(null)
   const [assignRec,  setAssignRec]  = useState(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+  const fileInputRef = useRef()
   const searchTimer = useRef()
 
   const load = useCallback(async (params = {}) => {
@@ -287,11 +292,51 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
 
   const openEdit = rec => { setEditRec(rec); setShowForm(true) }
 
+  const onPickFile = e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImportBusy(true); setImportResult(null)
+    itAssetService.import(file)
+      .then(res => { setImportResult({ ok: true, ...res }); refresh() })
+      .catch(err => setImportResult({ ok: false, message: err.message || 'Import failed' }))
+      .finally(() => setImportBusy(false))
+  }
+
+  const doExport = async () => {
+    setExportBusy(true)
+    try {
+      await itAssetService.export({
+        search, item: filterItem, status: filterStatus, condition: filterCondition,
+      })
+    } catch (err) {
+      setImportResult({ ok: false, message: err.message || 'Export failed' })
+    } finally { setExportBusy(false) }
+  }
+
   return (
     <div className="space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-end flex-wrap gap-2">
+        <button onClick={() => itAssetService.downloadTemplate()}
+          title="Download an empty Excel template with the correct columns"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50">
+          <FileDown className="w-4 h-4" />Template
+        </button>
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
+        <button onClick={() => fileInputRef.current?.click()} disabled={importBusy}
+          title="Upload an Excel file that matches the template layout"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
+          {importBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          Import Excel
+        </button>
+        <button onClick={doExport} disabled={exportBusy}
+          title="Download the current list as Excel (same layout as the template)"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
+          {exportBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          Export Excel
+        </button>
         <button onClick={refresh} disabled={loading}
           className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
@@ -301,6 +346,32 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
           <Plus className="w-4 h-4" />Add Asset
         </button>
       </div>
+
+      {importResult && (
+        <div className={`rounded-xl border p-3 text-sm flex items-start justify-between gap-3 ${
+          importResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div>
+            {importResult.ok ? (
+              <>
+                <b>Import done.</b>{' '}
+                {importResult.imported ?? 0} added · {importResult.updated ?? 0} updated · {importResult.skipped ?? 0} skipped
+                {Array.isArray(importResult.errors) && importResult.errors.length > 0 && (
+                  <ul className="mt-1 list-disc list-inside text-xs">
+                    {importResult.errors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <><b>Error:</b> {importResult.message}</>
+            )}
+          </div>
+          <button onClick={() => setImportResult(null)} className="text-inherit opacity-60 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">

@@ -30,6 +30,51 @@ export const itAssetService = {
   create: (data)       => req('/it-assets',      { method: 'POST',   body: JSON.stringify(data) }),
   update: (id, data)   => req(`/it-assets/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
   remove: (id)         => req(`/it-assets/${id}`, { method: 'DELETE' }),
+
+  async import(file) {
+    const token = localStorage.getItem('srs_token')
+    const body = new FormData()
+    body.append('file', file)
+    const res = await fetch(`${BASE}/it-assets/import`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body,
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.message || 'Import failed')
+    return json
+  },
+
+  async export(params = {}) {
+    const token = localStorage.getItem('srs_token')
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([,v]) => v !== '' && v != null))
+    ).toString()
+    const res = await fetch(`${BASE}/it-assets/export${qs ? '?' + qs : ''}`, {
+      headers: { Accept: '*/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    triggerDownload(blob, `IT_Asset_List_${new Date().toISOString().slice(0,10)}.xlsx`)
+  },
+
+  async downloadTemplate() {
+    const token = localStorage.getItem('srs_token')
+    const res = await fetch(`${BASE}/it-assets/template`, {
+      headers: { Accept: '*/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) throw new Error('Template download failed')
+    triggerDownload(await res.blob(), 'IT_Asset_List_Template.xlsx')
+  },
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a); a.click()
+  document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 
 export const assetService = {

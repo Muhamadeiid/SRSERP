@@ -166,6 +166,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // IT Asset Register
         Route::get('/it-assets/stats',               [ITAssetController::class, 'stats']);
+        Route::get('/it-assets/export',              [ITAssetController::class, 'export']);
+        Route::get('/it-assets/template',            [ITAssetController::class, 'template']);
+        Route::post('/it-assets/import',             [ITAssetController::class, 'import']);
         Route::get('/it-assets',                     [ITAssetController::class, 'index']);
         Route::post('/it-assets',                    [ITAssetController::class, 'store']);
         Route::put('/it-assets/{itAsset}',           [ITAssetController::class, 'update']);
