@@ -44,12 +44,12 @@
 
 .srs-loading-train {
   position: absolute;
-  left: -28vw;
+  left: -38vw;
   bottom: -1px;
-  width: clamp(300px, 36vw, 560px);
+  width: clamp(260px, 34vw, 500px);
   opacity: 0;
   transform-origin: 88% 92%;
-  animation: srs-train-approach 4.2s cubic-bezier(.42, .05, .22, 1) infinite;
+  animation: srs-train-approach 5.2s cubic-bezier(.42, .05, .22, 1) infinite;
   will-change: transform, opacity;
 }
 
@@ -63,17 +63,25 @@
 @keyframes srs-train-approach {
   0% {
     opacity: 0;
-    transform: translate3d(0, -28px, -120px) scale(.12);
+    transform: translate3d(0, -42px, -160px) scale(.08);
   }
-  14% {
-    opacity: .65;
+  8% {
+    opacity: .25;
   }
-  72% {
+  20% {
     opacity: 1;
+  }
+  78% {
+    opacity: 1;
+    transform: translate3d(calc(112vw + 260px), 7px, 0) scale(1.05);
+  }
+  96% {
+    opacity: 1;
+    transform: translate3d(calc(155vw + 760px), 18px, 0) scale(1.35);
   }
   100% {
-    opacity: 1;
-    transform: translate3d(calc(128vw + 320px), 7px, 0) scale(1.18);
+    opacity: 0;
+    transform: translate3d(calc(155vw + 760px), 18px, 0) scale(1.35);
   }
 }
 
