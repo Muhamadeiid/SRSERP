@@ -29,6 +29,10 @@ export const attendanceService = {
     const response = await api.post('/ccp/attendance/manual', data)
     return response.data
   },
+  saveCcpDailyBulk: async (data) => {
+    const response = await api.post('/ccp/attendance/manual/bulk', data)
+    return response.data
+  },
   /**
    * Upload biometric file
    */

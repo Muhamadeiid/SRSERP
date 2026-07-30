@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // CCP daily attendance: limited to Intervention/Mainline employees.
     Route::get('/ccp/attendance',        [AttendanceController::class, 'ccpDaily']);
     Route::post('/ccp/attendance/manual',[AttendanceController::class, 'ccpManual']);
+    Route::post('/ccp/attendance/manual/bulk', [AttendanceController::class, 'ccpBulkManual']);
 
     Route::get('/maintenance-tasks/options', [MaintenanceTaskController::class, 'options']);
     Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);

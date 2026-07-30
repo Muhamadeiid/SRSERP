@@ -302,6 +302,46 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function ccpBulkManual(Request $request)
+    {
+        $this->ensureCcpAccess();
+        $data = $request->validate([
+            'date' => 'required|date',
+            'rows' => 'required|array|min:1|max:500',
+            'rows.*.employee_id' => 'required|integer|exists:employees,id',
+            'rows.*.check_in' => 'nullable|date_format:H:i',
+            'rows.*.check_out' => 'nullable|date_format:H:i',
+            'rows.*.status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
+            'rows.*.notes' => 'nullable|string|max:500',
+        ]);
+
+        $allowedIds = $this->ccpEmployees()
+            ->whereIn('id', collect($data['rows'])->pluck('employee_id'))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        abort_unless(
+            $allowedIds->count() === collect($data['rows'])->pluck('employee_id')->unique()->count(),
+            403,
+            'CCP can only manage CM Intervention or Mainline employees.'
+        );
+
+        $saved = \DB::transaction(function () use ($data) {
+            return collect($data['rows'])->map(function ($row) use ($data) {
+                $row['date'] = $data['date'];
+                $row['check_in'] = $row['check_in'] ?: null;
+                $row['check_out'] = $row['check_out'] ?: null;
+                return $this->attendanceService->createManualEntry($row, auth()->id());
+            });
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$saved->count()} attendance records saved.",
+            'saved' => $saved->count(),
+        ]);
+    }
+
     private function ensureCcpAccess(): void
     {
         abort_unless(auth()->user()?->role === 'ccp', 403, 'CCP access only.');
