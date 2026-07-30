@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { assetService } from '../../services/assetService'
+import { assetService, itAssetService } from '../../services/assetService'
 import { getEmployees } from '../../services/employeeService'
 import { listIssuingSources } from '../../services/issuingSourceService'
 import {
   Search, Plus, X, Pencil, Loader2, RefreshCw,
   Package, CheckCircle2, AlertTriangle, ChevronDown,
-  Printer, RotateCcw, Trash2, Filter, Monitor, FileDown,
+  Printer, RotateCcw, Trash2, Filter, Monitor, FileDown, Upload, Download,
 } from 'lucide-react'
 import ITAssetsTab from './ITAssetsTab'
 
@@ -463,8 +463,11 @@ function EmployeeAssetsTab({ hideHeader = false }) {
   const [clearanceData,setClearData]  = useState(null)
   const [clearanceBusy,setClearBusy]  = useState(false)
   const [reportBusy,   setReportBusy] = useState(false)
+  const [excelBusy,    setExcelBusy]  = useState(false)
+  const [excelResult,  setExcelResult] = useState(null)
 
   const searchTimer = useRef()
+  const excelInputRef = useRef()
 
   const loadAssets = useCallback(async (params = {}) => {
     setLoading(true)
@@ -503,6 +506,37 @@ function EmployeeAssetsTab({ hideHeader = false }) {
   }, [search])
 
   const refresh = () => { loadAssets(); loadStats() }
+
+  const importItAssets = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setExcelBusy(true)
+    setExcelResult(null)
+    try {
+      const result = await itAssetService.import(file)
+      setExcelResult({
+        ok: true,
+        message: `${result.imported ?? 0} added, ${result.updated ?? 0} updated, ${result.skipped ?? 0} skipped`,
+      })
+    } catch (error) {
+      setExcelResult({ ok: false, message: error.message || 'Import failed' })
+    } finally {
+      setExcelBusy(false)
+    }
+  }
+
+  const exportItAssets = async () => {
+    setExcelBusy(true)
+    setExcelResult(null)
+    try {
+      await itAssetService.export()
+    } catch (error) {
+      setExcelResult({ ok: false, message: error.message || 'Export failed' })
+    } finally {
+      setExcelBusy(false)
+    }
+  }
 
   const openClearance = async emp => {
     setClearanceEmp(emp); setClearBusy(true); setClearData(null)
@@ -559,6 +593,23 @@ function EmployeeAssetsTab({ hideHeader = false }) {
         </div>
       )}
       <div className="flex items-center gap-2 justify-end">
+        <button onClick={() => itAssetService.downloadTemplate()}
+          title="Download the IT asset Excel template"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50">
+          <FileDown className="w-4 h-4" />Template
+        </button>
+        <input ref={excelInputRef} type="file" accept=".xlsx,.xls" onChange={importItAssets} className="hidden" />
+        <button onClick={() => excelInputRef.current?.click()} disabled={excelBusy}
+          title="Import assets into the IT Asset Register"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
+          {excelBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          Import Excel
+        </button>
+        <button onClick={exportItAssets} disabled={excelBusy}
+          title="Export the IT Asset Register"
+          className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
+          <Download className="w-4 h-4" />Export Excel
+        </button>
         <button onClick={refresh} disabled={loading}
           className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
@@ -568,6 +619,16 @@ function EmployeeAssetsTab({ hideHeader = false }) {
           <Plus className="w-4 h-4" />Assign Asset
         </button>
       </div>
+      {excelResult && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          excelResult.ok
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {excelResult.ok && <b className="mr-1">IT Asset import completed.</b>}
+          {excelResult.message}
+        </div>
+      )}
 
       {/* ── Stats ── */}
       <StatsBar stats={stats} />

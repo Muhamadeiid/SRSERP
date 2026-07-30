@@ -58,12 +58,17 @@ Copy-Item $snapEnv "$backend\.env" -Force -EA SilentlyContinue
 Copy-Item $snapLock "$backend\storage\app\.machine_lock" -Force -EA SilentlyContinue
 Log ".env and machine_lock restored"
 
-# PowerShell keeps the running script in memory. If this update replaced the
-# updater itself, restart through powershell.exe so the new logic is used now.
-$scriptHashAfter = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
-if ($scriptHashBefore -ne $scriptHashAfter) {
-    Log "Update script changed - re-executing the new version..."
-    $restartArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+# Always prefer the updater tracked inside the repository. The Desktop copy can
+# become stale because git pull does not replace files outside the repository.
+$repoUpdateScript = Join-Path $bd 'scripts\srs-update.ps1'
+$repoScriptHash = if (Test-Path $repoUpdateScript) {
+    (Get-FileHash -LiteralPath $repoUpdateScript -Algorithm SHA256).Hash
+} else {
+    ''
+}
+if ($repoScriptHash -and ($PSCommandPath -ne $repoUpdateScript -or $scriptHashBefore -ne $repoScriptHash)) {
+    Log "Switching to the latest updater from the repository..."
+    $restartArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $repoUpdateScript)
     if ($RefreshFrontend.IsPresent) {
         $restartArgs += '-RefreshFrontend'
     }
@@ -151,27 +156,8 @@ if ($frontendNeeded) {
         $frontendDeployed = $true
         Log "Frontend built and deployed from latest source"
     } else {
-        Log "Local frontend build unavailable - downloading pre-built Release fallback..."
-        $zip = "$env:TEMP\srs-public.zip"
-        $tmp = "$env:TEMP\srs-public-tmp"
-        try {
-            Invoke-WebRequest -Uri 'https://github.com/Muhamadeiid/SRSERP/releases/latest/download/public-only.zip' -OutFile $zip -UseBasicParsing
-            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-            Expand-Archive $zip -DestinationPath $tmp -Force
-            $publicSource = if (Test-Path (Join-Path $tmp 'public')) {
-                Join-Path $tmp 'public'
-            } else {
-                $tmp
-            }
-            Remove-Item (Join-Path $backend 'public\assets') -Recurse -Force -EA SilentlyContinue
-            Remove-Item (Join-Path $backend 'public\train-loader.png') -Force -EA SilentlyContinue
-            Copy-Item (Join-Path $publicSource '*') (Join-Path $backend 'public') -Recurse -Force
-            Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-            $frontendDeployed = $true
-            Log "Frontend replaced from Release fallback"
-        } catch {
-            Log "Could not deploy frontend: $($_.Exception.Message)"
-        }
+        Log "ERROR: Frontend build failed. The current deployed frontend was preserved."
+        Log "Fix Node/npm or the build error, then run this updater again."
     }
 
     if ($frontendDeployed -and (Test-Path $publicIndex)) {
