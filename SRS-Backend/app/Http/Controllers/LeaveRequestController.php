@@ -303,9 +303,9 @@ class LeaveRequestController extends Controller
             && in_array($data['leave_type'] ?? null, ['annual', 'casual', 'sick', 'early'], true)
         ) {
             $available = $this->availableLeaveBalances($employee->id);
-            $data['available_balance'] = $data['leave_type'] === 'sick'
-                ? $available['sick']
-                : $available['annual'];
+            // The official LRF always records the employee's total leave
+            // balance. Sick entitlement remains tracked separately.
+            $data['available_balance'] = $available['annual'];
             if (Schema::hasColumn('leave_requests', 'casual_available_balance')) {
                 $data['casual_available_balance'] = $available['casual'];
             }
@@ -972,6 +972,20 @@ class LeaveRequestController extends Controller
         // The request stores the balance snapshot from submission time.
         // Never replace it with the employee's later live balance because
         // approved documents must remain historically accurate.
+        if (
+            $leaveRequest->type === 'lrf'
+            && $leaveRequest->leave_type === 'sick'
+            && $leaveRequest->employee_id
+        ) {
+            // Older sick requests stored the sick entitlement in the generic
+            // snapshot field. Supply a document-only total without rewriting
+            // their historical database record.
+            $available = $this->availableLeaveBalances(
+                (int) $leaveRequest->employee_id,
+                (int) $leaveRequest->id
+            );
+            $leaveRequest->setAttribute('document_available_balance', $available['annual']);
+        }
     }
 
     private function validatedApprovalRequestChanges(Request $request, LeaveRequest $leaveRequest): array

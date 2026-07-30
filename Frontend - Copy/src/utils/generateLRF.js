@@ -132,10 +132,7 @@ function depotManagerNameFor(d) {
 }
 
 function formatBalanceDisplay(data = {}) {
-  const total = formatBalance(data.available_balance)
-  const casual = formatBalance(data.casual_available_balance)
-  if (!total) return ''
-  return casual ? `${total} (${casual} Casual)` : total
+  return formatBalance(data.document_available_balance ?? data.available_balance)
 }
 
 function para(text, opts = {}) {
