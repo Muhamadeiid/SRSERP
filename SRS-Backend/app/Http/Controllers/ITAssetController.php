@@ -49,10 +49,18 @@ class ITAssetController extends Controller
 
         $perPage = (int) $request->get('per_page', 50);
         $result  = $q->paginate($perPage);
+        $items = ITAsset::query()
+            ->whereNotNull('item')
+            ->where('item', '<>', '')
+            ->distinct()
+            ->orderBy('item')
+            ->pluck('item')
+            ->values();
 
         return response()->json([
             'success'    => true,
             'data'       => $result->items(),
+            'filters'    => ['items' => $items],
             'pagination' => [
                 'total'        => $result->total(),
                 'per_page'     => $result->perPage(),

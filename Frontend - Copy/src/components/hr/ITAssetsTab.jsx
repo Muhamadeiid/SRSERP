@@ -34,7 +34,8 @@ const COLS = [
 
 const fmtDate = d => {
   if (!d) return '—'
-  const dt = new Date(d + 'T00:00:00')
+  const dt = new Date(`${String(d).slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(dt.getTime())) return '—'
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -241,6 +242,7 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
   const [stats,      setStats]      = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [pagination, setPagination] = useState(null)
+  const [itemOptions, setItemOptions] = useState([])
   const [search,     setSearch]     = useState('')
   const [filterItem, setFilterItem] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -262,10 +264,12 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
         item:     params.item     ?? filterItem,
         status:   params.status   ?? filterStatus,
         condition: params.condition ?? filterCondition,
+        page: params.page ?? 1,
         per_page: 50,
       })
       setRecords(res.data ?? [])
       setPagination(res.pagination ?? null)
+      setItemOptions(res.filters?.items ?? [])
     } catch { setRecords([]) }
     finally { setLoading(false) }
   }, [search, filterItem, filterStatus, filterCondition])
@@ -274,14 +278,14 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
     try { setStats(await itAssetService.stats()) } catch {}
   }
 
-  const refresh = () => { load(); loadStats() }
+  const refresh = () => { load({ page: pagination?.current_page ?? 1 }); loadStats() }
 
-  useEffect(() => { load() }, [filterItem, filterStatus, filterCondition])
+  useEffect(() => { load({ page: 1 }) }, [filterItem, filterStatus, filterCondition])
   useEffect(() => { loadStats() }, [])
 
   useEffect(() => {
     clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(() => load({ search }), 350)
+    searchTimer.current = setTimeout(() => load({ search, page: 1 }), 350)
     return () => clearTimeout(searchTimer.current)
   }, [search])
 
@@ -420,7 +424,7 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
         <select value={filterItem} onChange={e => setFilterItem(e.target.value)}
           className="px-3 py-2 text-sm border border-neutral-200 rounded-xl outline-none focus:border-primary/60 bg-white">
           <option value="">All Items</option>
-          {ITEMS.map(i => <option key={i} value={i}>{i}</option>)}
+          {itemOptions.map(i => <option key={i} value={i}>{i}</option>)}
         </select>
         {(filterStatus !== 'all' || filterCondition !== 'all') && (
           <button onClick={() => { setFilterStatus('all'); setFilterCondition('all') }}
@@ -473,7 +477,9 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
                 {records.map((rec, i) => (
                   <tr key={rec.id}
                     className={`border-b border-neutral-100 transition-colors hover:bg-primary/5 ${i % 2 === 0 ? 'bg-white' : 'bg-neutral-50/60'}`}>
-                    <td className="px-2 py-2 text-center text-neutral-400 font-semibold">{i + 1}</td>
+                    <td className="px-2 py-2 text-center text-neutral-400 font-semibold">
+                      {((pagination?.current_page ?? 1) - 1) * (pagination?.per_page ?? 50) + i + 1}
+                    </td>
 
                     {/* Item */}
                     <td className="px-2 py-2">
@@ -552,6 +558,52 @@ export default function ITAssetsTab({ hideHeader = false, EmployeePicker }) {
           </div>
         )}
       </div>
+
+      {pagination?.last_page > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3">
+          <p className="text-xs text-neutral-500">
+            Page <b>{pagination.current_page}</b> of <b>{pagination.last_page}</b>
+            {' · '}{pagination.total} records
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={pagination.current_page <= 1 || loading}
+              onClick={() => load({ page: pagination.current_page - 1 })}
+              className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            {Array.from({ length: pagination.last_page }, (_, index) => index + 1)
+              .filter(page => Math.abs(page - pagination.current_page) <= 2 || page === 1 || page === pagination.last_page)
+              .map((page, index, pages) => (
+                <span key={page} className="contents">
+                  {index > 0 && page - pages[index - 1] > 1 && <span className="px-1 text-neutral-400">...</span>}
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => load({ page })}
+                    className={`min-w-8 rounded-lg px-2 py-1.5 text-xs font-bold ${
+                      page === pagination.current_page
+                        ? 'bg-primary text-white'
+                        : 'border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                </span>
+              ))}
+            <button
+              type="button"
+              disabled={pagination.current_page >= pagination.last_page || loading}
+              onClick={() => load({ page: pagination.current_page + 1 })}
+              className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Form modal */}
       {showForm && (
