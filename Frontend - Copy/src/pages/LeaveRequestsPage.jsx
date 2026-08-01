@@ -1423,7 +1423,142 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
             className="p-1 text-amber-600 hover:bg-amber-100 rounded"><X className="w-4 h-4" /></button>
         </div>
       )}
-      <div className="overflow-x-auto">
+      {/* ── MOBILE-FRIENDLY STACKED FORM (< sm) ─────────────────── */}
+      <div className="sm:hidden">
+        <div className="border-b-2 border-neutral-950 px-4 py-3 text-center">
+          <img src="/logo.svg" alt="Rotem SRS Egypt" className="mx-auto mb-2 h-8 w-auto object-contain" />
+          <p className="text-sm font-black text-neutral-950 leading-tight">Leave Request Form (LRF)</p>
+          <p className="text-xs font-bold text-neutral-800 mt-0.5" dir="rtl">نموذج طلب اجازة</p>
+        </div>
+
+        <div className="divide-y divide-neutral-100 text-sm">
+          <div className="p-3">
+            <div className={LBL}>Employee <span className="text-neutral-400 font-normal" dir="rtl">— إسم الموظف</span></div>
+            <EmployeeSearch onSelect={handleEmployeeSelect} initialName={form.employee_name} />
+          </div>
+          <div className="p-3">
+            <div className={LBL}>Job Title <span className="text-neutral-400 font-normal" dir="rtl">— المسمى الوظيفي</span></div>
+            <input value={form.job_title} onChange={e => set('job_title', e.target.value)} className={INP} placeholder="Auto-filled" />
+          </div>
+          <div className="p-3">
+            <div className={LBL}>Department <span className="text-neutral-400 font-normal" dir="rtl">— الإداره</span></div>
+            <input value={form.department_label || form.department} readOnly className={INP + ' bg-neutral-50'} placeholder="Auto-filled" />
+          </div>
+
+          <div className="p-3">
+            <div className={LBL}>Leave Type <span className="text-neutral-400 font-normal" dir="rtl">— نوع الاذن</span></div>
+            <div className="grid grid-cols-2 gap-2">
+              {[['annual', 'Annual'], ['casual', 'Casual'], ['sick', 'Sick'], ['early', 'Early Leave']].map(([key, label]) => (
+                <button key={key} type="button" onClick={() => set('leave_type', key)}
+                  className={`min-h-[44px] flex items-center justify-center gap-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                    form.leave_type === key
+                      ? 'bg-primary text-white border-primary shadow-sm'
+                      : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
+                  }`}>
+                  <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    form.leave_type === key ? 'border-white bg-white' : 'border-neutral-300'
+                  }`}>
+                    {form.leave_type === key && <span className="w-2 h-2 rounded-full bg-primary" />}
+                  </span>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {form.leave_type === 'early' && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className={LBL}>From</span>
+                  <PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))} placeholder="08:00" inputClassName={INP} />
+                </label>
+                <label className="block">
+                  <span className={LBL}>To</span>
+                  <PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))} placeholder="10:00" inputClassName={INP} />
+                </label>
+                <p className="col-span-2 text-xs text-neutral-500">Duration: <span className="font-bold text-primary">{earlyDays(form.early_from, form.early_to)}</span> day(s)</p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3">
+            <div className={LBL}>Payment <span className="text-neutral-400 font-normal" dir="rtl">— مدفوع / غير مدفوع</span></div>
+            <div className="grid grid-cols-2 gap-2">
+              {[[true, 'Paid'], [false, 'Unpaid']].map(([val, label]) => (
+                <button key={String(val)} type="button" onClick={() => set('paid', val)}
+                  className={`min-h-[44px] flex items-center justify-center gap-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                    form.paid === val
+                      ? 'bg-primary text-white border-primary shadow-sm'
+                      : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 grid grid-cols-1 gap-3">
+            <label className="block">
+              <span className={LBL}>Request Date <span className="text-neutral-400 font-normal" dir="rtl">— تاريخ الطلب</span></span>
+              <PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" inputClassName={INP} />
+            </label>
+            <label className="block">
+              <span className={LBL}>Start Date <span className="text-neutral-400 font-normal" dir="rtl">— تاريخ البداية</span></span>
+              <PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} inputClassName={INP} />
+            </label>
+            <label className="block">
+              <span className={LBL}>End Date <span className="text-neutral-400 font-normal" dir="rtl">— تاريخ الانتهاء</span></span>
+              <PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} inputClassName={INP} />
+            </label>
+            {days > 0 && (
+              <p className="text-xs text-neutral-500">Total: <span className="font-bold text-primary">{fmtDays(days)}</span> day(s)</p>
+            )}
+          </div>
+
+          <div className="p-3">
+            <div className={LBL}>Purpose <span className="text-neutral-400 font-normal" dir="rtl">— الغرض</span></div>
+            <div className="flex flex-wrap gap-2">
+              {leavePurposeOptions.map(option => {
+                const { value, ar } = splitPurposeOption(option)
+                return (
+                  <button key={value} type="button" onClick={() => set('purpose', value)}
+                    className={`min-h-[40px] px-3 rounded-xl border text-sm font-semibold transition-all ${
+                      form.purpose === value
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
+                    }`}>
+                    {value}{ar && <span className="ml-1 opacity-80" dir="rtl">{ar}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="p-3">
+            <div className={LBL}>Alternate Employee <span className="text-neutral-400 font-normal" dir="rtl">— الموظف البديل</span></div>
+            <EmployeeSearch
+              onSelect={emp => set('alternate_employee_name', twoName(emp.name))}
+              initialName={form.alternate_employee_name}
+              onInputChange={value => set('alternate_employee_name', value)}
+            />
+          </div>
+
+          <div className="p-3 bg-neutral-50">
+            <div className={LBL}>Approval Signatures</div>
+            <div className="space-y-1.5 text-xs">
+              <p className="flex justify-between"><span className="text-neutral-500">Direct Manager</span><span className="font-semibold text-secondary-700">{form.direct_manager_name || '—'}</span></p>
+              <p className="flex justify-between"><span className="text-neutral-500">Human Resource</span><span className="font-semibold text-secondary-700">{HR_OFFICER}</span></p>
+              <p className="flex justify-between"><span className="text-neutral-500">Depot Manager</span><span className="font-semibold text-secondary-700">{depotManagerName}</span></p>
+              <p className="text-[11px] text-neutral-400 pt-1 italic">Available balance is confidential and shown to approvers after submission.</p>
+            </div>
+          </div>
+
+          <div className="border-t-2 border-neutral-950 text-center text-[10px] font-bold py-1.5 px-2 text-neutral-800 bg-neutral-50">
+            Document No: <span className="text-red-600">SRS-HR-P02-F01</span> · <span className="text-red-600">Rev.: 03</span> · Page 1 of 1
+          </div>
+        </div>
+      </div>
+
+      {/* ── DESKTOP PAPER-FORM (sm+) ────────────────────────────── */}
+      <div className="hidden sm:block overflow-x-auto">
         <div className="min-w-[760px] p-4">
           <table className="w-full border-collapse border-2 border-neutral-950">
             <tbody><tr>
@@ -1472,7 +1607,11 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
           <div className="mt-2 flex items-center justify-between border-t-2 border-neutral-950 pt-2 text-[10px] font-bold"><span>Document No: <span className="text-red-600">SRS-HR-P02-F01</span> | <span className="text-red-600">Rev.: 03</span> | Rev. Date: 06/05/2026</span><span>| Page 1 of 1</span></div>
         </div>
       </div>
-      <div className="flex justify-end border-t border-neutral-100 px-4 py-4"><button type="submit" disabled={saving || !form.employee_name} className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-primary/90 disabled:opacity-60">{saving ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting...</> : 'Submit Leave Request'}</button></div>
+      <div className="flex justify-end border-t border-neutral-100 px-3 sm:px-4 py-3 sm:py-4">
+        <button type="submit" disabled={saving || !form.employee_name} className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 sm:py-2.5 text-sm font-bold text-white transition-all hover:bg-primary/90 disabled:opacity-60">
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting...</> : 'Submit Leave Request'}
+        </button>
+      </div>
     </form>
   )
 }
