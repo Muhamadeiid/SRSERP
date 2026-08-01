@@ -26,6 +26,7 @@ use App\Http\Controllers\FleetCheckController;
 use App\Http\Controllers\WithdrawalController;
 use App\Http\Controllers\PublicHolidayController;
 use App\Http\Controllers\MaintenanceTaskController;
+use App\Http\Controllers\PushController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -70,6 +71,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications',           [LeaveRequestController::class, 'notifications']);
     Route::post('/notifications/read-all', [LeaveRequestController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read',[LeaveRequestController::class, 'markRead']);
+
+    // ── Web push subscriptions — every authenticated user ─────────────────────
+    Route::get('/push/public-key',   [PushController::class, 'publicKey']);
+    Route::post('/push/subscribe',   [PushController::class, 'subscribe']);
+    Route::post('/push/unsubscribe', [PushController::class, 'unsubscribe']);
 
     // ── Subordinates — any manager can fetch their own ────────────────────────
     Route::get('/users/subordinates', [UserController::class, 'subordinates']);

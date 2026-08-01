@@ -1,9 +1,15 @@
 // src/components/dashboard/TopBar.jsx
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSelector } from 'react-redux'
-import { Bell, X, CheckCheck, Calendar, Clock, Menu } from 'lucide-react'
+import { Bell, BellOff, X, CheckCheck, Calendar, Clock, Menu } from 'lucide-react'
 import { getNotifications, markAllRead, markOneRead } from '../../services/leaveService'
 import { notificationRequestTarget } from '../../utils/notificationRoute'
+import {
+  pushSupported,
+  pushSubscriptionActive,
+  enablePushNotifications,
+  disablePushNotifications,
+} from '../../services/pushService'
 import { useNavigate } from 'react-router-dom'
 
 const fmtTime = (d) => {
@@ -29,7 +35,35 @@ export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuCli
   const [clock, setClock]   = useState('')
   const [notifs, setNotifs] = useState([])
   const [open, setOpen]     = useState(false)
+  const [pushOn, setPushOn] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
   const panelRef = useRef()
+
+  const supportsPush = pushSupported()
+
+  useEffect(() => {
+    if (!supportsPush) return
+    pushSubscriptionActive().then(setPushOn).catch(() => {})
+  }, [supportsPush])
+
+  const togglePush = async (e) => {
+    e.stopPropagation()
+    if (pushBusy) return
+    setPushBusy(true)
+    try {
+      if (pushOn) {
+        await disablePushNotifications()
+        setPushOn(false)
+      } else {
+        await enablePushNotifications()
+        setPushOn(true)
+      }
+    } catch (err) {
+      alert(err.message || 'Could not update push notifications')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   /* ── clock ── */
   useEffect(() => {
@@ -175,12 +209,26 @@ export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuCli
               </div>
 
               {/* Footer */}
-              {notifs.length > 0 && (
-                <div className="px-4 py-2.5 border-t border-neutral-100 text-center">
-                  <button onClick={() => { setOpen(false); navigate('/human-resources/leave-requests') }}
-                    className="text-xs sm:text-[11px] text-primary font-semibold hover:underline py-1.5 inline-block">
-                    View all in Leave Requests →
-                  </button>
+              {(notifs.length > 0 || supportsPush) && (
+                <div className="border-t border-neutral-100">
+                  {supportsPush && (
+                    <button onClick={togglePush} disabled={pushBusy}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold border-b border-neutral-100 transition-colors disabled:opacity-60 ${
+                        pushOn ? 'text-neutral-500 hover:bg-neutral-50' : 'text-primary hover:bg-primary/5'
+                      }`}>
+                      {pushOn
+                        ? <><BellOff className="w-3.5 h-3.5" /> Turn off push on this device</>
+                        : <><Bell className="w-3.5 h-3.5" /> Enable push on this device</>}
+                    </button>
+                  )}
+                  {notifs.length > 0 && (
+                    <div className="px-4 py-2.5 text-center">
+                      <button onClick={() => { setOpen(false); navigate('/human-resources/leave-requests') }}
+                        className="text-xs sm:text-[11px] text-primary font-semibold hover:underline py-1.5 inline-block">
+                        View all in Leave Requests →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

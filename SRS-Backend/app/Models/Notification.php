@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PushSender;
 use Illuminate\Database\Eloquent\Model;
 
 class Notification extends Model
@@ -17,8 +18,11 @@ class Notification extends Model
 
     public function user() { return $this->belongsTo(User::class); }
 
-    // Create a notification for every user that has one of the given roles
-    public static function notifyRole(string $role, string $type, string $title, string $body, array $data = []): void
+    // Create a notification for every user that has one of the given roles.
+    // Set $push=true only when this is an action item that the recipient must handle
+    // themselves (approvals waiting on them, tasks assigned to them). Broadcast / audit
+    // notifications should stay false to avoid noisy push spam.
+    public static function notifyRole(string $role, string $type, string $title, string $body, array $data = [], bool $push = false): void
     {
         $users = User::where('role', $role)->where('is_active', true)->get();
         foreach ($users as $user) {
@@ -29,11 +33,14 @@ class Notification extends Model
                 'body'    => $body,
                 'data'    => $data,
             ]);
+            if ($push) {
+                PushSender::sendToUser($user->id, $title, $body, $data + ['type' => $type]);
+            }
         }
     }
 
-    // Create a notification for a specific user
-    public static function notifyUser(int $userId, string $type, string $title, string $body, array $data = []): void
+    // Create a notification for a specific user. See notifyRole for $push semantics.
+    public static function notifyUser(int $userId, string $type, string $title, string $body, array $data = [], bool $push = false): void
     {
         static::create([
             'user_id' => $userId,
@@ -42,5 +49,8 @@ class Notification extends Model
             'body'    => $body,
             'data'    => $data,
         ]);
+        if ($push) {
+            PushSender::sendToUser($userId, $title, $body, $data + ['type' => $type]);
+        }
     }
 }

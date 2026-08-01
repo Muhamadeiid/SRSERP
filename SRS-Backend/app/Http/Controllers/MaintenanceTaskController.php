@@ -101,12 +101,14 @@ class MaintenanceTaskController extends Controller
 
         $position = $this->trainPosition($task);
         foreach ($viewerIds as $viewerId) {
+            // Task assignees must act on this — push so they see it away from the app.
             Notification::notifyUser(
                 $viewerId,
                 'maintenance_task_assigned',
                 'New maintenance task',
                 $task->title . ($position ? " - {$position}" : ''),
-                ['maintenance_task_id' => $task->id, 'path' => '/maintenance']
+                ['maintenance_task_id' => $task->id, 'path' => '/maintenance'],
+                true
             );
         }
 
