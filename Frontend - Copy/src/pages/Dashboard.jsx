@@ -62,19 +62,19 @@ function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
 
   return (
     <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden border-l-4 border-l-blue-500">
-      <div className="px-5 py-4 border-b border-neutral-50 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-neutral-50 flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
             <FileText className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-secondary-700">My Requests</p>
-            <p className="text-[11px] text-neutral-400 mt-0.5">Status of your submitted leave & overtime requests</p>
+            <p className="text-[11px] text-neutral-400 mt-0.5 hidden sm:block">Status of your submitted leave & overtime requests</p>
           </div>
         </div>
         <button onClick={onNewRequest}
-          className="text-xs font-bold text-white bg-primary hover:bg-primary/90 px-3 py-2 rounded-lg whitespace-nowrap">
-          + New Request
+          className="text-xs font-bold text-white bg-primary hover:bg-primary/90 px-3 py-2 rounded-lg whitespace-nowrap shrink-0">
+          + New
         </button>
       </div>
 
@@ -84,9 +84,9 @@ function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
           ['Approved',    approvedCount,    'text-green-600'],
           ['Rescheduled', rescheduledOpen,  'text-orange-600'],
         ].map(([lbl, val, col]) => (
-          <div key={lbl} className="px-4 py-3 text-center">
-            <p className={`text-2xl font-extrabold ${col}`}>{loading ? '…' : val}</p>
-            <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-wider">{lbl}</p>
+          <div key={lbl} className="px-2 sm:px-4 py-3 text-center">
+            <p className={`text-xl sm:text-2xl font-extrabold ${col}`}>{loading ? '…' : val}</p>
+            <p className="text-[9px] sm:text-[10px] text-neutral-400 mt-0.5 uppercase tracking-wider leading-tight">{lbl}</p>
           </div>
         ))}
       </div>
@@ -111,7 +111,7 @@ function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
               : `${(r.ot_date||'').slice(0,10)} · ${r.start_time?.slice(0,5)}–${r.end_time?.slice(0,5)}`
             return (
               <button key={r.id} onClick={() => r.status === 'rescheduled' ? onResubmit(r.id) : onOpen(r.id)}
-                className="w-full px-5 py-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors text-left">
+                className="w-full px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 hover:bg-neutral-50 transition-colors text-left">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isLRF ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
                   {isLRF ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                 </div>
@@ -136,24 +136,24 @@ function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
 function DeptSection({ title, subtitle, icon: Icon, accentColor, headerBg, iconBg, onView, viewLabel = 'View Module', children }) {
   return (
     <div className={`bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden border-l-4 ${accentColor}`}>
-      <div className={`px-5 py-4 flex items-center justify-between ${headerBg} border-b border-neutral-100`}>
-        <div className="flex items-center gap-3">
+      <div className={`px-3 sm:px-5 py-3 sm:py-4 flex items-center justify-between gap-2 ${headerBg} border-b border-neutral-100`}>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
             <Icon className="w-4 h-4" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-secondary-700">{title}</h2>
-            {subtitle && <p className="text-[10px] text-neutral-400 mt-0.5">{subtitle}</p>}
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-secondary-700 truncate">{title}</h2>
+            {subtitle && <p className="text-[10px] text-neutral-400 mt-0.5 hidden sm:block">{subtitle}</p>}
           </div>
         </div>
         {onView && (
           <button onClick={onView}
-            className="flex items-center gap-1 text-xs font-bold text-primary hover:underline">
-            {viewLabel} <ArrowRight className="w-3 h-3" />
+            className="flex items-center gap-1 text-xs font-bold text-primary hover:underline shrink-0 whitespace-nowrap">
+            <span className="hidden sm:inline">{viewLabel}</span><span className="sm:hidden">Open</span> <ArrowRight className="w-3 h-3" />
           </button>
         )}
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="p-3 sm:p-5">{children}</div>
     </div>
   )
 }
@@ -449,7 +449,7 @@ export default function DashboardPage() {
             onView={() => navigate('/inventory')}
             viewLabel="Open Inventory"
           >
-            <div className="flex items-center gap-4 bg-emerald-50/60 rounded-xl p-4">
+            <div className="flex items-center gap-3 sm:gap-4 bg-emerald-50/60 rounded-xl p-3 sm:p-4">
               <Package2 className="w-10 h-10 text-emerald-400 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-emerald-700">Inventory Module Active</p>
@@ -476,7 +476,7 @@ export default function DashboardPage() {
             viewLabel="Open Module"
           >
             {role === 'admin' ? (
-              <div className="flex items-center gap-4 bg-orange-50/60 rounded-xl p-4">
+              <div className="flex items-center gap-3 sm:gap-4 bg-orange-50/60 rounded-xl p-3 sm:p-4">
                 <Wrench className="w-10 h-10 text-orange-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-orange-700">Module Preview (Admin Only)</p>
@@ -490,7 +490,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-4 bg-neutral-50 rounded-xl p-4">
+              <div className="flex items-center gap-3 sm:gap-4 bg-neutral-50 rounded-xl p-3 sm:p-4">
                 <Wrench className="w-10 h-10 text-neutral-300 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-neutral-500">Module Coming Soon</p>
@@ -542,7 +542,7 @@ export default function DashboardPage() {
 
           {/* Recent activity */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
               <h3 className="text-sm font-bold text-secondary-700">Recent Activity</h3>
               <button onClick={() => navigate(isHRFull ? '/human-resources/leave' : '/procurement')}
                 className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
@@ -567,7 +567,7 @@ export default function DashboardPage() {
                                              { color: 'bg-purple-50 text-purple-500', Icon: ShoppingCart }
                   return (
                     <button key={i} onClick={() => it.href && navigate(it.href)}
-                      className="w-full flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors text-left">
+                      className="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-neutral-50 transition-colors text-left">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${cfg.color}`}>
                         <cfg.Icon className="w-3.5 h-3.5" />
                       </div>
@@ -585,7 +585,7 @@ export default function DashboardPage() {
 
           {/* Alerts */}
           <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+            <div className="px-3 sm:px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
               <h3 className="text-sm font-bold text-secondary-700 flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Alerts
               </h3>
@@ -606,7 +606,7 @@ export default function DashboardPage() {
                                                 'bg-blue-50  text-blue-700  border-l-blue-500'
                   return (
                     <button key={i} onClick={() => a.href && navigate(a.href)}
-                      className={`w-full flex items-start gap-2 px-5 py-3 border-l-4 ${palette} hover:opacity-90 transition-all text-left`}>
+                      className={`w-full flex items-start gap-2 px-3 sm:px-5 py-3 border-l-4 ${palette} hover:opacity-90 transition-all text-left`}>
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                       <p className="text-xs font-semibold leading-relaxed">{a.message}</p>
                     </button>
