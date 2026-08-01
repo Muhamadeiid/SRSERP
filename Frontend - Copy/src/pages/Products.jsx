@@ -303,7 +303,70 @@ export default function Products() {
                 </div>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  {/* ── Mobile: card list (< sm) ── */}
+                  <div className="sm:hidden divide-y divide-neutral-100">
+                    {filtered.map(p => {
+                      const status = getStatus(p.stock, p.min)
+                      const pct = Math.min(100, Math.round((p.stock / Math.max(p.min * 2, 1)) * 100))
+                      const isLow = status === 'Low'
+                      const isMid = status === 'Mid'
+                      return (
+                        <div key={p.id} className={`p-3 ${isLow ? 'bg-red-50/60 border-l-4 border-l-red-400' : ''}`}>
+                          <div className="flex items-start gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isLow ? 'bg-red-100 text-red-500' : 'bg-neutral-100 text-secondary-400'}`}>
+                              {isLow
+                                ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                : CAT_ICON[p.cat] ?? CAT_ICON['Tools']}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-secondary-700 text-sm truncate">{p.desc}</p>
+                              <p className="text-[11px] text-neutral-400 mt-0.5 font-mono">{p.code}</p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-neutral-100 text-neutral-600">{p.cat}</span>
+                                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">{p.site}</span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${isLow ? 'bg-red-500' : isMid ? 'bg-yellow-400' : 'bg-secondary'}`} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className={`text-xs font-semibold tabular-nums ${isLow ? 'text-red-500' : isMid ? 'text-yellow-600' : 'text-secondary-700'}`}>
+                                  {p.stock} {p.unit}
+                                </span>
+                                <span className="text-[10px] text-neutral-400 tabular-nums">min {p.min}</span>
+                              </div>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <div className="text-[11px] font-mono text-neutral-500 min-w-0 truncate">
+                                  <span className="text-neutral-400">HRC:</span> {p.hrc}
+                                  {p.sup && <><span className="text-neutral-300 mx-1">·</span>{p.sup}</>}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isLow ? (
+                                    <button className="px-3 py-1.5 text-xs font-bold bg-secondary text-white rounded-md">REORDER</button>
+                                  ) : (
+                                    <>
+                                      <button onClick={() => setProductModal({ open: true, product: p })}
+                                        aria-label="Edit"
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-primary/10 text-neutral-400 hover:text-primary">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                      </button>
+                                      <button onClick={() => setDeleteTarget(p)}
+                                        aria-label="Delete"
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* ── Desktop: table (sm+) ── */}
+                  <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full min-w-[980px] text-sm">
                     <thead>
                       <tr className="border-b border-neutral-100 bg-neutral-50/50">
