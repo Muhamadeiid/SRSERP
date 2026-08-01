@@ -334,7 +334,59 @@ export default function MaintenanceTab({ type, label, departments }) {
             <p className="text-xs mt-1">Create your first job card to get started</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* ── Mobile: card list (< sm) ── */}
+          <div className="sm:hidden divide-y divide-neutral-100">
+            {filtered.map(card => (
+              <div key={card.id} className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <button onClick={() => setExpandedId(expandedId === card.id ? null : card.id)}
+                    className="min-w-0 flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] font-bold text-primary shrink-0">{card.card_no}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${PRIORITY_STYLE[card.priority] || ''}`}>{card.priority}</span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-secondary-700">{card.title}</p>
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openForm(card)} aria-label="Edit" className="w-9 h-9 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-400 hover:text-primary">
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(card.id)} aria-label="Delete" className="w-9 h-9 rounded-lg hover:bg-red-50 flex items-center justify-center text-neutral-400 hover:text-red-500">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                  <div className="min-w-0">
+                    <dt className="text-neutral-400 uppercase tracking-wider">Equipment</dt>
+                    <dd className="text-neutral-600 font-mono truncate">{card.equipment?.code || '—'}{card.equipment?.name ? ` · ${card.equipment.name}` : ''}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-neutral-400 uppercase tracking-wider">Assigned</dt>
+                    <dd className="text-neutral-600 truncate">{card.assigned_to_name || '—'}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-neutral-400 uppercase tracking-wider">Date</dt>
+                    <dd className="text-neutral-600">{card.reported_date ? new Date(card.reported_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-2">
+                  <select value={card.status} onChange={e => handleStatusChange(card, e.target.value)}
+                    className={`w-full min-h-[40px] px-3 rounded-lg text-xs font-bold border cursor-pointer outline-none ${STATUS_STYLE[card.status] || ''}`}>
+                    {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Desktop: table (sm+) ── */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-neutral-100 bg-neutral-50/50 text-neutral-400 text-[11px] uppercase tracking-wider">
@@ -394,6 +446,7 @@ export default function MaintenanceTab({ type, label, departments }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
