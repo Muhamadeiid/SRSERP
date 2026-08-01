@@ -115,31 +115,32 @@ export default function HRTopBar() {
           </button>
 
           {open && (
-            <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl border border-neutral-200 shadow-2xl z-50 overflow-hidden">
+            <div className="fixed sm:absolute inset-x-2 sm:inset-x-auto sm:right-0 top-14 sm:top-10 sm:w-96 max-w-md sm:max-w-none bg-white rounded-2xl border border-neutral-200 shadow-2xl z-50 overflow-hidden mx-auto sm:mx-0">
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
-                <div className="flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-primary" />
+                <div className="flex items-center gap-2 min-w-0">
+                  <Bell className="w-4 h-4 text-primary shrink-0" />
                   <p className="text-sm font-bold text-secondary-700">Notifications</p>
                   {unread > 0 && (
-                    <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full">{unread} new</span>
+                    <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full shrink-0">{unread} new</span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 shrink-0">
                   {unread > 0 && (
                     <button onClick={handleMarkAll}
-                      className="flex items-center gap-1 text-[11px] text-primary font-semibold hover:underline">
-                      <CheckCheck className="w-3 h-3" /> Mark all read
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-primary font-semibold hover:bg-primary/5">
+                      <CheckCheck className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Mark all read</span><span className="sm:hidden">Read all</span>
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
-                    <X className="w-3.5 h-3.5" />
+                  <button onClick={() => setOpen(false)} aria-label="Close notifications"
+                    className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg hover:bg-neutral-100 text-neutral-500 flex items-center justify-center">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               {/* List */}
-              <div className="max-h-80 overflow-y-auto divide-y divide-neutral-50">
+              <div className="max-h-[60vh] sm:max-h-80 overflow-y-auto divide-y divide-neutral-50">
                 {notifs.length === 0 ? (
                   <div className="py-12 text-center text-neutral-300">
                     <Bell className="w-7 h-7 mx-auto mb-2 opacity-40" />
@@ -147,16 +148,16 @@ export default function HRTopBar() {
                   </div>
                 ) : notifs.map(n => (
                   <button key={n.id} onClick={() => handleClick(n)}
-                    className={`w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors flex items-start gap-3 ${!n.read ? 'bg-blue-50/50' : ''}`}>
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!n.read ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
+                    className={`w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors flex items-start gap-3 min-h-[64px] ${!n.read ? 'bg-blue-50/50' : ''}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!n.read ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
                       {TYPE_ICON[n.type?.split('_')[0]] ?? <Bell className="w-3.5 h-3.5" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-bold truncate ${!n.read ? 'text-secondary-700' : 'text-neutral-500'}`}>{n.title}</p>
-                      <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
-                      <p className="text-[10px] text-neutral-300 mt-1">{fmtTime(n.created_at)}</p>
+                      <p className={`text-sm sm:text-xs font-bold ${!n.read ? 'text-secondary-700' : 'text-neutral-500'} line-clamp-1`}>{n.title}</p>
+                      <p className="text-xs sm:text-[11px] text-neutral-500 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
+                      <p className="text-[10px] text-neutral-400 mt-1">{fmtTime(n.created_at)}</p>
                     </div>
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                    {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />}
                   </button>
                 ))}
               </div>
@@ -165,7 +166,7 @@ export default function HRTopBar() {
               {notifs.length > 0 && (
                 <div className="px-4 py-2.5 border-t border-neutral-100 text-center">
                   <button onClick={() => { setOpen(false); navigate('/human-resources/leave-requests') }}
-                    className="text-[11px] text-primary font-semibold hover:underline">
+                    className="text-xs sm:text-[11px] text-primary font-semibold hover:underline py-1.5 inline-block">
                     View all in Leave Requests →
                   </button>
                 </div>
