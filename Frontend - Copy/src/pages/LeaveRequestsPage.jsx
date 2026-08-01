@@ -1689,11 +1689,11 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
         </div>
       )}
       {/* ══ PAGE HEADER — matches PDF ══ */}
-      <table className="w-full border-collapse border-2 border-neutral-800">
+      <table className="w-full border-collapse border-2 border-neutral-800 table-fixed">
         <tbody>
           <tr>
-            <td className="border-r-2 border-neutral-800 w-[160px] px-3 py-2 align-middle">
-              <img src="/logo.svg" alt="Rotem SRS Egypt" className="h-14 w-auto object-contain"
+            <td className="border-r-2 border-neutral-800 w-[100px] sm:w-[160px] px-2 sm:px-3 py-2 align-middle">
+              <img src="/logo.svg" alt="Rotem SRS Egypt" className="h-9 sm:h-14 w-auto object-contain mx-auto"
                 onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }} />
               <div style={{display:'none'}} className="items-center gap-1">
                 <span className="text-2xl font-black text-[#1b5e38] italic leading-none">Rotem</span>
@@ -1703,9 +1703,9 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
                 </div>
               </div>
             </td>
-            <td className="text-center px-4 py-3 align-middle">
-              <p className="text-xl font-black text-secondary-800 tracking-wide">Overtime Request Form</p>
-              <p className="text-sm font-bold text-secondary-700 mt-1">إذن عمل ساعات إضافيه</p>
+            <td className="text-center px-2 sm:px-4 py-2 sm:py-3 align-middle">
+              <p className="text-sm sm:text-xl font-black text-secondary-800 tracking-wide leading-tight">Overtime Request Form</p>
+              <p className="text-xs sm:text-sm font-bold text-secondary-700 mt-0.5 sm:mt-1">إذن عمل ساعات إضافيه</p>
             </td>
           </tr>
         </tbody>
@@ -1714,74 +1714,75 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
       <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, hours, tracking_no: genOTRNo(), status: 'pending', type: 'otr', created_at: new Date().toISOString() }) }} className="divide-y divide-neutral-100">
 
         {/* Employee + Date */}
-        <div className="grid grid-cols-2 divide-x divide-neutral-100">
-          <div className="divide-y divide-neutral-100">
-            <div className="grid grid-cols-[120px_1fr] divide-x divide-neutral-100">
-              <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Employee Name</p><p className="text-[10px] text-neutral-400">إسم الموظف</p></div>
-              <div className="px-4 py-3"><EmployeeSearch onSelect={handleEmployeeSelect} initialName={form.employee_name} /></div>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-neutral-100">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[120px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700 leading-tight">Employee Name</p><p className="text-[10px] text-neutral-400">إسم الموظف</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><EmployeeSearch onSelect={handleEmployeeSelect} initialName={form.employee_name} /></div>
           </div>
-          <div className="grid grid-cols-[80px_1fr] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Date</p><p className="text-[10px] text-neutral-400">التاريخ</p></div>
-            <div className="px-4 py-3"><input type="date" required value={form.ot_date} onChange={e => set('ot_date', e.target.value)} className={INP} /></div>
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[80px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Date</p><p className="text-[10px] text-neutral-400">التاريخ</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><input type="date" required value={form.ot_date} onChange={e => set('ot_date', e.target.value)} className={INP} /></div>
           </div>
         </div>
 
         {/* Title + Department */}
-        <div className="grid grid-cols-2 divide-x divide-neutral-100">
-          <div className="grid grid-cols-[120px_1fr] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Title</p><p className="text-[10px] text-neutral-400">المسمى الوظيفي</p></div>
-            <div className="px-4 py-3"><input value={form.job_title} onChange={e => set('job_title', e.target.value)} className={INP} placeholder="Auto-filled" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-neutral-100">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[120px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Title</p><p className="text-[10px] text-neutral-400">المسمى الوظيفي</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><input value={form.job_title} onChange={e => set('job_title', e.target.value)} className={INP} placeholder="Auto-filled" /></div>
           </div>
-          <div className="grid grid-cols-[80px_1fr] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Department</p><p className="text-[10px] text-neutral-400">الإداره</p></div>
-            <div className="px-4 py-3"><input value={form.department_label || form.department} readOnly className={INP + ' bg-neutral-50 cursor-default'} placeholder="Auto-filled" /></div>
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[80px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Department</p><p className="text-[10px] text-neutral-400">الإداره</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><input value={form.department_label || form.department} readOnly className={INP + ' bg-neutral-50 cursor-default'} placeholder="Auto-filled" /></div>
           </div>
         </div>
 
         {/* Overtime From / To / Hours */}
-        <div className="grid grid-cols-[1fr_1fr_200px] divide-x divide-neutral-100">
-          <div className="grid grid-cols-[140px_1fr] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Overtime needed from</p><p className="text-[10px] text-neutral-400">العمل الإضافي من</p></div>
-            <div className="px-4 py-3"><input type="time" required value={form.start_time} onChange={e => set('start_time', e.target.value)} className={INP} /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_200px] divide-y sm:divide-y-0 sm:divide-x divide-neutral-100">
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[140px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700 leading-tight">Overtime needed from</p><p className="text-[10px] text-neutral-400">العمل الإضافي من</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><input type="time" required value={form.start_time} onChange={e => set('start_time', e.target.value)} className={INP} /></div>
           </div>
-          <div className="grid grid-cols-[40px_1fr] divide-x divide-neutral-100">
-            <div className="px-2 py-3 bg-neutral-50 flex items-center justify-center"><p className="text-xs font-bold text-secondary-700">To</p></div>
-            <div className="px-4 py-3"><input type="time" required value={form.end_time} onChange={e => set('end_time', e.target.value)} className={INP} /></div>
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[40px_1fr] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-2 py-2.5 sm:py-3 bg-neutral-50 flex sm:items-center sm:justify-center">
+              <p className="text-xs font-bold text-secondary-700">To <span className="sm:hidden text-[10px] font-normal text-neutral-400">— إلى</span></p>
+            </div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 min-w-0"><input type="time" required value={form.end_time} onChange={e => set('end_time', e.target.value)} className={INP} /></div>
           </div>
-          <div className="grid grid-cols-[1fr_80px] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">Total not to exceed</p><p className="text-[10px] text-neutral-400">إجمالي الساعات</p></div>
-            <div className="px-4 py-3 flex items-center justify-center">
-              <span className="text-xl font-black text-primary">{hours}</span>
+          <div className="grid grid-cols-[110px_1fr] sm:grid-cols-[1fr_80px] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700 leading-tight">Total not to exceed</p><p className="text-[10px] text-neutral-400">إجمالي الساعات</p></div>
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 flex items-center sm:justify-center">
+              <span className="text-2xl sm:text-xl font-black text-primary">{hours}</span>
+              <span className="ml-1.5 text-[10px] text-neutral-400 sm:hidden">hrs</span>
             </div>
           </div>
         </div>
 
         {/* Explanation */}
         <div className="divide-y divide-neutral-100">
-          <div className="px-4 py-2 bg-neutral-50">
-            <p className="text-xs font-bold text-secondary-700">Detailed Explanation why over time is required</p>
+          <div className="px-3 sm:px-4 py-2 bg-neutral-50">
+            <p className="text-xs font-bold text-secondary-700 leading-tight">Detailed Explanation why over time is required</p>
             <p className="text-[10px] text-neutral-400">تفسير سبب إحتياج العمل لساعات إضافيه</p>
           </div>
-          <div className="px-4 py-3">
+          <div className="px-3 sm:px-4 py-2.5 sm:py-3">
             <textarea required value={form.explanation} onChange={e => set('explanation', e.target.value)} rows={4} className={INP + ' resize-none'} placeholder="Describe in detail why overtime is needed…" />
           </div>
         </div>
 
         {/* Overtime Results */}
         <div className="divide-y divide-neutral-100">
-          <div className="px-4 py-2 bg-neutral-50">
+          <div className="px-3 sm:px-4 py-2 bg-neutral-50">
             <p className="text-xs font-bold text-secondary-700">Overtime Results</p>
             <p className="text-[10px] text-neutral-400">نتائج العمل لساعات إضافيه</p>
           </div>
-          <div className="px-4 py-3">
+          <div className="px-3 sm:px-4 py-2.5 sm:py-3">
             <div className="flex flex-wrap gap-2 mb-3">
               {overtimeResultOptions.map(option => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => set('overtime_results', option)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
                     form.overtime_results === option
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40 hover:text-primary'
@@ -1796,23 +1797,23 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
         </div>
 
         {/* Signatures */}
-        {[ 
+        {[
           ['Direct Manager Signature', 'توقيع مدير المباشر', ''],
           ['HR Signature', 'توقيع الموارد البشرية', ''],
           ['Depot Manager Signature', 'توقيع مدير الموقع', ''],
         ].map(([en, ar, val]) => (
-          <div key={en} className="grid grid-cols-[200px_1fr_100px_150px] divide-x divide-neutral-100">
-            <div className="px-4 py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700">{en}</p><p className="text-[10px] text-neutral-400">{ar}</p></div>
-            <div className="px-4 py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{val}</p></div>
-            <div className="px-4 py-3 bg-neutral-50 flex items-center"><p className="text-xs font-bold text-secondary-700">Date</p></div>
-            <div className="px-4 py-4" />
+          <div key={en} className="grid grid-cols-[130px_1fr] sm:grid-cols-[200px_1fr_100px_150px] divide-x divide-neutral-100">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-neutral-50"><p className="text-xs font-bold text-secondary-700 leading-tight">{en}</p><p className="text-[10px] text-neutral-400">{ar}</p></div>
+            <div className="px-3 sm:px-4 py-3 sm:py-4 min-h-[48px] flex items-end"><p className="text-sm text-neutral-500 italic">{val}</p></div>
+            <div className="hidden sm:flex px-4 py-3 bg-neutral-50 items-center border-l border-neutral-100"><p className="text-xs font-bold text-secondary-700">Date</p></div>
+            <div className="hidden sm:block px-4 py-4 border-l border-neutral-100" />
           </div>
         ))}
 
         {/* Submit */}
-        <div className="px-6 py-4 bg-neutral-50 flex justify-end">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-neutral-50 flex justify-end">
           <button type="submit" disabled={saving || !form.employee_name}
-            className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-60">
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-60">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" />Submitting…</> : 'Submit Overtime Request'}
           </button>
         </div>
@@ -2032,12 +2033,12 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   }
 
   return createPortal(
-    <div className="fixed inset-0 w-screen h-screen z-[100] flex items-center justify-center p-4 isolate">
+    <div className="fixed inset-0 w-screen h-screen z-[100] flex items-center justify-center p-2 sm:p-4 isolate">
       <div className="fixed inset-0 w-screen h-screen bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col isolate">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col isolate">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-white shrink-0 z-30">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral-100 bg-white shrink-0 z-30">
           <div className="min-w-0 flex-1 mr-3">
             <p className="text-sm font-bold text-secondary-700">{isLRF ? 'Leave Request (LRF)' : 'Overtime Request (OTR)'}</p>
 
@@ -2083,12 +2084,12 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
 
         {/* Approval progress */}
-        <div className="px-6 pt-4">
+        <div className="px-4 sm:px-6 pt-4">
           <ApprovalProgress req={req} />
         </div>
 
         {/* Details */}
-        <div className="px-6 pb-4 divide-y divide-neutral-100 text-sm">
+        <div className="px-4 sm:px-6 pb-4 divide-y divide-neutral-100 text-sm">
           {[
             ['Employee',   req.employee_name],
             ['Job Title',  req.job_title],
@@ -2102,9 +2103,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             req.reschedule_reason ? ['Reschedule Reason', req.reschedule_reason] : null,
             ['Submitted', fmtShort(req.created_at)],
           ].filter(Boolean).map(([k, v]) => v ? (
-            <div key={k} className="py-2.5 grid grid-cols-[150px_1fr] gap-2">
-              <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">{k}</span>
-              <span className="text-secondary-700 font-medium">{v}</span>
+            <div key={k} className="py-2.5 grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-1 sm:gap-2">
+              <span className="text-[10px] sm:text-xs font-semibold text-neutral-400 uppercase tracking-wide">{k}</span>
+              <span className="text-secondary-700 font-medium break-words">{v}</span>
             </div>
           ) : null)}
         </div>
@@ -2418,24 +2419,24 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
   // Single row renderer used by both Active and History sections
   const renderRequestRow = (r, { showArchiveAction = false, showRestoreAction = false } = {}) => (
-    <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-neutral-50 transition-colors">
-      <div className="flex items-center gap-3">
+    <div key={r.id} className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 hover:bg-neutral-50 transition-colors">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
           {r.type==='lrf' ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
         </div>
-        <div>
-          <p className="text-sm font-semibold text-secondary-700">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-secondary-700 truncate">
             {r.type==='lrf' ? `${(r.leave_type||'').replace('_',' ')} Leave` : 'Overtime Request'}
             {r.tracking_no && <span className="ml-2 text-xs text-neutral-400 font-normal">{r.tracking_no}</span>}
           </p>
-          <p className="text-xs text-neutral-400">
+          <p className="text-[11px] sm:text-xs text-neutral-400 truncate">
             {r.employee_name} · {r.type==='lrf'
               ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${fmtDays(r.days)}d`
               : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${displayOvertimeHours(r.hours)}h`}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <StatusBadge status={r.status} />
         <button
           onClick={() => openRequest(r)}
@@ -2630,20 +2631,20 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
 
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold text-secondary-700">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-extrabold text-secondary-700 leading-tight">
             {showOnly === 'otr' ? 'Overtime Requests' : showOnly === 'lrf' ? 'Leave Requests' : 'Leave & Overtime Requests'}
           </h1>
-          <p className="text-sm text-neutral-400 mt-0.5">
+          <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
             {showOnly === 'otr' ? 'نموذج العمل الإضافي' : showOnly === 'lrf' ? 'نماذج طلب الإجازة' : 'نماذج طلب الإجازة وساعات العمل الإضافي'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Refresh */}
           <button onClick={fetchRequests}
             className="p-2 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-neutral-400 transition-colors">
@@ -2654,7 +2655,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {/* Success toast — fixed bottom-right */}
       {submitted && (
-        <div className="fixed bottom-6 right-6 z-[60] flex items-start gap-3 bg-white border border-green-200 shadow-2xl rounded-2xl px-5 py-4 max-w-sm animate-fade-in">
+        <div className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:right-6 sm:left-auto z-[60] flex items-start gap-3 bg-white border border-green-200 shadow-2xl rounded-2xl px-4 sm:px-5 py-3 sm:py-4 sm:max-w-sm animate-fade-in">
           <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center shrink-0 mt-0.5">
             <CheckCircle className="w-5 h-5 text-green-500" />
           </div>
@@ -2672,15 +2673,15 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {/* Tab selector — hidden when showing only one type */}
       {!showOnly && (
-        <div className="flex gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
           {[['lrf', 'Leave Request (LRF)', 'نموذج طلب الإجازة'],
             ['otr', 'Overtime Request (OTR)', 'نموذج العمل الإضافي']].map(([key, label, sub]) => (
             <button key={key} onClick={() => setTab(key)}
-              className={`flex flex-col items-start px-5 py-3 rounded-xl border transition-all text-left ${
+              className={`flex flex-col items-start px-3 py-2.5 sm:px-5 sm:py-3 rounded-xl border transition-all text-left ${
                 tab === key ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-neutral-500 border-neutral-200 hover:border-primary/40 hover:text-primary'
               }`}>
-              <span className="text-sm font-bold">{label}</span>
-              <span className={`text-[11px] mt-0.5 ${tab === key ? 'text-white/70' : 'text-neutral-400'}`}>{sub}</span>
+              <span className="text-xs sm:text-sm font-bold leading-tight">{label}</span>
+              <span className={`text-[10px] sm:text-[11px] mt-0.5 ${tab === key ? 'text-white/70' : 'text-neutral-400'}`}>{sub}</span>
             </button>
           ))}
         </div>
