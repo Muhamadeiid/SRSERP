@@ -2423,9 +2423,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           >
             {canWithdraw && (
               <button onClick={() => onCancel(req.id)}
-                className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-neutral-600 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-xl transition-all text-sm font-semibold">
+                title="Withdraw" aria-label="Withdraw"
+                className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-neutral-600 sm:text-neutral-500 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                 <Ban className="w-4 h-4" />
-                <span>Withdraw</span>
+                <span className="sm:hidden">Withdraw</span>
               </button>
             )}
 
@@ -2433,19 +2434,22 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             {req.status === 'pending' && isDirectManager && !isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reschedule" aria-label="Reschedule"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <CalendarClock className="w-4 h-4" />
-                  <span>Reschedule</span>
+                  <span className="sm:hidden">Reschedule</span>
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reject" aria-label="Reject"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <XCircle className="w-4 h-4" />
-                  <span>Reject</span>
+                  <span className="sm:hidden">Reject</span>
                 </button>
                 <button onClick={submitManagerApproval}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold shadow-sm">
+                  title="Approve" aria-label="Approve"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold sm:font-normal">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Approve</span>
+                  <span className="sm:hidden">Approve</span>
                 </button>
               </>
             )}
@@ -2454,19 +2458,22 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             {['pending', 'manager_approved'].includes(req.status) && isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reschedule" aria-label="Reschedule"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <CalendarClock className="w-4 h-4" />
-                  <span>Reschedule</span>
+                  <span className="sm:hidden">Reschedule</span>
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reject" aria-label="Reject"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <XCircle className="w-4 h-4" />
-                  <span>Reject</span>
+                  <span className="sm:hidden">Reject</span>
                 </button>
                 <button onClick={submitFinalApproval}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold shadow-sm">
+                  title="Approve and finalize" aria-label="Approve and finalize"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold sm:font-normal">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Approve &amp; finalize</span>
+                  <span className="sm:hidden">Approve &amp; finalize</span>
                 </button>
               </>
             )}
@@ -2474,19 +2481,22 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             {awaitingHrApproval && canHrApprove && !isDepotAdmin && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reschedule" aria-label="Reschedule"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <CalendarClock className="w-4 h-4" />
-                  <span>Reschedule</span>
+                  <span className="sm:hidden">Reschedule</span>
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reject" aria-label="Reject"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <XCircle className="w-4 h-4" />
-                  <span>Reject</span>
+                  <span className="sm:hidden">Reject</span>
                 </button>
                 <button onClick={submitHrApproval}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all text-sm font-bold shadow-sm">
+                  title="HR Approve" aria-label="HR Approve"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all text-sm font-bold sm:font-normal">
                   <CheckCircle className="w-4 h-4" />
-                  <span>HR approve</span>
+                  <span className="sm:hidden">HR approve</span>
                 </button>
               </>
             )}
@@ -2494,19 +2504,22 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             {isDepotAdmin && req.status === 'hr_approved' && (
               <>
                 <button onClick={() => onReschedule(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reschedule" aria-label="Reschedule"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <CalendarClock className="w-4 h-4" />
-                  <span>Reschedule</span>
+                  <span className="sm:hidden">Reschedule</span>
                 </button>
                 <button onClick={() => onReject(req.id)}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                  title="Reject" aria-label="Reject"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                   <XCircle className="w-4 h-4" />
-                  <span>Reject</span>
+                  <span className="sm:hidden">Reject</span>
                 </button>
                 <button onClick={submitFinalApproval}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 px-4 sm:px-3 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold shadow-sm">
+                  title="Final Approve" aria-label="Final Approve"
+                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold sm:font-normal">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Final approve</span>
+                  <span className="sm:hidden">Final approve</span>
                 </button>
               </>
             )}
