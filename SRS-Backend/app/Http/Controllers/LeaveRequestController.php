@@ -531,6 +531,35 @@ class LeaveRequestController extends Controller
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
 
+    // Save reviewer edits (OTR timing / LRF leave classification) WITHOUT approving.
+    // Any user who could approve a stage on this request may also save its details.
+    public function updateDetails(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        $canApproveManager = in_array($user->role, ['admin', 'depot_manager'], true)
+            || $this->isDirectManager($leaveRequest, $user->id);
+        $canApproveHr = in_array($user->role, ['admin', 'hr'], true)
+            || $user->hasPermission('leaves.approve_hr');
+        $canApproveDepot = in_array($user->role, ['admin', 'depot_manager'], true);
+
+        if (!($canApproveManager || $canApproveHr || $canApproveDepot)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        if (in_array($leaveRequest->status, ['approved', 'rejected', 'cancelled'], true)) {
+            return response()->json(['success' => false, 'message' => 'Request is already finalized'], 422);
+        }
+
+        $changes = $this->validatedApprovalRequestChanges($request, $leaveRequest);
+        if (empty($changes)) {
+            return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
+        }
+
+        $leaveRequest->update($changes);
+
+        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
+    }
+
     public function reject(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();

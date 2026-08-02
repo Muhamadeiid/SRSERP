@@ -11,7 +11,7 @@ import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest,
+  updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
 
@@ -2186,6 +2186,36 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const submitManagerApproval = () => {
     onManagerApprove(req.id, isLRF ? {} : otrDraft)
   }
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [detailsSaved, setDetailsSaved] = useState(false)
+  const saveDetails = async () => {
+    let payload
+    if (isLRF) {
+      if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
+        alert('Enter a valid Early Leave From and To time.')
+        return
+      }
+      payload = {
+        leave_type: hrLeaveDraft.leave_type,
+        paid: hrLeaveDraft.paid,
+        early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
+        early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
+      }
+    } else {
+      payload = otrDraft
+    }
+    try {
+      setSavingDetails(true)
+      await updateLeaveDetails(req.id, payload)
+      setDetailsSaved(true)
+      setTimeout(() => setDetailsSaved(false), 2000)
+      onUpdated?.()
+    } catch (e) {
+      alert(e.message || 'Could not save changes')
+    } finally {
+      setSavingDetails(false)
+    }
+  }
   const signatureParties = req.signature_parties || req.signatureParties || {}
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
   const hrSignatureParty = signatureParties.hr || null
@@ -2358,6 +2388,13 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 </div>
               </div>
             )}
+            <div className="mt-3 flex items-center justify-end gap-2">
+              {detailsSaved && <span className="text-xs font-semibold text-green-600">Saved</span>}
+              <button onClick={saveDetails} disabled={savingDetails}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold disabled:opacity-60">
+                {savingDetails ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</> : 'Save changes'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -2381,9 +2418,18 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 <input type="time" value={otrDraft.end_time} onChange={e => setOtrDraft(d => ({ ...d, end_time: e.target.value }))} className={INP} />
               </label>
             </div>
-            <p className="mt-3 text-xs font-semibold text-blue-700">
-              Total: {diffHours(otrDraft.start_time, otrDraft.end_time) || 0} hours
-            </p>
+            <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs font-semibold text-blue-700">
+                Total: {diffHours(otrDraft.start_time, otrDraft.end_time) || 0} hours
+              </p>
+              <div className="flex items-center gap-2">
+                {detailsSaved && <span className="text-xs font-semibold text-green-600">Saved</span>}
+                <button onClick={saveDetails} disabled={savingDetails}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold disabled:opacity-60">
+                  {savingDetails ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</> : 'Save changes'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -2600,8 +2646,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     r.can_approve_hr ||
     r.can_approve_depot ||
     (r.status === 'pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
-    (r.status === 'manager_approved' && isHrApprover) ||
-    (r.status === 'hr_approved' && isDepotAdmin)
+    (r.status === 'manager_approved' && (isHrApprover || isDepotAdmin)) ||
+    // Show depot-pending requests to HR and direct managers too, so everyone
+    // can see who the request is currently waiting on. Approval buttons stay
+    // disabled for wrong stages because they key off can_approve_* flags.
+    (r.status === 'hr_approved' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r)))
   )
   const approvalStageFor = (request) => {
     if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'manager'

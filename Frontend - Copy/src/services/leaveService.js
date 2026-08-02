@@ -32,6 +32,7 @@ export const createLeaveRequest = (data)     => request('/leave-requests', { met
 export const managerApproveLeave = (id, data = {}) => request(`/leave-requests/${id}/manager-approve`, { method: 'POST', body: JSON.stringify(data) })
 export const hrApproveLeave      = (id, data = {}) => request(`/leave-requests/${id}/hr-approve`,    { method: 'POST', body: JSON.stringify(data) })
 export const approveLeave        = (id, data = {}) => request(`/leave-requests/${id}/approve`,       { method: 'POST', body: JSON.stringify(data) })
+export const updateLeaveDetails  = (id, data = {}) => request(`/leave-requests/${id}/details`,       { method: 'PATCH', body: JSON.stringify(data) })
 export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const rescheduleLeave     = (id, reason)  => request(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
