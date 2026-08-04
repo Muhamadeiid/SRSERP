@@ -152,6 +152,11 @@ class LeaveRequestController extends Controller
     public function archive(LeaveRequest $leaveRequest): JsonResponse
     {
         $this->ensureHrArchiveAccess(auth()->user());
+        abort_unless(
+            $leaveRequest->type === 'lrf' && $leaveRequest->status === 'approved',
+            422,
+            'Only fully approved leave requests can be marked as printed.'
+        );
 
         DB::table('leave_request_archives')->updateOrInsert(
             [
@@ -1087,7 +1092,7 @@ class LeaveRequestController extends Controller
     private function attachArchiveStatus($requests, User $user): void
     {
         if (
-            !in_array($user->role, ['admin', 'hr'], true)
+            !(in_array($user->role, ['admin', 'hr'], true) || $user->hasPermission('leaves.approve_hr'))
             || !Schema::hasTable('leave_request_archives')
             || $requests->isEmpty()
         ) {
@@ -1107,7 +1112,11 @@ class LeaveRequestController extends Controller
 
     private function ensureHrArchiveAccess(User $user): void
     {
-        abort_unless(in_array($user->role, ['admin', 'hr'], true), 403, 'Only HR or Super Admin can archive printed requests.');
+        abort_unless(
+            in_array($user->role, ['admin', 'hr'], true) || $user->hasPermission('leaves.approve_hr'),
+            403,
+            'Only HR or Super Admin can archive printed requests.'
+        );
     }
 
     private function hideConfidentialBalances($requests, User $user): void

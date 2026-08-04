@@ -2618,7 +2618,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const isHrApprover  = user?.role === 'admin'
     || user?.role === 'hr'
     || permissions.includes('leaves.approve_hr')
-  const canManagePrintArchive = user?.role === 'admin' || user?.role === 'hr'
+  const canManagePrintArchive = user?.role === 'admin'
+    || user?.role === 'hr'
+    || permissions.includes('leaves.approve_hr')
   const isManager     = isDepotAdmin  // keep for compat
   const location      = useLocation()
   const navigate      = useNavigate()
@@ -2733,14 +2735,15 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             <Download className="w-4 h-4" />
           </button>
         )}
-        {showArchiveAction && (
+        {showArchiveAction && r.status === 'approved' && (
           <button
             onClick={() => handleArchive(r.id)}
-            className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
-            title="Printed / handled - move to archive"
-            aria-label="Archive request"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"
+            title="Mark as printed and move to archive"
+            aria-label="Mark request as printed"
           >
             <CheckCircle className="w-4 h-4" />
+            <span>Printed</span>
           </button>
         )}
         {showRestoreAction && (
