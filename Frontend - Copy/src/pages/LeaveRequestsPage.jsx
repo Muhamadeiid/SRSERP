@@ -2672,12 +2672,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     r.can_approve_hr ||
     r.can_approve_depot ||
     (r.status === 'pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
-    (r.status === 'manager_approved' && (isHrApprover || isDepotAdmin)) ||
+    (r.status === 'manager_approved' && (isHrApprover || isDepotAdmin || isDirectManagerOf(r))) ||
     // Show depot-pending requests to HR and direct managers too, so everyone
     // can see who the request is currently waiting on. Approval buttons stay
     // disabled for wrong stages because they key off can_approve_* flags.
     (r.status === 'hr_approved' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
-    (r.status === 'cancellation_pending' && isDepotAdmin)
+    (r.status === 'cancellation_pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r)))
   )
   const approvalStageFor = (request) => {
     if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'manager'
