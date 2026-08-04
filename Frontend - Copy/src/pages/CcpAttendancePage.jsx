@@ -139,6 +139,17 @@ export default function CcpAttendancePage() {
   }
 
   const save = async employee => {
+    const draft = drafts[employee.id] || {}
+    const status = parseStatus(draft.status)
+    const checkIn = parseTime(draft.check_in)
+    const checkOut = parseTime(draft.check_out)
+    // Working statuses need both times so a check-in-only row doesn't slip through.
+    const needsTimes = ['present', 'late', 'permission'].includes(status)
+    if (needsTimes && (!checkIn || !checkOut)) {
+      setError(`${employee.name}: both Check In and Check Out are required for ${status} status.`)
+      setMessage('')
+      return
+    }
     setSavingId(employee.id)
     setError('')
     setMessage('')
@@ -146,10 +157,10 @@ export default function CcpAttendancePage() {
       const response = await attendanceService.saveCcpDaily({
         employee_id: employee.id,
         date,
-        ...drafts[employee.id],
-        check_in: parseTime(drafts[employee.id]?.check_in),
-        check_out: parseTime(drafts[employee.id]?.check_out),
-        status: parseStatus(drafts[employee.id]?.status),
+        ...draft,
+        check_in: checkIn,
+        check_out: checkOut,
+        status,
       })
       const savedRecord = response?.data ?? null
       // Sync both employees + drafts from the persisted record so the row shows
@@ -179,20 +190,34 @@ export default function CcpAttendancePage() {
 
   const saveAll = async () => {
     if (!dirtyIds.length) return
+    const rows = dirtyIds.map(employeeId => {
+      const draft = drafts[employeeId] || {}
+      return {
+        employee_id: employeeId,
+        ...draft,
+        check_in: parseTime(draft.check_in),
+        check_out: parseTime(draft.check_out),
+        status: parseStatus(draft.status),
+      }
+    })
+    const incomplete = rows.filter(r =>
+      ['present', 'late', 'permission'].includes(r.status) && (!r.check_in || !r.check_out)
+    )
+    if (incomplete.length) {
+      const names = incomplete
+        .map(r => employees.find(e => e.id === r.employee_id)?.name || `#${r.employee_id}`)
+        .slice(0, 3)
+        .join(', ')
+      const extra = incomplete.length > 3 ? ` and ${incomplete.length - 3} more` : ''
+      setError(`Both Check In and Check Out are required for ${names}${extra}.`)
+      setMessage('')
+      return
+    }
     setBulkSaving(true)
     setError('')
     setMessage('')
     try {
-      const result = await attendanceService.saveCcpDailyBulk({
-        date,
-        rows: dirtyIds.map(employeeId => ({
-          employee_id: employeeId,
-          ...drafts[employeeId],
-          check_in: parseTime(drafts[employeeId]?.check_in),
-          check_out: parseTime(drafts[employeeId]?.check_out),
-          status: parseStatus(drafts[employeeId]?.status),
-        })),
-      })
+      const result = await attendanceService.saveCcpDailyBulk({ date, rows })
       setMessage(result.message || `${dirtyIds.length} attendance records saved.`)
       await load()
     } catch (requestError) {

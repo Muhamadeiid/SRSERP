@@ -276,13 +276,19 @@ class AttendanceController extends Controller
     public function ccpManual(Request $request)
     {
         $this->ensureCcpAccess();
+        // Present/Late/Permission are working states — require both times so partial
+        // rows can't slip through (e.g. check-in only, check-out null). Absent and
+        // day-off keep the times optional because the person didn't work.
         $data = $request->validate([
             'employee_id' => 'required|integer|exists:employees,id',
             'date' => 'required|date',
-            'check_in' => 'nullable|date_format:H:i',
-            'check_out' => 'nullable|date_format:H:i',
+            'check_in' => 'nullable|required_if:status,present,late,permission|date_format:H:i',
+            'check_out' => 'nullable|required_if:status,present,late,permission|date_format:H:i',
             'status' => 'required|in:present,absent,late,permission,off',
             'notes' => 'nullable|string|max:500',
+        ], [
+            'check_in.required_if' => 'Check-in is required when status is Present, Late, or Permission.',
+            'check_out.required_if' => 'Check-out is required when status is Present, Late, or Permission.',
         ]);
 
         abort_unless(
@@ -313,10 +319,13 @@ class AttendanceController extends Controller
             'date' => 'required|date',
             'rows' => 'required|array|min:1|max:500',
             'rows.*.employee_id' => 'required|integer|exists:employees,id',
-            'rows.*.check_in' => 'nullable|date_format:H:i',
-            'rows.*.check_out' => 'nullable|date_format:H:i',
+            'rows.*.check_in' => 'nullable|required_if:rows.*.status,present,late,permission|date_format:H:i',
+            'rows.*.check_out' => 'nullable|required_if:rows.*.status,present,late,permission|date_format:H:i',
             'rows.*.status' => 'required|in:present,absent,late,permission,off',
             'rows.*.notes' => 'nullable|string|max:500',
+        ], [
+            'rows.*.check_in.required_if' => 'Row #:position: check-in is required when status is Present, Late, or Permission.',
+            'rows.*.check_out.required_if' => 'Row #:position: check-out is required when status is Present, Late, or Permission.',
         ]);
 
         $allowedIds = $this->ccpEmployees()
