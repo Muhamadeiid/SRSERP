@@ -143,7 +143,7 @@ export default function CcpAttendancePage() {
     setError('')
     setMessage('')
     try {
-      await attendanceService.saveCcpDaily({
+      const response = await attendanceService.saveCcpDaily({
         employee_id: employee.id,
         date,
         ...drafts[employee.id],
@@ -151,6 +151,23 @@ export default function CcpAttendancePage() {
         check_out: parseTime(drafts[employee.id]?.check_out),
         status: parseStatus(drafts[employee.id]?.status),
       })
+      const savedRecord = response?.data ?? null
+      // Sync both employees + drafts from the persisted record so the row shows
+      // the normalized values that hit the database (and does not blank out).
+      if (savedRecord) {
+        setEmployees(current => current.map(e =>
+          e.id === employee.id ? { ...e, attendance: savedRecord } : e
+        ))
+        setDrafts(current => ({
+          ...current,
+          [employee.id]: {
+            check_in: timeValue(savedRecord.check_in),
+            check_out: timeValue(savedRecord.check_out),
+            status: savedRecord.status || 'present',
+            notes: savedRecord.notes || '',
+          },
+        }))
+      }
       setMessage(`${employee.name} saved successfully.`)
       setDirtyIds(current => current.filter(id => id !== employee.id))
     } catch (requestError) {

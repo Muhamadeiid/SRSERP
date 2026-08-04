@@ -333,9 +333,12 @@ class AttendanceService
         }
 
         // OT calculation differs by employee type:
-        // - Regular employees: OT starts at 17:00 (5 PM), regardless of check-in time.
+        // - Regular day-shift employees: OT starts at 17:00 (5 PM).
+        // - Night / crossover shifts: 17:00 rule doesn't apply — fall back to
+        //   "hours over expected", same as Intervention.
         // - Intervention employees: OT = hours worked beyond expected shift length.
-        if (!$isIntervention) {
+        $crossesMidnight = !$checkIn->isSameDay($checkOut);
+        if (!$isIntervention && !$crossesMidnight) {
             $otStart = Carbon::parse($checkIn->toDateString() . ' ' . AttendancePolicy::get('attendance_regular_ot_start_time'));
             $overtimeHours = $checkOut->gt($otStart)
                 ? round($checkOut->diffInMinutes($otStart) / 60, 2)
@@ -477,6 +480,13 @@ class AttendanceService
         if (isset($data['check_in']) && isset($data['check_out'])) {
             $checkIn  = Carbon::parse($data['date'] . ' ' . $data['check_in']);
             $checkOut = Carbon::parse($data['date'] . ' ' . $data['check_out']);
+
+            // Night shifts (e.g. Afternoon 15:00→00:00, Night 23:00→07:00) hand
+            // us a check-out that is earlier than the check-in on the same date.
+            // Roll it to the next day so worked hours come out positive.
+            if ($checkOut->lte($checkIn)) {
+                $checkOut->addDay();
+            }
 
             $employee       = Employee::active()->findOrFail($data['employee_id']);
             $expectedHours  = $this->getExpectedHours($employee);
