@@ -13,6 +13,7 @@ class LeaveRequest extends Model
         // LRF
         'leave_type', 'paid', 'available_balance', 'casual_available_balance',
         'request_date', 'start_date', 'end_date', 'days', 'purpose',
+        'medical_attachment_path', 'medical_attachment_name', 'medical_attachment_mime',
         'early_from', 'early_to',
         // OTR
         'ot_date', 'start_time', 'end_time', 'hours', 'explanation', 'overtime_results',
@@ -50,6 +51,8 @@ class LeaveRequest extends Model
         'days'                => 'decimal:2',
         'hours'               => 'float',
     ];
+
+    protected $hidden = ['medical_attachment_path'];
 
     public function user()           { return $this->belongsTo(User::class); }
     public function employee()       { return $this->belongsTo(Employee::class); }

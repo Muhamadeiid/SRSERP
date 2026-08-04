@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -211,6 +212,7 @@ class LeaveRequestController extends Controller
             'hours' => 'nullable|numeric|min:0',
             'explanation' => 'required_if:type,otr|nullable|string|max:2000',
             'overtime_results' => 'nullable|string|max:2000',
+            'medical_attachment' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         if ($v->fails()) {
@@ -239,6 +241,7 @@ class LeaveRequestController extends Controller
         }
 
         $data = $v->validated();
+        unset($data['medical_attachment']);
         if ($data['type'] === 'lrf' && ($data['leave_type'] ?? null) === 'early') {
             $earlyDays = $this->earlyLeaveDays($data['early_from'] ?? null, $data['early_to'] ?? null);
             if ($earlyDays === null) {
@@ -335,6 +338,13 @@ class LeaveRequestController extends Controller
         }
         $data['tracking_no'] = $this->generateTrackingNo($data['type'], $employee);
         $data['request_date'] = $data['request_date'] ?? now()->toDateString();
+
+        if ($request->hasFile('medical_attachment') && ($data['leave_type'] ?? null) === 'sick') {
+            $attachment = $request->file('medical_attachment');
+            $data['medical_attachment_path'] = $attachment->store('leave-medical-attachments', 'local');
+            $data['medical_attachment_name'] = $attachment->getClientOriginalName();
+            $data['medical_attachment_mime'] = $attachment->getMimeType();
+        }
 
         $leave = LeaveRequest::create($data);
         $this->notifyNewRequest($leave, $employee);
@@ -438,6 +448,36 @@ class LeaveRequestController extends Controller
         }
         $this->attachWorkflowAccess(collect([$leave]), $user);
         return response()->json(['success' => true, 'data' => $leave]);
+    }
+
+    public function medicalAttachment(LeaveRequest $leaveRequest)
+    {
+        $user = auth()->user();
+        abort_unless(
+            in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
+                || $user->hasPermission('leaves.approve_hr')
+                || (int) $leaveRequest->user_id === (int) $user->id
+                || $this->isDirectManager($leaveRequest, $user->id),
+            403,
+            'Unauthorized'
+        );
+        abort_unless(
+            $leaveRequest->type === 'lrf'
+                && $leaveRequest->leave_type === 'sick'
+                && $leaveRequest->medical_attachment_path
+                && Storage::disk('local')->exists($leaveRequest->medical_attachment_path),
+            404,
+            'Medical attachment not found.'
+        );
+
+        return response()->file(
+            Storage::disk('local')->path($leaveRequest->medical_attachment_path),
+            [
+                'Content-Type' => $leaveRequest->medical_attachment_mime ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="medical-attachment"',
+                'Cache-Control' => 'private, no-store',
+            ]
+        );
     }
 
     public function managerApprove(Request $request, LeaveRequest $leaveRequest): JsonResponse

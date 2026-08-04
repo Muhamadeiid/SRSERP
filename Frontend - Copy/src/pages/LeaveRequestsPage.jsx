@@ -4,14 +4,15 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
-  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore
+  Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore,
+  UploadCloud, Trash2, Paperclip
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  approveLeaveCancellation, rejectLeaveCancellation,
+  approveLeaveCancellation, rejectLeaveCancellation, getLeaveMedicalAttachment,
   updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
@@ -1311,6 +1312,58 @@ function PickerInput({
   )
 }
 
+function MedicalAttachmentInput({ file, onFile }) {
+  const inputRef = useRef(null)
+  const [preview, setPreview] = useState('')
+
+  useEffect(() => {
+    if (!file) { setPreview(''); return undefined }
+    const url = URL.createObjectURL(file)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  const acceptFile = (candidate) => {
+    if (!candidate) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(candidate.type)) {
+      alert('Please attach a JPG, PNG, or WebP image.')
+      return
+    }
+    if (candidate.size > 5 * 1024 * 1024) {
+      alert('Medical attachment must be 5MB or smaller.')
+      return
+    }
+    onFile(candidate)
+  }
+
+  const handlePaste = (event) => {
+    const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith('image/'))
+    if (!imageItem) return
+    event.preventDefault()
+    acceptFile(imageItem.getAsFile())
+  }
+
+  return (
+    <div tabIndex={0} onPaste={handlePaste} onDragOver={event => event.preventDefault()}
+      onDrop={event => { event.preventDefault(); acceptFile(event.dataTransfer.files?.[0]) }}
+      className="rounded-xl border border-dashed border-violet-300 bg-violet-50/50 p-3 outline-none focus:ring-2 focus:ring-violet-300">
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => acceptFile(event.target.files?.[0])} />
+      {file ? (
+        <div className="flex items-center gap-3">
+          <img src={preview} alt="Medical attachment preview" className="h-16 w-20 shrink-0 rounded-lg border border-violet-200 bg-white object-cover" />
+          <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-secondary-700">{file.name}</p><p className="mt-1 text-[11px] text-neutral-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p></div>
+          <button type="button" onClick={() => onFile(null)} title="Remove attachment" className="rounded-lg p-2 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()} className="flex w-full items-center justify-center gap-3 py-2 text-left">
+          <UploadCloud className="h-6 w-6 text-violet-600" />
+          <span><span className="block text-xs font-bold text-violet-700">Upload medical insurance image</span><span className="block text-[11px] text-neutral-500">Click, drag and drop, or paste an image here (max 5MB)</span></span>
+        </button>
+      )}
+    </div>
+  )
+}
+
 function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const buildInitial = () => {
     if (!prefill) return { ...LRF_EMPTY }
@@ -1334,11 +1387,16 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     }
   }
   const [form, setForm] = useState(buildInitial)
+  const [medicalAttachment, setMedicalAttachment] = useState(null)
   const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const days = lrfDays(form)
+
+  useEffect(() => {
+    if (form.leave_type !== 'sick') setMedicalAttachment(null)
+  }, [form.leave_type])
 
   useEffect(() => {
     getDepotManager()
@@ -1406,7 +1464,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
   const submit = (e) => {
     e.preventDefault()
-    onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, medical_attachment: form.leave_type === 'sick' ? medicalAttachment : null, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1480,6 +1538,13 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               </div>
             )}
           </div>
+
+          {form.leave_type === 'sick' && (
+            <div className="p-3">
+              <div className={LBL}>Medical Attachment (optional)</div>
+              <MedicalAttachmentInput file={medicalAttachment} onFile={setMedicalAttachment} />
+            </div>
+          )}
 
           <div className="p-3">
             <div className={LBL}>Payment <span className="text-neutral-400 font-normal" dir="rtl">— مدفوع / غير مدفوع</span></div>
@@ -1594,6 +1659,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
                 <div className="border-r border-neutral-400 px-2 py-2 text-center text-[12px]">( {form.leave_type === 'early' ? earlyDays(form.early_from, form.early_to) : ''} )</div><div className="px-2 py-2 text-[12px]">Day</div>
               </div>
             </td></tr>
+            {form.leave_type === 'sick' && <tr>{labelCell('Medical Attachment:', 'مرفق الإجازة المرضية')}<td className="border border-neutral-900 p-3"><MedicalAttachmentInput file={medicalAttachment} onFile={setMedicalAttachment} /></td></tr>}
             <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
             <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2"><span className="text-xs font-semibold italic text-neutral-400">Confidential — available to approvers after submission</span></td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
@@ -2094,6 +2160,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     start_time: normalizeTime(req?.start_time),
     end_time: normalizeTime(req?.end_time),
   })
+  const [medicalAttachmentUrl, setMedicalAttachmentUrl] = useState('')
+  const [loadingMedicalAttachment, setLoadingMedicalAttachment] = useState(false)
   const approvalActionsRef = useRef(null)
 
   useEffect(() => {
@@ -2117,6 +2185,23 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
       end_time: normalizeTime(req?.end_time),
     })
   }, [req?.id, req?.ot_date, req?.start_time, req?.end_time])
+
+  useEffect(() => {
+    let objectUrl = ''
+    if (!req?.id || !req?.medical_attachment_name) {
+      setMedicalAttachmentUrl('')
+      return undefined
+    }
+    setLoadingMedicalAttachment(true)
+    getLeaveMedicalAttachment(req.id)
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob)
+        setMedicalAttachmentUrl(objectUrl)
+      })
+      .catch(() => setMedicalAttachmentUrl(''))
+      .finally(() => setLoadingMedicalAttachment(false))
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [req?.id, req?.medical_attachment_name])
 
   useEffect(() => {
     if (!focusApproval || !req) return
@@ -2337,6 +2422,20 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             </div>
           ) : null)}
         </div>
+
+        {isLRF && req.leave_type === 'sick' && req.medical_attachment_name && (
+          <div className="mx-4 mb-4 rounded-xl border border-violet-200 bg-violet-50/50 p-4 sm:mx-6">
+            <div className="mb-3 flex items-center gap-2"><Paperclip className="h-4 w-4 text-violet-600" /><p className="text-xs font-bold uppercase tracking-wide text-violet-700">Medical Attachment</p></div>
+            {loadingMedicalAttachment ? (
+              <div className="flex items-center gap-2 py-4 text-xs text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading attachment...</div>
+            ) : medicalAttachmentUrl ? (
+              <a href={medicalAttachmentUrl} target="_blank" rel="noreferrer" className="block">
+                <img src={medicalAttachmentUrl} alt="Medical insurance attachment" className="max-h-72 w-full rounded-lg border border-violet-200 bg-white object-contain" />
+                <p className="mt-2 truncate text-xs font-semibold text-violet-700">{req.medical_attachment_name} · Open full image</p>
+              </a>
+            ) : <p className="text-xs text-red-600">Attachment could not be loaded.</p>}
+          </div>
+        )}
 
         {canEditHrLeave && (
           <div className="mx-6 mb-4 rounded-lg border border-purple-200 bg-purple-50/60 p-4">

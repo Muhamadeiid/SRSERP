@@ -2,9 +2,10 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
+  const isFormData = options.body instanceof FormData
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       Accept: 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
@@ -28,7 +29,25 @@ export const getLeaveRequests  = (params = {}) => {
 }
 export const getLeaveRequest   = (id) => request(`/leave-requests/${id}`)
 export const getCalendarLeaves = () => request('/leave-requests/calendar')
-export const createLeaveRequest = (data)     => request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
+export const createLeaveRequest = (data) => {
+  if (!(data.medical_attachment instanceof File)) {
+    return request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
+  }
+  const body = new FormData()
+  Object.entries(data).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return
+    body.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : value)
+  })
+  return request('/leave-requests', { method: 'POST', body })
+}
+export const getLeaveMedicalAttachment = async (id) => {
+  const token = localStorage.getItem('srs_token')
+  const response = await fetch(`${BASE_URL}/leave-requests/${id}/medical-attachment`, {
+    headers: { Accept: 'image/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  })
+  if (!response.ok) throw new Error('Unable to load medical attachment')
+  return response.blob()
+}
 export const managerApproveLeave = (id, data = {}) => request(`/leave-requests/${id}/manager-approve`, { method: 'POST', body: JSON.stringify(data) })
 export const hrApproveLeave      = (id, data = {}) => request(`/leave-requests/${id}/hr-approve`,    { method: 'POST', body: JSON.stringify(data) })
 export const approveLeave        = (id, data = {}) => request(`/leave-requests/${id}/approve`,       { method: 'POST', body: JSON.stringify(data) })
