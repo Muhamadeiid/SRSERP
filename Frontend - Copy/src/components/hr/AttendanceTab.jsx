@@ -440,9 +440,13 @@ function EditModal({ row, employee, onClose, onSaved }) {
       if (form.check_in && form.check_out) {
         const [ih, im] = form.check_in.split(':').map(Number)
         const [oh, om] = form.check_out.split(':').map(Number)
-        const inMin  = ih*60+im, outMin = oh*60+om
+        const inMin  = ih*60+im
+        let   outMin = oh*60+om
+        // Night / crossover shifts (e.g. 23:00→07:00) send check_out earlier than
+        // check_in on the same day. Roll it 24h forward so worked hours are positive.
+        if (outMin <= inMin) outMin += 24 * 60
         const workMin = outMin - inMin
-        work_hours     = workMin > 0 ? Math.round(workMin/60*100)/100 : 0
+        work_hours     = Math.round(workMin/60*100)/100
         late_minutes   = Math.max(0, inMin - 480)
         overtime_hours = Math.max(0, Math.round((work_hours-9)*2)/2)
       }
