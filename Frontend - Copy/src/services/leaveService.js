@@ -35,6 +35,8 @@ export const approveLeave        = (id, data = {}) => request(`/leave-requests/$
 export const updateLeaveDetails  = (id, data = {}) => request(`/leave-requests/${id}/details`,       { method: 'PATCH', body: JSON.stringify(data) })
 export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
+export const approveLeaveCancellation = (id) => request(`/leave-requests/${id}/approve-cancellation`, { method: 'POST' })
+export const rejectLeaveCancellation = (id, reason) => request(`/leave-requests/${id}/reject-cancellation`, { method: 'POST', body: JSON.stringify({ reason }) })
 export const rescheduleLeave     = (id, reason)  => request(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
 export const archiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'POST' })
 export const unarchiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'DELETE' })

@@ -21,13 +21,14 @@ const STATUS_STYLE = {
   pending:           'bg-amber-50    text-amber-700   border-amber-200',
   manager_approved:  'bg-blue-50     text-blue-700    border-blue-200',
   approved:          'bg-green-50    text-green-700   border-green-200',
+  cancellation_pending: 'bg-amber-50 text-amber-700 border-amber-200',
   rejected:          'bg-red-50      text-red-700     border-red-200',
   cancelled:         'bg-neutral-50  text-neutral-500 border-neutral-200',
   rescheduled:       'bg-purple-50   text-purple-700  border-purple-200',
 }
 
 const STATUS_LABEL = {
-  pending: 'Pending', manager_approved: 'Mgr Approved', approved: 'Approved',
+  pending: 'Pending', manager_approved: 'Mgr Approved', approved: 'Approved', cancellation_pending: 'Cancellation Pending',
   rejected: 'Rejected', cancelled: 'Cancelled', rescheduled: 'Rescheduled',
 }
 

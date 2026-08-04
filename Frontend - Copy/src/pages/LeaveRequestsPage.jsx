@@ -11,6 +11,7 @@ import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
+  approveLeaveCancellation, rejectLeaveCancellation,
   updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
@@ -392,6 +393,7 @@ function StatusBadge({ status }) {
     approved:         { label: 'Approved',         cls: 'bg-green-50 text-green-600 border-green-200',     Icon: CheckCircle  },
     rejected:         { label: 'Rejected',         cls: 'bg-red-50 text-red-600 border-red-200',           Icon: XCircle      },
     cancelled:        { label: 'Cancelled',        cls: 'bg-neutral-100 text-neutral-500 border-neutral-200', Icon: Ban       },
+    cancellation_pending: { label: 'Cancellation Pending', cls: 'bg-amber-50 text-amber-700 border-amber-200', Icon: Clock },
     rescheduled:      { label: 'Reschedule',       cls: 'bg-amber-50 text-amber-600 border-amber-200',     Icon: CalendarClock},
   }[status] ?? { label: status, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200', Icon: Clock }
   return (
@@ -1985,14 +1987,15 @@ function SigStamp({ label, name, date, sig }) {
 
 // ── Approval steps progress bar ───────────────────────────────
 function ApprovalProgress({ req }) {
-  const managerSkipped = ['manager_approved','hr_approved','approved'].includes(req.status)
+  const approvedStatuses = ['approved', 'cancellation_pending']
+  const managerSkipped = ['manager_approved','hr_approved', ...approvedStatuses].includes(req.status)
     && !req.manager_approved_by
     && !req.manager_approved_at
   const steps = [
     { key: 'submitted', label: 'Submitted',       done: true,                                              date: req.created_at },
-    { key: 'manager',   label: managerSkipped ? 'Manager Skipped' : 'Manager Approval', done: ['manager_approved','hr_approved','approved'].includes(req.status), date: req.manager_approved_at, name: managerSkipped ? 'Not assigned' : (req.manager_approver?.name || req.direct_manager_name) },
-    { key: 'hr',        label: 'HR Approval',     done: ['hr_approved','approved'].includes(req.status),  date: req.hr_approved_at,      name: req.hr_approver?.name },
-    { key: 'depot',     label: 'Depot Approval',  done: req.status === 'approved',                        date: req.approved_at,         name: req.approver?.name },
+    { key: 'manager',   label: managerSkipped ? 'Manager Skipped' : 'Manager Approval', done: ['manager_approved','hr_approved', ...approvedStatuses].includes(req.status), date: req.manager_approved_at, name: managerSkipped ? 'Not assigned' : (req.manager_approver?.name || req.direct_manager_name) },
+    { key: 'hr',        label: 'HR Approval',     done: ['hr_approved', ...approvedStatuses].includes(req.status),  date: req.hr_approved_at,      name: req.hr_approver?.name },
+    { key: 'depot',     label: 'Depot Approval',  done: approvedStatuses.includes(req.status),                        date: req.approved_at,         name: req.approver?.name },
   ]
 
   // Identify the current step (first not-done) so we can highlight it and show a summary banner.
@@ -2000,6 +2003,7 @@ function ApprovalProgress({ req }) {
   const isRejected = req.status === 'rejected'
   const isCancelled = req.status === 'cancelled' || req.status === 'withdrawn'
   const isComplete = req.status === 'approved'
+  const isCancellationPending = req.status === 'cancellation_pending'
   const waitingOn = currentIdx >= 0 ? steps[currentIdx] : null
 
   let bannerTone = 'bg-amber-50 border-amber-200 text-amber-800'
@@ -2015,6 +2019,9 @@ function ApprovalProgress({ req }) {
     bannerTone = 'bg-neutral-100 border-neutral-200 text-neutral-600'
     bannerIcon = <Ban className="w-4 h-4 shrink-0" />
     bannerText = req.status === 'withdrawn' ? 'Withdrawn' : 'Cancelled'
+  } else if (isCancellationPending) {
+    bannerText = 'Cancellation Pending'
+    bannerSub = req.cancellation_reason || 'Awaiting Depot Manager decision'
   } else if (isComplete) {
     bannerTone = 'bg-green-50 border-green-200 text-green-700'
     bannerIcon = <CheckCircle className="w-4 h-4 shrink-0" />
@@ -2066,7 +2073,7 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, onApproveCancellation, onRejectCancellation, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
   const { departments } = useLookups()
   const resolveDept = (raw) => {
     if (!raw) return ''
@@ -2144,7 +2151,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canViewLeaveBalance = isLRF
     && req.available_balance !== null
     && req.available_balance !== undefined
-    && (isHR || isDirectManager || req.status === 'approved')
+    && (isHR || isDirectManager || ['approved', 'cancellation_pending'].includes(req.status))
   const hrEarlyDays = hrLeaveDraft.leave_type === 'early'
     ? earlyDays(hrLeaveDraft.early_from, hrLeaveDraft.early_to)
     : ''
@@ -2434,7 +2441,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
         )}
 
         {/* Signatures strip (show when approved) */}
-        {['hr_approved','approved'].includes(req.status) && (
+        {['hr_approved','approved','cancellation_pending'].includes(req.status) && (
           <div className="px-6 pb-4 border-t border-neutral-100">
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-3 pt-3">Signatures</p>
             <div className="flex gap-4 flex-wrap">
@@ -2469,11 +2476,28 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           >
             {canWithdraw && (
               <button onClick={() => onCancel(req.id)}
-                title="Withdraw" aria-label="Withdraw"
+                title={req.status === 'approved' ? 'Request Cancellation' : 'Cancel'} aria-label={req.status === 'approved' ? 'Request Cancellation' : 'Cancel'}
                 className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-neutral-600 sm:text-neutral-500 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
                 <Ban className="w-4 h-4" />
-                <span className="sm:hidden">Withdraw</span>
+                <span className="sm:hidden">{req.status === 'approved' ? 'Request Cancellation' : 'Cancel'}</span>
               </button>
+            )}
+
+            {req.status === 'cancellation_pending' && isDepotAdmin && (
+              <>
+                <button onClick={() => onRejectCancellation(req.id)}
+                  title="Reject Cancellation" aria-label="Reject Cancellation"
+                  className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                  <XCircle className="w-4 h-4" />
+                  <span>Reject Cancellation</span>
+                </button>
+                <button onClick={() => onApproveCancellation(req.id)}
+                  title="Approve Cancellation" aria-label="Approve Cancellation"
+                  className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-white bg-green-600 hover:bg-green-700 border border-green-600 rounded-xl transition-all text-sm font-semibold">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Approve Cancellation</span>
+                </button>
+              </>
             )}
 
             {/* Direct manager (non-depot) approving a pending request */}
@@ -2612,6 +2636,8 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [rejectReason, setRejectReason] = useState('')
   const [cancelModal,  setCancelModal]  = useState(null) // { id }
   const [cancelReason,     setCancelReason]     = useState('')
+  const [cancellationRejectModal, setCancellationRejectModal] = useState(null) // { id }
+  const [cancellationRejectReason, setCancellationRejectReason] = useState('')
   const [rescheduleModal,  setRescheduleModal]  = useState(null) // { id }
   const [rescheduleReason, setRescheduleReason] = useState('')
   // History filters
@@ -2650,12 +2676,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     // Show depot-pending requests to HR and direct managers too, so everyone
     // can see who the request is currently waiting on. Approval buttons stay
     // disabled for wrong stages because they key off can_approve_* flags.
-    (r.status === 'hr_approved' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r)))
+    (r.status === 'hr_approved' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
+    (r.status === 'cancellation_pending' && isDepotAdmin)
   )
   const approvalStageFor = (request) => {
     if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'manager'
     if (request.status === 'pending' || request.status === 'manager_approved') return 'hr'
     if (request.status === 'hr_approved') return 'depot'
+    if (request.status === 'cancellation_pending') return 'depot'
     return null
   }
   const approvalStages = [
@@ -2698,7 +2726,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
           <Eye className="w-4 h-4" />
         </button>
-        {r.status === 'approved' && (
+        {['approved', 'cancellation_pending'].includes(r.status) && (
           <button
             onClick={() => downloadRequestWord(r)}
             className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">
@@ -2725,9 +2753,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             <ArchiveRestore className="w-4 h-4" />
           </button>
         )}
-        {['pending','manager_approved','hr_approved','approved'].includes(r.status) && (isDepotAdmin || r.user_id === user?.id) && (
-          <button onClick={() => setCancelModal({ id: r.id })}
-            className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-300 hover:text-neutral-500 transition-colors" title="Cancel / Withdraw">
+        {['pending','manager_approved','hr_approved','approved'].includes(r.status) && r.user_id === user?.id && !['admin','depot_manager','hr','manager'].includes(user?.role) && (
+          <button onClick={() => setCancelModal({ id: r.id, status: r.status })}
+            className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-300 hover:text-neutral-500 transition-colors" title={r.status === 'approved' ? 'Request Cancellation' : 'Cancel'}>
             <Ban className="w-4 h-4" />
           </button>
         )}
@@ -2867,6 +2895,25 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       await cancelLeave(cancelModal.id, cancelReason)
       setCancelModal(null)
       setCancelReason('')
+      setViewReq(null)
+      fetchRequests()
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleApproveCancellation = async (id) => {
+    try {
+      await approveLeaveCancellation(id)
+      setViewReq(null)
+      fetchRequests()
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleRejectCancellation = async () => {
+    if (!cancellationRejectModal || !cancellationRejectReason.trim()) return
+    try {
+      await rejectLeaveCancellation(cancellationRejectModal.id, cancellationRejectReason.trim())
+      setCancellationRejectModal(null)
+      setCancellationRejectReason('')
       setViewReq(null)
       fetchRequests()
     } catch (e) { alert(e.message) }
@@ -3034,7 +3081,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       {/* ═══ Active Requests — always visible (small count) ═══ */}
       {(() => {
         const active = typeFiltered.filter(r =>
-          r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at && !r.archived_by_me
+          !r.archived_by_me && (
+            r.status === 'cancellation_pending' ||
+            (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
+          )
         )
         if (active.length === 0) return null
         return (
@@ -3240,7 +3290,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           onApprove={handleApprove}
           onReject={(id) => { setRejectModal({ id }); setViewReq(null) }}
           onReschedule={(id) => { setRescheduleModal({ id }); setViewReq(null) }}
-          onCancel={(id) => { setCancelModal({ id }); setViewReq(null) }}
+          onCancel={(id) => { setCancelModal({ id, status: viewReq.status }); setViewReq(null) }}
+          onApproveCancellation={handleApproveCancellation}
+          onRejectCancellation={(id) => { setCancellationRejectModal({ id }); setViewReq(null) }}
           userRole={user?.role}
           userDepartment={user?.department}
           currentUserId={user?.id}
@@ -3321,8 +3373,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 <Ban className="w-5 h-5 text-neutral-500" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-bold text-secondary-700">Withdraw / Cancel Request</p>
-                <p className="text-xs text-neutral-400">If the request was already approved, the balance will be restored.</p>
+                <p className="text-sm font-bold text-secondary-700">{cancelModal.status === 'approved' ? 'Request Cancellation' : 'Cancel Request'}</p>
+                <p className="text-xs text-neutral-400">
+                  {cancelModal.status === 'approved'
+                    ? 'The request remains approved until the Depot Manager makes a final decision.'
+                    : 'This request has not reached final approval and will be cancelled immediately.'}
+                </p>
               </div>
               <button onClick={() => { setCancelModal(null); setCancelReason('') }} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400 shrink-0"><X className="w-4 h-4" /></button>
             </div>
@@ -3333,12 +3389,36 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 onChange={e => setCancelReason(e.target.value)}
                 rows={3}
                 className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-neutral-400 resize-none"
-                placeholder="Why are you withdrawing this request?"
+                placeholder="Why do you want to cancel this request?"
               />
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setCancelModal(null); setCancelReason('') }} className="px-4 py-2 text-sm font-semibold text-neutral-500 hover:bg-neutral-100 rounded-lg transition-all">Close</button>
-              <button onClick={handleCancel} className="px-5 py-2 text-sm font-bold text-white bg-neutral-600 hover:bg-neutral-700 rounded-lg transition-all">Confirm Withdraw</button>
+              <button onClick={handleCancel} className="px-5 py-2 text-sm font-bold text-white bg-neutral-600 hover:bg-neutral-700 rounded-lg transition-all">
+                {cancelModal.status === 'approved' ? 'Submit Cancellation Request' : 'Confirm Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancellationRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setCancellationRejectModal(null); setCancellationRejectReason('') }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-secondary-700">Reject Cancellation</p>
+              <button onClick={() => { setCancellationRejectModal(null); setCancellationRejectReason('') }} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Reason</label>
+              <textarea value={cancellationRejectReason} onChange={e => setCancellationRejectReason(e.target.value)} rows={3}
+                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-red-400 resize-none"
+                placeholder="Why is the cancellation being rejected?" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setCancellationRejectModal(null); setCancellationRejectReason('') }} className="px-4 py-2 text-sm font-semibold text-neutral-500 hover:bg-neutral-100 rounded-lg">Close</button>
+              <button onClick={handleRejectCancellation} disabled={!cancellationRejectReason.trim()} className="px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">Reject Cancellation</button>
             </div>
           </div>
         </div>

@@ -50,13 +50,14 @@ const REQ_STATUS_META = {
   manager_approved: { label: 'Awaiting HR',      cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   hr_approved:      { label: 'Awaiting Depot',   cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   approved:         { label: 'Approved',         cls: 'bg-green-50 text-green-700 border-green-200' },
+  cancellation_pending: { label: 'Cancellation Pending', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   rejected:         { label: 'Rejected',         cls: 'bg-red-50 text-red-700 border-red-200' },
   rescheduled:      { label: 'Rescheduled',      cls: 'bg-orange-50 text-orange-700 border-orange-200' },
   cancelled:        { label: 'Cancelled',        cls: 'bg-neutral-50 text-neutral-500 border-neutral-200' },
 }
 function MyRequestsCard({ reqs, loading, onOpen, onResubmit, onNewRequest }) {
   const items = (reqs || []).slice(0, 5)
-  const pendingCount    = reqs.filter(r => ['pending','manager_approved','hr_approved'].includes(r.status)).length
+  const pendingCount    = reqs.filter(r => ['pending','manager_approved','hr_approved','cancellation_pending'].includes(r.status)).length
   const approvedCount   = reqs.filter(r => r.status === 'approved').length
   const rescheduledOpen = reqs.filter(r => r.status === 'rescheduled').length
 

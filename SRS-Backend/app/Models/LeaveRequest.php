@@ -20,6 +20,8 @@ class LeaveRequest extends Model
         'status', 'approved_by', 'approved_at', 'balance_deducted_at', 'rejection_reason',
         // Cancellation
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
+        'requested_cancellation_at', 'requested_cancellation_by',
+        'cancellation_rejected_at', 'cancellation_rejected_by', 'cancellation_rejection_reason',
         // Reschedule
         'rescheduled_at', 'rescheduled_by', 'reschedule_reason',
         // Manager approval
@@ -41,6 +43,8 @@ class LeaveRequest extends Model
         'manager_approved_at' => 'datetime',
         'balance_deducted_at' => 'datetime',
         'cancelled_at'        => 'datetime',
+        'requested_cancellation_at' => 'datetime',
+        'cancellation_rejected_at' => 'datetime',
         'available_balance'   => 'decimal:2',
         'casual_available_balance' => 'decimal:2',
         'days'                => 'decimal:2',
@@ -52,6 +56,8 @@ class LeaveRequest extends Model
     public function approver()       { return $this->belongsTo(User::class, 'approved_by'); }
     public function hrApprover()     { return $this->belongsTo(User::class, 'hr_approved_by'); }
     public function canceller()      { return $this->belongsTo(User::class, 'cancelled_by'); }
+    public function cancellationRequester(){ return $this->belongsTo(User::class, 'requested_cancellation_by'); }
+    public function cancellationRejecter(){ return $this->belongsTo(User::class, 'cancellation_rejected_by'); }
     public function managerApprover(){ return $this->belongsTo(User::class, 'manager_approved_by'); }
     public function rescheduler()    { return $this->belongsTo(User::class, 'rescheduled_by'); }
 }

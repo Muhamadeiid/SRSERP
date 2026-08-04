@@ -42,6 +42,8 @@ class LeaveRequestController extends Controller
             'approver:id,name,role',
             'managerApprover:id,name,role',
             'hrApprover:id,name,role',
+            'cancellationRequester:id,name',
+            'cancellationRejecter:id,name',
             'user:id,name',
             'employee:id,name,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id',
@@ -86,7 +88,7 @@ class LeaveRequestController extends Controller
         if ($request->filled('scope')) {
             if ($request->scope === 'active') {
                 $query->where(function ($q) {
-                    $q->whereIn('status', ['pending', 'manager_approved', 'hr_approved'])
+                    $q->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending'])
                       ->orWhere(function ($qq) {
                           $qq->where('type', 'lrf')
                             ->where('status', 'approved')
@@ -215,7 +217,7 @@ class LeaveRequestController extends Controller
             $end = $request->end_date ?? $request->start_date;
             $conflict = LeaveRequest::where('employee_id', $request->employee_id)
                 ->where('type', 'lrf')
-                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved'])
+                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween('start_date', [$start, $end])
                         ->orWhereBetween('end_date', [$start, $end])
@@ -357,6 +359,8 @@ class LeaveRequestController extends Controller
             'approver:id,name,e_signature,role',
             'managerApprover:id,name,e_signature,role',
             'hrApprover:id,name,e_signature,role',
+            'cancellationRequester:id,name',
+            'cancellationRejecter:id,name',
             'user:id,name',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.user:id,name,e_signature',
@@ -627,12 +631,41 @@ class LeaveRequestController extends Controller
                 'message' => 'Only the staff account that submitted this request can withdraw it. Approvers must reject it instead.',
             ], 403);
         }
-        if (in_array($leaveRequest->status, ['cancelled', 'rejected'])) {
+        if (in_array($leaveRequest->status, ['cancelled', 'rejected', 'rescheduled', 'cancellation_pending'], true)) {
             return response()->json(['success' => false, 'message' => 'Cannot cancel this request'], 422);
         }
 
-        $wasApproved = $leaveRequest->status === 'approved';
-        $wasDeducted = (bool) $leaveRequest->balance_deducted_at;
+        $request->validate(['reason' => 'nullable|string|max:2000']);
+
+        // Final approval stays effective until Depot/Admin accepts the cancellation.
+        if ($leaveRequest->status === 'approved') {
+            $leaveRequest->update([
+                'status' => 'cancellation_pending',
+                'requested_cancellation_at' => now(),
+                'requested_cancellation_by' => $user->id,
+                'cancellation_reason' => $request->input('reason'),
+                'cancellation_rejected_at' => null,
+                'cancellation_rejected_by' => null,
+                'cancellation_rejection_reason' => null,
+            ]);
+
+            $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+            $message = "{$leaveRequest->employee_name} requested cancellation of {$typeLabel} ({$leaveRequest->tracking_no}).";
+            Notification::notifyRole(
+                'depot_manager',
+                $leaveRequest->type . '_cancellation_requested',
+                "{$typeLabel} Cancellation Approval Required",
+                $message,
+                ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type],
+                true
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cancellation request submitted for Depot Manager approval',
+                'data' => $leaveRequest->fresh(['cancellationRequester:id,name']),
+            ]);
+        }
 
         $leaveRequest->update([
             'status' => 'cancelled',
@@ -641,13 +674,6 @@ class LeaveRequestController extends Controller
             'cancellation_reason' => $request->input('reason'),
         ]);
 
-        if ($wasApproved && $wasDeducted && $leaveRequest->type === 'lrf' && $leaveRequest->employee_id && $leaveRequest->days > 0) {
-            $balance = LeaveBalance::where('employee_id', $leaveRequest->employee_id)->first();
-            if ($balance && in_array($leaveRequest->leave_type, ['annual', 'casual', 'sick', 'early'])) {
-                $balance->restore($leaveRequest->leave_type, $leaveRequest->days);
-            }
-        }
-
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $msg = "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was cancelled by {$user->name}.";
         Notification::notifyRole('admin', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
@@ -655,9 +681,98 @@ class LeaveRequestController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Request cancelled' . ($wasDeducted ? ' and balance restored' : ''),
+            'message' => 'Request cancelled',
             'data' => $leaveRequest->fresh(['approver', 'canceller']),
         ]);
+    }
+
+    public function approveCancellation(LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless(in_array($user->role, ['admin', 'depot_manager'], true), 403, 'Only Admin or Depot Manager can approve cancellation.');
+
+        $leaveRequest = DB::transaction(function () use ($leaveRequest, $user) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'cancellation_pending') {
+                throw ValidationException::withMessages(['status' => 'This request is not awaiting cancellation approval.']);
+            }
+
+            // Restore only a balance that the deduction service actually consumed.
+            if (
+                $locked->type === 'lrf'
+                && $locked->balance_deducted_at
+                && $locked->employee_id
+                && (float) $locked->days > 0
+                && in_array($locked->leave_type, ['annual', 'casual', 'sick', 'early'], true)
+            ) {
+                $balance = LeaveBalance::where('employee_id', $locked->employee_id)->lockForUpdate()->first();
+                $balance?->restore($locked->leave_type, (float) $locked->days);
+            }
+
+            $locked->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'cancelled_by' => $user->id,
+            ]);
+
+            return $locked;
+        });
+
+        $this->notifyCancellationDecision($leaveRequest, true);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cancellation approved',
+            'data' => $leaveRequest->fresh(['canceller:id,name']),
+        ]);
+    }
+
+    public function rejectCancellation(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless(in_array($user->role, ['admin', 'depot_manager'], true), 403, 'Only Admin or Depot Manager can reject cancellation.');
+        $validated = $request->validate(['reason' => 'required|string|max:2000']);
+
+        $leaveRequest = DB::transaction(function () use ($leaveRequest, $user, $validated) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'cancellation_pending') {
+                throw ValidationException::withMessages(['status' => 'This request is not awaiting cancellation approval.']);
+            }
+
+            $locked->update([
+                'status' => 'approved',
+                'cancellation_rejected_at' => now(),
+                'cancellation_rejected_by' => $user->id,
+                'cancellation_rejection_reason' => $validated['reason'],
+            ]);
+
+            return $locked;
+        });
+
+        $this->notifyCancellationDecision($leaveRequest, false);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cancellation rejected',
+            'data' => $leaveRequest->fresh(['cancellationRejecter:id,name']),
+        ]);
+    }
+
+    private function notifyCancellationDecision(LeaveRequest $leaveRequest, bool $approved): void
+    {
+        $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        $event = $leaveRequest->type . ($approved ? '_cancellation_approved' : '_cancellation_rejected');
+        $title = "{$typeLabel} Cancellation " . ($approved ? 'Approved' : 'Rejected');
+        $body = "Cancellation of {$typeLabel} ({$leaveRequest->tracking_no}) was " . ($approved ? 'approved.' : 'rejected.');
+        $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
+
+        if ($leaveRequest->user_id) {
+            Notification::notifyUser($leaveRequest->user_id, $event, $title, $body, $data, true);
+        }
+        if ($approved) {
+            Notification::notifyRole('hr', $event, $title, $body, $data);
+            Notification::notifyRole('admin', $event, $title, $body, $data);
+        }
     }
 
     /**
@@ -693,7 +808,7 @@ class LeaveRequestController extends Controller
         $this->deductions->processDue();
 
         $requests = LeaveRequest::where('type', 'lrf')
-            ->where('status', 'approved')
+            ->whereIn('status', ['approved', 'cancellation_pending'])
             ->select('id', 'employee_name', 'leave_type', 'start_date', 'end_date', 'days', 'department_label', 'approved_at', 'balance_deducted_at')
             ->orderBy('start_date')
             ->get();
@@ -872,6 +987,10 @@ class LeaveRequestController extends Controller
                 'can_approve_depot',
                 $isDepotAdmin && in_array($request->status, ['pending', 'manager_approved', 'hr_approved'], true)
             );
+            $request->setAttribute(
+                'can_approve_cancellation',
+                $isDepotAdmin && $request->status === 'cancellation_pending'
+            );
         }
     }
 
@@ -883,7 +1002,7 @@ class LeaveRequestController extends Controller
 
         $next = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
             ->where(function ($q) {
-                $q->where('status', 'approved')
+                $q->whereIn('status', ['approved', 'cancellation_pending'])
                   ->orWhereIn('status', ['pending', 'manager_approved', 'hr_approved']);
             })
             ->pluck('tracking_no')
@@ -914,7 +1033,7 @@ class LeaveRequestController extends Controller
             ->where('type', 'lrf')
             ->where('employee_id', $employeeId)
             ->whereNull('balance_deducted_at')
-            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved'])
+            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
             ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
             ->where('days', '>', 0)
             ->where(function ($q) {
@@ -961,7 +1080,7 @@ class LeaveRequestController extends Controller
             return true;
         }
 
-        return $leaveRequest->status === 'approved'
+        return in_array($leaveRequest->status, ['approved', 'cancellation_pending'], true)
             && (int) $leaveRequest->user_id === (int) $user->id;
     }
 
