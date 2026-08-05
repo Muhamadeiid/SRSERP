@@ -212,7 +212,7 @@ class LeaveRequestController extends Controller
             'hours' => 'nullable|numeric|min:0',
             'explanation' => 'required_if:type,otr|nullable|string|max:2000',
             'overtime_results' => 'nullable|string|max:2000',
-            'medical_attachment' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'medical_attachment' => 'required_if:leave_type,sick|nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         if ($v->fails()) {

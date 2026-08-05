@@ -1464,6 +1464,10 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
   const submit = (e) => {
     e.preventDefault()
+    if (form.leave_type === 'sick' && !medicalAttachment) {
+      alert('Please attach the medical insurance image before submitting a sick leave request.')
+      return
+    }
     onSubmit({ ...form, medical_attachment: form.leave_type === 'sick' ? medicalAttachment : null, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
@@ -1541,7 +1545,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
           {form.leave_type === 'sick' && (
             <div className="p-3">
-              <div className={LBL}>Medical Attachment (optional)</div>
+              <div className={LBL}>Medical Attachment <span className="text-red-600">*</span></div>
               <MedicalAttachmentInput file={medicalAttachment} onFile={setMedicalAttachment} />
             </div>
           )}
