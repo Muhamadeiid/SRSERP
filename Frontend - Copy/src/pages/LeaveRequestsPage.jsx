@@ -2752,6 +2752,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyPage,   setHistoryPage]   = useState(1)
   const [approvalStage, setApprovalStage] = useState('all')
   const [archiveExpanded, setArchiveExpanded] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const HISTORY_PER_PAGE = 25
 
   const openRequest = useCallback((request, options = {}) => {
@@ -3300,17 +3301,26 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {/* ═══ Requests History — paginated, filtered ═══ */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setHistoryExpanded(value => !value)}
+          className="w-full px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-left hover:bg-neutral-50 transition-colors"
+          aria-expanded={historyExpanded}
+        >
           <div>
             <h2 className="text-sm font-bold text-secondary-700">
               {showOnly === 'otr' ? 'Completed Overtime Requests' : showOnly === 'lrf' ? 'Completed Leave Requests' : 'Completed Requests'}
             </h2>
             <p className="text-xs text-neutral-400 mt-0.5">Closed, approved & past requests</p>
           </div>
-          {loadingReqs && <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />}
-        </div>
+          <div className="flex items-center gap-2 text-xs text-neutral-400">
+            {loadingReqs && <Loader2 className="w-4 h-4 animate-spin text-neutral-300" />}
+            <span>{historyExpanded ? 'Hide' : 'Show'}</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${historyExpanded ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
 
-        {(() => {
+        {historyExpanded && (() => {
           // Completed is workflow-closed only. Approved requests stay Active
           // until HR marks them Printed, then they live exclusively in Archive.
           const historyPool = typeFiltered.filter(r => {
@@ -3349,9 +3359,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   <>
                     <div className="flex items-center gap-1 bg-white rounded-lg border border-neutral-200 p-0.5">
                       {[
-                        ['all', 'All',      historyPool.length],
-                        ['lrf', 'Leave',    historyPool.filter(r => r.type === 'lrf').length],
-                        ['otr', 'Overtime', historyPool.filter(r => r.type === 'otr').length],
+                        ['all', 'All',      periodFiltered.length],
+                        ['lrf', 'Leave',    periodFiltered.filter(r => r.type === 'lrf').length],
+                        ['otr', 'Overtime', periodFiltered.filter(r => r.type === 'otr').length],
                       ].map(([key, label, n]) => (
                         <button key={key} onClick={() => { setHistoryType(key); setHistoryPage(1) }}
                           className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
@@ -3374,7 +3384,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     ['cancelled',   'Cancelled',   'bg-neutral-50 text-neutral-500 border-neutral-200',  'bg-neutral-500 text-white'],
                     ['rescheduled', 'Rescheduled', 'bg-purple-50 text-purple-700 border-purple-200',     'bg-purple-500 text-white'],
                   ].map(([key, label, idle, active]) => {
-                    const count = key === 'all' ? historyPool.length : historyPool.filter(r => r.status === key).length
+                    const count = key === 'all' ? periodFiltered.length : periodFiltered.filter(r => r.status === key).length
                     if (key !== 'all' && count === 0) return null
                     return (
                       <button key={key} onClick={() => { setHistoryStatus(key); setHistoryPage(1) }}
