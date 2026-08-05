@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore,
-  UploadCloud, Trash2, Paperclip, FileText
+  UploadCloud, Trash2, Paperclip, FileText, ChevronDown
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
@@ -2751,6 +2751,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyPeriod, setHistoryPeriod] = useState('current_month')   // current_month | last_30 | last_90 | last_year | all
   const [historyPage,   setHistoryPage]   = useState(1)
   const [approvalStage, setApprovalStage] = useState('all')
+  const [archiveExpanded, setArchiveExpanded] = useState(false)
   const HISTORY_PER_PAGE = 25
 
   const openRequest = useCallback((request, options = {}) => {
@@ -2889,13 +2890,16 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       const type = showOnly === 'lrf' ? 'lrf' : showOnly === 'otr' ? 'otr' : undefined
       const [activeRes, historyRes] = await Promise.all([
         getLeaveRequests({ scope: 'active', type }),
-        getLeaveRequests({ scope: 'history', type, ...historyRange(historyPeriod) }),
+        // Load the complete closed set so the Printed archive is not limited
+        // by the currently selected Completed period. Period filtering stays
+        // client-side and applies only to the Completed section.
+        getLeaveRequests({ scope: 'history', type }),
       ])
       const merged = [...(activeRes.data ?? []), ...(historyRes.data ?? [])]
       setRequests(Array.from(new Map(merged.map(r => [r.id, r])).values()))
     } catch (_) {}
     finally { setLoadingReqs(false) }
-  }, [historyPeriod, showOnly])
+  }, [showOnly])
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
@@ -3240,7 +3244,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         const active = typeFiltered.filter(r =>
           !r.archived_by_me && (
             r.status === 'cancellation_pending' ||
-            (r.type === 'lrf' && r.status === 'approved' && !r.balance_deducted_at)
+            (r.type === 'lrf' && r.status === 'approved')
           )
         )
         if (active.length === 0) return null
@@ -3269,17 +3273,27 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         if (archived.length === 0) return null
         return (
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50">
+            <button
+              type="button"
+              onClick={() => setArchiveExpanded(value => !value)}
+              className="w-full px-6 py-4 flex items-center justify-between gap-3 bg-neutral-50 hover:bg-neutral-100 transition-colors text-left"
+              aria-expanded={archiveExpanded}
+            >
               <div className="flex items-center gap-2">
                 <ArchiveRestore className="h-4 w-4 text-neutral-500" />
                 <h2 className="text-sm font-bold text-secondary-700">Archived Leave Requests</h2>
                 <span className="px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs font-bold rounded-full">{archived.length}</span>
               </div>
-              <p className="text-[11px] text-neutral-400">Printed or handled by you</p>
-            </div>
-            <div className="divide-y divide-neutral-50">
-              {archived.map(request => renderRequestRow(request, { showRestoreAction: true }))}
-            </div>
+              <span className="flex items-center gap-2 text-[11px] text-neutral-400">
+                Printed requests
+                <ChevronDown className={`h-4 w-4 transition-transform ${archiveExpanded ? 'rotate-180' : ''}`} />
+              </span>
+            </button>
+            {archiveExpanded && (
+              <div className="divide-y divide-neutral-50 border-t border-neutral-100">
+                {archived.map(request => renderRequestRow(request, { showRestoreAction: true }))}
+              </div>
+            )}
           </div>
         )
       })()}
@@ -3297,12 +3311,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         </div>
 
         {(() => {
-          // Build the history pool: closed + completed (NOT in active set)
+          // Completed is workflow-closed only. Approved requests stay Active
+          // until HR marks them Printed, then they live exclusively in Archive.
           const historyPool = typeFiltered.filter(r => {
             return r.status === 'rejected' ||
               r.status === 'cancelled' ||
               r.status === 'rescheduled' ||
-              (r.type === 'lrf' && r.status === 'approved' && r.balance_deducted_at) ||
               (r.type === 'otr' && r.status === 'approved')
           })
 
