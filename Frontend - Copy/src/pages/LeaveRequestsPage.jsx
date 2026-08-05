@@ -2166,6 +2166,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   })
   const [medicalAttachmentUrl, setMedicalAttachmentUrl] = useState('')
   const [loadingMedicalAttachment, setLoadingMedicalAttachment] = useState(false)
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [detailsSaved, setDetailsSaved] = useState(false)
   const approvalActionsRef = useRef(null)
 
   useEffect(() => {
@@ -2282,8 +2284,6 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const submitManagerApproval = () => {
     onManagerApprove(req.id, isLRF ? {} : otrDraft)
   }
-  const [savingDetails, setSavingDetails] = useState(false)
-  const [detailsSaved, setDetailsSaved] = useState(false)
   const saveDetails = async () => {
     let payload
     if (isLRF) {
