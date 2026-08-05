@@ -1,5 +1,5 @@
 // src/services/assetService.js
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE } from '../config/api'
 
 function authHeaders() {
   const token = localStorage.getItem('srs_token')

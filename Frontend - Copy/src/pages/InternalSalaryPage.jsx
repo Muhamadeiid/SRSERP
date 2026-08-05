@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   Loader2, RefreshCw, Download, FileSpreadsheet, Calendar, Search, Filter,
 } from 'lucide-react'
-
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE } from '../config/api'
 
 function getToken() {
   return localStorage.getItem('srs_token')

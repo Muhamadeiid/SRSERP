@@ -43,6 +43,7 @@ import { saveEmployeeSignature, getLeaveBalance, updateLeaveBalance } from "../.
 import SignaturePad from "./SignaturePad";
 import { useLookups } from "../../hooks/useLookups";
 import { searchPositions } from "../../services/positionService";
+import { API_BASE_URL } from "../../config/api";
 
 // ── Config ──────────────────────────────────────────────────
 const DEPT = {
@@ -680,7 +681,7 @@ export default function WorkforceTab() {
     if ((!formOpen && !bulkMode) || optionsLoaded.current) return;
     optionsLoaded.current = true;
     const token = localStorage.getItem('srs_token');
-    const base  = import.meta.env.VITE_API_URL ?? '/api';
+    const base  = API_BASE_URL;
     const hdrs  = { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 
     // Employees list for "Direct Manager" dropdown

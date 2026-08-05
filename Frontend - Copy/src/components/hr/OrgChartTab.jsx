@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, UserCheck, X, Loader2,
          RefreshCw, Users, ShieldCheck, Plus, AlertCircle,
          ChevronRight, ChevronDown } from 'lucide-react'
-
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE } from '../../config/api'
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('srs_token')
   const res = await fetch(`${BASE}${path}`, {

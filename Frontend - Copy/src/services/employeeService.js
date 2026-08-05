@@ -5,7 +5,7 @@
 
 // src/services/employeeService.js
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE_URL } from '../config/api'
 const readCache = new Map()
 const inFlightReads = new Map()
 

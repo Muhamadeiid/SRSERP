@@ -14,6 +14,10 @@ class VerifyMachineLicense
 
     public function handle(Request $request, Closure $next)
     {
+        if (! config('app.machine_lock_enabled', true)) {
+            return $next($request);
+        }
+
         if ($this->isAuthorized()) {
             return $next($request);
         }
@@ -48,19 +52,43 @@ class VerifyMachineLicense
 
     protected function computeMachineHash(): ?string
     {
-        $parts = array_filter([
-            $this->registryValue('HKLM\SOFTWARE\Microsoft\Cryptography', 'MachineGuid'),
-            $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'ProductId'),
-            $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'InstallDate'),
-            $this->registryValue('HKLM\SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001', 'HwProfileGuid'),
-            gethostname() ?: '',
-        ], fn ($v) => $v !== '');
+        $configuredId = trim((string) config('app.machine_lock_id', ''));
+        if ($configuredId !== '') {
+            return hash('sha256', 'configured-machine-id|' . $configuredId);
+        }
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $parts = [
+                $this->registryValue('HKLM\SOFTWARE\Microsoft\Cryptography', 'MachineGuid'),
+                $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'ProductId'),
+                $this->registryValue('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', 'InstallDate'),
+                $this->registryValue('HKLM\SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001', 'HwProfileGuid'),
+                gethostname() ?: '',
+            ];
+        } else {
+            $parts = [
+                $this->fileValue('/etc/machine-id'),
+                $this->fileValue('/sys/class/dmi/id/product_uuid'),
+                gethostname() ?: '',
+            ];
+        }
+
+        $parts = array_values(array_filter($parts, fn ($v) => $v !== ''));
 
         if (count($parts) < 2) {
             return null;
         }
 
         return hash('sha256', implode('|', $parts));
+    }
+
+    protected function fileValue(string $path): string
+    {
+        if (! is_readable($path)) {
+            return '';
+        }
+
+        return trim((string) @file_get_contents($path));
     }
 
     protected function registryValue(string $key, string $name): string

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE_URL } from '../config/api'
 let settingsCache = null
 let settingsExpiresAt = 0
 let settingsInFlight = null

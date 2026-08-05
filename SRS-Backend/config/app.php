@@ -57,6 +57,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'machine_lock_enabled' => env('MACHINE_LOCK_ENABLED', true),
+
+    'machine_lock_id' => env('MACHINE_LOCK_ID'),
+
     'asset_url' => env('ASSET_URL'),
 
     /*

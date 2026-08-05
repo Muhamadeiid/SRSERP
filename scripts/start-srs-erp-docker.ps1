@@ -73,6 +73,24 @@ function Get-EnvValue($Name, $Default) {
     return ($line -replace "^$Name=", "").Trim()
 }
 
+function Set-MachineLockId {
+    $machineGuid = (Get-ItemProperty `
+        -LiteralPath "HKLM:\SOFTWARE\Microsoft\Cryptography" `
+        -Name MachineGuid `
+        -ErrorAction Stop).MachineGuid
+    if ([string]::IsNullOrWhiteSpace($machineGuid)) {
+        throw "Windows MachineGuid is unavailable. Cannot bind this installation to the server."
+    }
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($machineGuid)
+        $env:MACHINE_LOCK_ID = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Test-Image($Docker, $Image) {
     cmd.exe /c "`"$Docker`" image inspect `"$Image`" >NUL 2>NUL"
     return $LASTEXITCODE -eq 0
@@ -86,6 +104,7 @@ Ensure-DockerEngine $Docker
 
 Write-Step "2/5 Preparing settings"
 Ensure-EnvFile
+Set-MachineLockId
 
 Write-Step "3/5 Checking Docker images"
 $hasDb = Test-Image $Docker "mysql:8.0"

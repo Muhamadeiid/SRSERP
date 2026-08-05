@@ -1,13 +1,13 @@
 /**
  * inventory.js — Centralized API layer for Inventory Control
- * Base URL pulled from .env: VITE_API_BASE=http://SERVER-IP:8000/api
+ * Base URL comes from the shared frontend API configuration.
  *
  * Usage:
  *   import api from "../api/inventory";
  *   const products = await api.products.list({ site: "SC-01" });
  */
 
-const BASE = import.meta.env.VITE_API_BASE ?? "/api";
+import { API_BASE_URL as BASE } from "../config/api";
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────
 async function request(method, path, body = null) {

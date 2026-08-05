@@ -87,3 +87,7 @@ current-screen.png
 # ───── Codex / Claude work directories ─────────────────────────────
 .codex-work/
 .srs-docker-config/
+.codex-docker-config/
+.codex-release-*/
+.codex-sheet-work/
+outputs/

@@ -44,6 +44,8 @@ services:
       SESSION_DRIVER: file
       SESSION_LIFETIME: 120
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5175,http://127.0.0.1:5175}
+      MACHINE_LOCK_ENABLED: ${MACHINE_LOCK_ENABLED:-true}
+      MACHINE_LOCK_ID: ${MACHINE_LOCK_ID:-}
       FILESYSTEM_DISK: local
       MAIL_MAILER: log
     ports:

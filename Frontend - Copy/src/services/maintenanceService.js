@@ -1,4 +1,4 @@
-const BASE = (import.meta.env.VITE_API_URL ?? '/api')
+import { API_BASE_URL as BASE } from '../config/api'
 
 async function request(path, opts = {}) {
   const token = localStorage.getItem('srs_token')

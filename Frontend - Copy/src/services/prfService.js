@@ -1,7 +1,7 @@
 // PRF (Purchase Request Form) — service module.
 // Mirrors the auth + transport pattern from leaveService.js.
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { API_BASE_URL as BASE_URL } from '../config/api'
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
