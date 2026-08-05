@@ -477,7 +477,7 @@ class AttendanceService
     public function createManualEntry(array $data, $userId): Attendance
     {
         // Calculate if check_in and check_out provided
-        if (isset($data['check_in']) && isset($data['check_out'])) {
+        if (!empty($data['check_in']) && !empty($data['check_out'])) {
             $checkIn  = Carbon::parse($data['date'] . ' ' . $data['check_in']);
             $checkOut = Carbon::parse($data['date'] . ' ' . $data['check_out']);
 
@@ -496,6 +496,16 @@ class AttendanceService
 
             $data = array_merge($data, $calculated, [
                 'expected_hours' => $expectedHours,
+            ]);
+        } elseif (!empty($data['check_in']) || !empty($data['check_out'])) {
+            // Open shift: preserve the available punch and postpone work-hour
+            // calculations until CCP enters the second punch.
+            $employee = Employee::active()->findOrFail($data['employee_id']);
+            $data = array_merge($data, [
+                'work_hours' => 0,
+                'expected_hours' => $this->getExpectedHours($employee),
+                'late_minutes' => 0,
+                'overtime_hours' => 0,
             ]);
         }
 

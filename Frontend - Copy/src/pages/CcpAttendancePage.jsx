@@ -143,10 +143,10 @@ export default function CcpAttendancePage() {
     const status = parseStatus(draft.status)
     const checkIn = parseTime(draft.check_in)
     const checkOut = parseTime(draft.check_out)
-    // Working statuses need both times so a check-in-only row doesn't slip through.
+    // During an active shift CCP may save only Check In, then add Check Out later.
     const needsTimes = ['present', 'late', 'permission'].includes(status)
-    if (needsTimes && (!checkIn || !checkOut)) {
-      setError(`${employee.name}: both Check In and Check Out are required for ${status} status.`)
+    if (needsTimes && !checkIn && !checkOut) {
+      setError(`${employee.name}: enter Check In or Check Out for ${status} status.`)
       setMessage('')
       return
     }
@@ -201,7 +201,7 @@ export default function CcpAttendancePage() {
       }
     })
     const incomplete = rows.filter(r =>
-      ['present', 'late', 'permission'].includes(r.status) && (!r.check_in || !r.check_out)
+      ['present', 'late', 'permission'].includes(r.status) && !r.check_in && !r.check_out
     )
     if (incomplete.length) {
       const names = incomplete
@@ -209,7 +209,7 @@ export default function CcpAttendancePage() {
         .slice(0, 3)
         .join(', ')
       const extra = incomplete.length > 3 ? ` and ${incomplete.length - 3} more` : ''
-      setError(`Both Check In and Check Out are required for ${names}${extra}.`)
+      setError(`Enter Check In or Check Out for ${names}${extra}.`)
       setMessage('')
       return
     }
