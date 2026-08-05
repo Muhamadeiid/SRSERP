@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore,
-  UploadCloud, Trash2, Paperclip
+  UploadCloud, Trash2, Paperclip, FileText
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
@@ -2801,6 +2801,20 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     ? pending
     : pending.filter(request => approvalStageFor(request) === approvalStage)
 
+  // Keep requests visible to the account that submitted them while another
+  // role owns the current approval step.
+  const mySubmittedRequests = typeFiltered.filter(request =>
+    String(request.user_id || '') === String(user?.id || '')
+    && ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending'].includes(request.status)
+  )
+  const waitingOnLabel = request => {
+    if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'Waiting for Direct Manager'
+    if (request.status === 'pending' || request.status === 'manager_approved') return 'Waiting for HR'
+    if (request.status === 'hr_approved') return 'Waiting for Depot Manager'
+    if (request.status === 'cancellation_pending') return 'Cancellation waiting for Depot Manager'
+    return 'In progress'
+  }
+
   // Check if current user is the direct manager of a given request's employee
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
   // Single row renderer used by both Active and History sections
@@ -3098,6 +3112,43 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         ? <OfficialLRFForm key={`lrf-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'lrf' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
         : <OTRForm key={`otr-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'otr' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
       }
+
+      {mySubmittedRequests.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:px-6 sm:py-4">
+            <FileText className="h-4 w-4 text-blue-600" />
+            <h2 className="text-sm font-bold text-secondary-700">My Submitted Requests</h2>
+            <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">{mySubmittedRequests.length}</span>
+          </div>
+          <div className="divide-y divide-neutral-100">
+            {mySubmittedRequests.map(request => (
+              <div key={request.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-bold text-secondary-700">{request.employee_name}</p>
+                    <StatusBadge status={request.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {request.type === 'lrf'
+                      ? `${String(request.leave_type || '').replace('_', ' ')} leave · ${fmtDays(request.days)} day(s) · ${fmtShort(request.start_date)} → ${fmtShort(request.end_date)}`
+                      : `Overtime · ${displayOvertimeHours(request.hours)}h · ${fmtShort(request.ot_date)}`}
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold text-blue-600">{waitingOnLabel(request)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openRequest(request)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-50"
+                  title="View request details"
+                  aria-label={`View ${request.employee_name} request`}
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pending approvals — manager / depot_manager only */}
       {pending.length > 0 && (
