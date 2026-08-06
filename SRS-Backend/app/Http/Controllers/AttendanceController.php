@@ -898,6 +898,12 @@ class AttendanceController extends Controller
             'start_date'  => $startDate,
             'end_date'    => $endDate,
         ]);
+        $approvedLeaves = LeaveRequest::where('employee_id', $employee->id)
+            ->where('type', 'lrf')
+            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereDate('start_date', '<=', $endDate)
+            ->whereDate('end_date', '>=', $startDate)
+            ->get();
 
         // ── helpers ──────────────────────────────────────────────
         $timeStr = function($t): ?string {
@@ -980,6 +986,7 @@ class AttendanceController extends Controller
         $C_BLUE    = 'BFDBFE';
         $C_DAYOFF  = 'D5D5D5';
         $C_OT      = 'FFF9C4';
+        $C_ABSENT  = 'F4CCCC';
         $C_WHITE   = 'FFFFFF';
         $C_ALT     = 'F3F4F6';
 
@@ -1129,6 +1136,14 @@ class AttendanceController extends Controller
             $rec = $dr['record'];
             $off = $dr['isDayOff'];
             $dt  = $dr['date'];
+            $dateKey = $dt->toDateString();
+            $dayLeaves = $approvedLeaves->filter(function ($leave) use ($dateKey) {
+                $from = $leave->start_date?->toDateString();
+                $to = $leave->end_date?->toDateString() ?? $from;
+                return $from && $from <= $dateKey && $to >= $dateKey;
+            });
+            $fullDayLeave = $dayLeaves->first(fn($leave) => in_array($leave->leave_type, ['annual', 'casual', 'sick'], true));
+            $earlyLeave = $dayLeaves->first(fn($leave) => $leave->leave_type === 'early');
 
             $otStartStr = $otEndStr = '';
             $dayRate = $nightRate = 0;
@@ -1167,13 +1182,22 @@ class AttendanceController extends Controller
 
             $ciStr = $timeStr($rec?->check_in);
             $coStr = $timeStr($rec?->check_out);
+            $leaveLabel = $fullDayLeave
+                ? ['annual' => 'Annual', 'casual' => 'Casual', 'sick' => 'Sick'][$fullDayLeave->leave_type]
+                : null;
+            $notes = trim((string) ($rec?->notes ?? ''));
+            if ($earlyLeave) {
+                $fraction = rtrim(rtrim(number_format((float) $earlyLeave->days, 2, '.', ''), '0'), '.');
+                $elrNote = 'ELR ' . $fraction;
+                $notes = $notes === '' ? $elrNote : $notes . ' | ' . $elrNote;
+            }
 
             $values = [
                 $dr['sn'],
                 $dt->format('j-M-Y'),
                 $dt->format('D'),
-                $ciStr ? $fmt12($ciStr) : '',
-                $coStr ? $fmt12($coStr) : '',
+                $leaveLabel ?? ($ciStr ? $fmt12($ciStr) : ''),
+                $leaveLabel ?? ($coStr ? $fmt12($coStr) : ''),
                 $workHrsStr,
                 '0.00',
                 $otStartStr,
@@ -1184,7 +1208,7 @@ class AttendanceController extends Controller
                 $totalOTVal,
                 $dedHrs !== '' ? $dedHrs : '',
                 $dedMin !== '' ? $dedMin : '',
-                $rec?->notes ?? '',
+                $notes,
             ];
 
             foreach ($values as $ci => $val) {
@@ -1192,7 +1216,9 @@ class AttendanceController extends Controller
                 $sheet->setCellValue("{$col}{$row}", $val);
             }
 
-            $bg = $off ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT));
+            $bg = $rec?->status === 'absent'
+                ? $C_ABSENT
+                : ($off ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
 
             $sheet->getStyle("{$firstCol}{$row}:{$lastCol}{$row}")->applyFromArray([
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $bg]],
