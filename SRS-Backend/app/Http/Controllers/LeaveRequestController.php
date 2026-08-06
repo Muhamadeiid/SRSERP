@@ -154,9 +154,9 @@ class LeaveRequestController extends Controller
     {
         $this->ensureHrArchiveAccess(auth()->user());
         abort_unless(
-            $leaveRequest->type === 'lrf' && $leaveRequest->status === 'approved',
+            in_array($leaveRequest->type, ['lrf', 'otr'], true) && $leaveRequest->status === 'approved',
             422,
-            'Only fully approved leave requests can be marked as printed.'
+            'Only fully approved leave or overtime requests can be marked as printed.'
         );
 
         DB::table('leave_request_archives')->updateOrInsert(

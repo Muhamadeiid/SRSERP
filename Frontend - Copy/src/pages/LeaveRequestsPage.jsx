@@ -3245,7 +3245,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         const active = typeFiltered.filter(r =>
           !r.archived_by_me && (
             r.status === 'cancellation_pending' ||
-            (r.type === 'lrf' && r.status === 'approved')
+            r.status === 'approved'
           )
         )
         if (active.length === 0) return null
@@ -3270,7 +3270,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
       {(() => {
         if (!canManagePrintArchive) return null
-        const archived = typeFiltered.filter(r => r.type === 'lrf' && r.archived_by_me)
+        const archived = typeFiltered.filter(r => r.archived_by_me)
         if (archived.length === 0) return null
         return (
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
@@ -3282,7 +3282,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             >
               <div className="flex items-center gap-2">
                 <ArchiveRestore className="h-4 w-4 text-neutral-500" />
-                <h2 className="text-sm font-bold text-secondary-700">Archived Leave Requests</h2>
+                <h2 className="text-sm font-bold text-secondary-700">
+                  {showOnly === 'otr' ? 'Archived Overtime Requests' : showOnly === 'lrf' ? 'Archived Leave Requests' : 'Archived Requests'}
+                </h2>
                 <span className="px-2 py-0.5 bg-neutral-200 text-neutral-600 text-xs font-bold rounded-full">{archived.length}</span>
               </div>
               <span className="flex items-center gap-2 text-[11px] text-neutral-400">
@@ -3326,8 +3328,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           const historyPool = typeFiltered.filter(r => {
             return r.status === 'rejected' ||
               r.status === 'cancelled' ||
-              r.status === 'rescheduled' ||
-              (r.type === 'otr' && r.status === 'approved')
+              r.status === 'rescheduled'
           })
 
           // Apply period filter
