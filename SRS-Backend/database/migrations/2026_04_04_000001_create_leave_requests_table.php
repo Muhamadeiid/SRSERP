@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('leave_requests', function (Blueprint $table) {
             $table->id();
-            $table->string('tracking_no')->unique();
+            $table->string('tracking_no')->nullable()->unique();
 
             // Who submitted
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();

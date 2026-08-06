@@ -336,7 +336,8 @@ class LeaveRequestController extends Controller
         if (!Schema::hasColumn('leave_requests', 'alternate_employee_name')) {
             unset($data['alternate_employee_name']);
         }
-        $data['tracking_no'] = $this->generateTrackingNo($data['type'], $employee);
+        // The official tracking sequence is reserved only at final approval.
+        $data['tracking_no'] = null;
         $data['request_date'] = $data['request_date'] ?? now()->toDateString();
 
         if ($request->hasFile('medical_attachment') && ($data['leave_type'] ?? null) === 'sick') {
@@ -562,7 +563,14 @@ class LeaveRequestController extends Controller
         // Depot Manager and Super Admin may finalize an outstanding request directly.
         // Skipped approval stages remain unsigned so the printed form stays truthful.
         DB::transaction(function () use ($leaveRequest, $changes, $user) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            $employee = $locked->employee_id
+                ? Employee::withTrashed()->find($locked->employee_id)
+                : null;
+            $trackingNo = $locked->tracking_no ?: $this->generateTrackingNo($locked->type, $employee);
+
             $leaveRequest->update(array_merge($changes, [
+                'tracking_no' => $trackingNo,
                 'status' => 'approved',
                 'approved_by' => $user->id,
                 'approved_at' => now(),
@@ -622,6 +630,7 @@ class LeaveRequestController extends Controller
         }
 
         $leaveRequest->update([
+            'tracking_no' => null,
             'status' => 'rejected',
             'approved_by' => $user->id,
             'approved_at' => now(),
@@ -648,6 +657,7 @@ class LeaveRequestController extends Controller
         }
 
         $leaveRequest->update([
+            'tracking_no' => null,
             'status' => 'rescheduled',
             'rescheduled_by' => $user->id,
             'rescheduled_at' => now(),
@@ -713,6 +723,7 @@ class LeaveRequestController extends Controller
         }
 
         $leaveRequest->update([
+            'tracking_no' => null,
             'status' => 'cancelled',
             'cancelled_by' => $user->id,
             'cancelled_at' => now(),
@@ -830,6 +841,13 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         if (!$user->isHR()) {
             return response()->json(['success' => false, 'message' => 'Only HR can edit the tracking number'], 403);
+        }
+
+        if ($leaveRequest->status !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tracking numbers can only be edited after final approval.',
+            ], 422);
         }
 
         $v = Validator::make($request->all(), [
@@ -1046,10 +1064,8 @@ class LeaveRequestController extends Controller
                 . '-';
 
         $next = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
-            ->where(function ($q) {
-                $q->whereIn('status', ['approved', 'cancellation_pending'])
-                  ->orWhereIn('status', ['pending', 'manager_approved', 'hr_approved']);
-            })
+            ->whereNotNull('tracking_no')
+            ->lockForUpdate()
             ->pluck('tracking_no')
             ->map(function ($tracking) use ($prefix) {
                 $tail = substr((string) $tracking, strlen($prefix));

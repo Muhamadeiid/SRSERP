@@ -337,9 +337,7 @@ const fmtShort  = d => d ? new Date(d).toLocaleDateString('en-GB', { day:'2-digi
 const fmtDateTime = d => d ? new Date(d).toLocaleString('en-GB', {
   day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
 }) : '—'
-const genLRFNo  = () => `LRF-GZ-????`
 const fmtDays   = d => d != null ? +parseFloat(d) : d
-const genOTRNo  = () => `OTR-EG1-????`
 const DEFAULT_OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
 const DEFAULT_LEAVE_PURPOSE_OPTIONS = ['Sick | مرضي', 'Personal matter | أمر شخصي']
 const parseConfiguredOptions = (value, fallback) => {
@@ -904,8 +902,6 @@ function LRFForm({ onSubmit, saving }) {
     const selectedDept = deptValue(emp)
     const selectedManager = emp?.form_direct_manager || emp?.direct_manager || emp?.directManager
     const selectedManagerRole = selectedManager?.role || selectedManager?.user_role || selectedManager?.user?.role
-    const region = emp.project_code ?? (emp.rotem_code?.toLowerCase().startsWith('ganz') ? 'GZ' : 'EG1')
-    const previewTracking = `LRF-${region}-????`
     setForm(f => ({
       ...f,
       employee_id:      emp.id ?? null,
@@ -916,7 +912,7 @@ function LRFForm({ onSubmit, saving }) {
       direct_manager_name: selectedManager?.name && selectedManagerRole !== 'depot_manager'
         ? twoName(selectedManager.name)
         : '',
-      tracking_no:      previewTracking,
+      tracking_no:      null,
     }))
     if (emp.id) {
       // fetch direct manager
@@ -968,7 +964,7 @@ function LRFForm({ onSubmit, saving }) {
       </table>
 
       <div className="px-4 pt-3 pb-1 space-y-1">
-        <p className="text-xs font-bold text-secondary-700">Tracking No: {form.tracking_no || '—'}</p>
+        <p className="text-xs font-bold text-secondary-700">Tracking No: Assigned after final approval</p>
 
         {/* Purpose block */}
         <div className="flex justify-between items-start">
@@ -982,7 +978,7 @@ function LRFForm({ onSubmit, saving }) {
 
       <form onSubmit={e => {
         e.preventDefault()
-        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+        onSubmit({ ...form, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: null, status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
       }}>
         {/* ══ MAIN TABLE ══ */}
         <table className="w-full border-collapse border-2 border-neutral-800 mx-[1px]" style={{width:'calc(100% - 2px)'}}>
@@ -1468,7 +1464,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
       alert('Please attach the medical insurance image before submitting a sick leave request.')
       return
     }
-    onSubmit({ ...form, medical_attachment: form.leave_type === 'sick' ? medicalAttachment : null, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: genLRFNo(), status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
+    onSubmit({ ...form, medical_attachment: form.leave_type === 'sick' ? medicalAttachment : null, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: null, status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
   }
 
   return (
@@ -1922,7 +1918,7 @@ function OTRForm({ onSubmit, saving, prefill, onPrefillDone }) {
         </tbody>
       </table>
 
-      <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, hours, tracking_no: genOTRNo(), status: 'pending', type: 'otr', created_at: new Date().toISOString() }) }} className="divide-y divide-neutral-100">
+      <form onSubmit={e => { e.preventDefault(); onSubmit({ ...form, hours, tracking_no: null, status: 'pending', type: 'otr', created_at: new Date().toISOString() }) }} className="divide-y divide-neutral-100">
 
         {/* Employee + Date */}
         <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-neutral-100">
@@ -2383,7 +2379,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 <p className={`text-xs ${trackingMissing ? 'text-amber-600 italic font-semibold' : 'text-neutral-400'}`}>
                   {trackingMissing ? 'No tracking number' : req.tracking_no}
                 </p>
-                {isHR && (
+                {isHR && req.status === 'approved' && (
                   <button onClick={() => setEditingTracking(true)}
                     className="text-[10px] font-bold text-primary hover:underline">
                     {trackingMissing ? '+ Set' : 'Edit'}
