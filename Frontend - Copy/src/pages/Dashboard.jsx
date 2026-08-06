@@ -11,6 +11,7 @@ import {
 import { getEmployees, getEmployeeStats } from '../services/employeeService'
 import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
+import { attendanceService }           from '../services/Attendanceservice'
 
 // ── time formatter ──────────────────────────────────────────────
 const fmtTime = (d) => {
@@ -24,7 +25,13 @@ const fmtTime = (d) => {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 // ── Compact stat tile for use inside dept sections ──────────────
 function SectionStat({ label, value, sub, subColor = 'text-neutral-400', icon: Icon, iconBg, onClick }) {
@@ -177,6 +184,7 @@ export default function DashboardPage() {
   const [reqs,      setReqs]      = useState([])
   const [prfs,      setPrfs]      = useState([])
   const [notifs,    setNotifs]    = useState([])
+  const [todayAttendance, setTodayAttendance] = useState([])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -189,6 +197,9 @@ export default function DashboardPage() {
           setEmployees(list)
         }).catch(() => {}),
         getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}),
+        attendanceService.getAttendance({ date: todayISO() }).then(r => {
+          setTodayAttendance(Array.isArray(r?.data) ? r.data : [])
+        }).catch(() => {}),
       )
     } else {
       // All other roles (staff, manager, procurement, ehs) — see just their own submitted requests
@@ -209,15 +220,6 @@ export default function DashboardPage() {
   }, [fetchAll])
 
   // ── Derived stats ───────────────────────────────────────────
-  const today = todayISO()
-
-  const onLeaveToday = useMemo(() =>
-    reqs.filter(r =>
-      r.type === 'lrf' && r.status === 'approved' &&
-      (r.start_date?.slice(0,10) ?? '') <= today &&
-      today <= (r.end_date?.slice(0,10) ?? r.start_date?.slice(0,10) ?? '')
-    ).length, [reqs, today])
-
   const pendingLeaves     = useMemo(() => reqs.filter(r => ['pending','manager_approved'].includes(r.status)).length, [reqs])
   const pendingLrfCount   = useMemo(() => reqs.filter(r => r.type === 'lrf' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
   const pendingOtCount    = useMemo(() => reqs.filter(r => r.type === 'otr' && ['pending','manager_approved'].includes(r.status)).length, [reqs])
@@ -231,7 +233,11 @@ export default function DashboardPage() {
   const rejectedPrfs = useMemo(() => prfs.filter(p => p.status === 'rejected').length, [prfs])
 
   const totalStaff  = empStats?.total_employees ?? employees.length
-  const onSiteStaff = totalStaff - onLeaveToday
+  const onSiteStaff = useMemo(() => new Set(
+    todayAttendance
+      .filter(record => record.check_in || record.check_out)
+      .map(record => String(record.employee_id))
+  ).size, [todayAttendance])
 
   // ── Recent activity ─────────────────────────────────────────
   const recent = useMemo(() => {
@@ -334,8 +340,8 @@ export default function DashboardPage() {
             />
             <SectionStat
               label="On Site Today"
-              value={L(onSiteStaff >= 0 ? onSiteStaff : '—')}
-              sub={`${L(onLeaveToday)} on leave`}
+              value={L(onSiteStaff)}
+              sub="Employees with a punch today"
               subColor="text-sky-600"
               icon={UserCheck}
               iconBg="bg-sky-100 text-sky-600"
