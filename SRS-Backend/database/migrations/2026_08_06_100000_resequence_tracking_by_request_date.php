@@ -12,21 +12,6 @@ return new class extends Migration
             return;
         }
 
-        if (DB::getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE leave_requests MODIFY tracking_no VARCHAR(255) NULL');
-        }
-
-        DB::table('leave_requests')
-            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'rejected', 'rescheduled'])
-            ->update(['tracking_no' => null]);
-
-        DB::table('leave_requests')
-            ->where('status', 'cancelled')
-            ->whereNull('approved_at')
-            ->update(['tracking_no' => null]);
-
-        // Close historical gaps left by rejected or unfinished requests. Use
-        // temporary values first for databases retaining the original unique index.
         $groups = [];
         $finalized = DB::table('leave_requests')
             ->whereNotNull('tracking_no')
@@ -50,7 +35,7 @@ return new class extends Migration
         foreach ($groups as $prefix => $ids) {
             foreach ($ids as $id) {
                 DB::table('leave_requests')->where('id', $id)->update([
-                    'tracking_no' => '__TRACKING_RENUMBER__' . $id,
+                    'tracking_no' => '__TRACKING_DATE_ORDER__' . $id,
                 ]);
             }
 
@@ -64,7 +49,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Tracking numbers assigned after final approval cannot be reconstructed
-        // safely for unfinished requests, so rollback intentionally keeps nullable.
+        // The previous sequence cannot be reconstructed safely.
     }
 };

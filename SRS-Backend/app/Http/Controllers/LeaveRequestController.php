@@ -576,7 +576,11 @@ class LeaveRequestController extends Controller
                 'approved_at' => now(),
                 'depot_signature' => $user->e_signature ?? null,
             ]));
+
+            $this->resequenceFinalizedTrackingNumbers($this->trackingPrefix($locked->type, $employee));
         });
+
+        $leaveRequest->refresh();
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         if ($leaveRequest->user_id) {
@@ -1059,9 +1063,7 @@ class LeaveRequestController extends Controller
 
     private function generateTrackingNo(string $type, ?Employee $employee = null): string
     {
-        $prefix = ($type === 'lrf' ? 'LRF' : 'OTR')
-                . '-' . ($employee?->projectCode() ?? 'EG1')
-                . '-';
+        $prefix = $this->trackingPrefix($type, $employee);
 
         $next = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
             ->whereNotNull('tracking_no')
@@ -1074,6 +1076,41 @@ class LeaveRequestController extends Controller
             ->max() + 1;
 
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function trackingPrefix(string $type, ?Employee $employee = null): string
+    {
+        return ($type === 'lrf' ? 'LRF' : 'OTR')
+            . '-' . ($employee?->projectCode() ?? 'EG1')
+            . '-';
+    }
+
+    private function resequenceFinalizedTrackingNumbers(string $prefix): void
+    {
+        $ids = LeaveRequest::query()
+            ->where('tracking_no', 'like', $prefix . '%')
+            ->where(function ($query) {
+                $query->whereIn('status', ['approved', 'cancellation_pending'])
+                    ->orWhere(function ($cancelled) {
+                        $cancelled->where('status', 'cancelled')->whereNotNull('approved_at');
+                    });
+            })
+            ->orderByRaw('COALESCE(request_date, DATE(created_at))')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('id')
+            ->all();
+
+        foreach ($ids as $id) {
+            LeaveRequest::whereKey($id)->update(['tracking_no' => '__TRACKING_RENUMBER__' . $id]);
+        }
+
+        foreach (array_values($ids) as $index => $id) {
+            LeaveRequest::whereKey($id)->update([
+                'tracking_no' => $prefix . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT),
+            ]);
+        }
     }
 
     private function availableLeaveBalances(int $employeeId, ?int $excludeRequestId = null): array
