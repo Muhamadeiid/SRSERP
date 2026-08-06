@@ -871,7 +871,7 @@ const LRF_EMPTY = {
   employee_id: null, employee_name: '', job_title: '', department: '', department_label: '',
   leave_type: 'annual', early_from: '', early_to: '',
   paid: true,
-  alternate_employee_name: '',
+  alternate_employee_id: null, alternate_employee_name: '',
   request_date: today(), start_date: '', end_date: '', purpose: 'Personal matter',
 }
 
@@ -1371,6 +1371,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
       department:          prefill.department ?? '',
       department_label:    prefill.department_label ?? '',
       direct_manager_name: prefill.direct_manager_name ?? '',
+      alternate_employee_id: prefill.alternate_employee_id ?? null,
       alternate_employee_name: prefill.alternate_employee_name ?? '',
       leave_type:          prefill.leave_type ?? 'annual',
       paid:                prefill.paid ?? true,
@@ -1602,9 +1603,17 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
           <div className="p-3">
             <div className={LBL}>Alternate Employee <span className="text-neutral-400 font-normal" dir="rtl">— الموظف البديل</span></div>
             <EmployeeSearch
-              onSelect={emp => set('alternate_employee_name', twoName(emp.name))}
+              onSelect={emp => setForm(current => ({
+                ...current,
+                alternate_employee_id: emp.id ?? null,
+                alternate_employee_name: twoName(emp.name),
+              }))}
               initialName={form.alternate_employee_name}
-              onInputChange={value => set('alternate_employee_name', value)}
+              onInputChange={value => setForm(current => ({
+                ...current,
+                alternate_employee_id: null,
+                alternate_employee_name: value,
+              }))}
             />
           </div>
 
@@ -2309,6 +2318,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     }
   }
   const signatureParties = req.signature_parties || req.signatureParties || {}
+  const employeeSignatureParty = signatureParties.employee || req.employee || null
+  const alternateSignatureParty = signatureParties.alternate_employee || signatureParties.alternateEmployee
+    || req.alternate_employee || req.alternateEmployee || null
   const directSignatureParty = signatureParties.direct_manager || signatureParties.directManager || null
   const hrSignatureParty = signatureParties.hr || null
   const depotSignatureParty = signatureParties.depot_manager || signatureParties.depotManager || null
@@ -2539,11 +2551,15 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         )}
 
-        {/* Signatures strip (show when approved) */}
-        {['hr_approved','approved','cancellation_pending'].includes(req.status) && (
+        {/* Each slot reads from the same server-resolved signature source. */}
+        {(
           <div className="px-6 pb-4 border-t border-neutral-100">
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-wide mb-3 pt-3">Signatures</p>
             <div className="flex gap-4 flex-wrap">
+              <SigStamp label="Employee" name={employeeSignatureParty?.name || req.employee_name} date={req.created_at} sig={employeeSignatureParty?.e_signature} />
+              {req.type === 'lrf' && req.alternate_employee_name && (
+                <SigStamp label="Alternate Employee" name={alternateSignatureParty?.name || req.alternate_employee_name} sig={alternateSignatureParty?.e_signature} />
+              )}
               <SigStamp label="Direct Manager" name={directSignatureParty?.name || req.manager_approver?.name} date={req.manager_approved_at} sig={directSignatureParty?.e_signature || req.manager_signature} />
               <SigStamp label="HR Officer"     name={hrSignatureParty?.name || req.hr_approver?.name}           date={req.hr_approved_at}      sig={hrSignatureParty?.e_signature || req.hr_signature} />
               <SigStamp label="Depot Manager"  name={depotSignatureParty?.name || req.approver?.name}           date={req.approved_at}         sig={depotSignatureParty?.e_signature || req.depot_signature} />

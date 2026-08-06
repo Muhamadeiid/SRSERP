@@ -8,7 +8,8 @@ class LeaveRequest extends Model
 {
     protected $fillable = [
         'tracking_no', 'user_id', 'employee_id',
-        'employee_name', 'job_title', 'department', 'department_label', 'direct_manager_name', 'alternate_employee_name',
+        'employee_name', 'job_title', 'department', 'department_label', 'direct_manager_name',
+        'alternate_employee_id', 'alternate_employee_name',
         'type',
         // LRF
         'leave_type', 'paid', 'available_balance', 'casual_available_balance',
@@ -56,6 +57,7 @@ class LeaveRequest extends Model
 
     public function user()           { return $this->belongsTo(User::class); }
     public function employee()       { return $this->belongsTo(Employee::class); }
+    public function alternateEmployee(){ return $this->belongsTo(Employee::class, 'alternate_employee_id')->withTrashed(); }
     public function approver()       { return $this->belongsTo(User::class, 'approved_by'); }
     public function hrApprover()     { return $this->belongsTo(User::class, 'hr_approved_by'); }
     public function canceller()      { return $this->belongsTo(User::class, 'cancelled_by'); }

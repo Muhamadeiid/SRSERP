@@ -194,6 +194,7 @@ class LeaveRequestController extends Controller
             'department' => 'nullable|string|max:100',
             'department_label' => 'nullable|string|max:100',
             'direct_manager_name' => 'nullable|string|max:255',
+            'alternate_employee_id' => 'nullable|exists:employees,id',
             'alternate_employee_name' => 'nullable|string|max:255',
             'employee_id' => 'nullable|exists:employees,id',
             'leave_type' => 'required_if:type,lrf|nullable|in:annual,casual,sick,early',
@@ -336,6 +337,17 @@ class LeaveRequestController extends Controller
         if (!Schema::hasColumn('leave_requests', 'alternate_employee_name')) {
             unset($data['alternate_employee_name']);
         }
+        if (!Schema::hasColumn('leave_requests', 'alternate_employee_id')) {
+            unset($data['alternate_employee_id']);
+        } elseif (empty($data['alternate_employee_id']) && !empty($data['alternate_employee_name'])) {
+            $alternateMatches = Employee::active()
+                ->where('name', 'like', trim($data['alternate_employee_name']) . '%')
+                ->limit(2)
+                ->get(['id']);
+            if ($alternateMatches->count() === 1) {
+                $data['alternate_employee_id'] = $alternateMatches->first()->id;
+            }
+        }
         // The official tracking sequence is reserved only at final approval.
         $data['tracking_no'] = null;
         $data['request_date'] = $data['request_date'] ?? now()->toDateString();
@@ -383,12 +395,27 @@ class LeaveRequestController extends Controller
             'employee.directManager:id,name,position,user_id,e_signature',
             'employee.directManager.user:id,name,role,e_signature',
             'employee.userManager:id,name,role,e_signature',
+            'alternateEmployee:id,name,e_signature,user_id',
+            'alternateEmployee.user:id,name,e_signature',
         ]);
 
         // A signature may have been uploaded from Workforce or saved on the
         // employee's linked login account. Forms should accept either source.
         if ($leave->employee && !$leave->employee->e_signature && $leave->employee->user?->e_signature) {
             $leave->employee->setAttribute('e_signature', $leave->employee->user->e_signature);
+        }
+
+        $alternateEmployee = $leave->alternateEmployee;
+        if (!$alternateEmployee && $leave->alternate_employee_name) {
+            $alternateMatches = Employee::withTrashed()
+                ->where('name', 'like', trim($leave->alternate_employee_name) . '%')
+                ->limit(2)
+                ->get(['id', 'name', 'e_signature', 'user_id']);
+            $alternateEmployee = $alternateMatches->count() === 1 ? $alternateMatches->first() : null;
+            $alternateEmployee?->load('user:id,name,e_signature');
+        }
+        if ($alternateEmployee && !$alternateEmployee->e_signature && $alternateEmployee->user?->e_signature) {
+            $alternateEmployee->setAttribute('e_signature', $alternateEmployee->user->e_signature);
         }
 
         if ($leave->employee && $leave->employee->userManager) {
@@ -413,6 +440,16 @@ class LeaveRequestController extends Controller
             ? Employee::active()->where('user_id', $depotManager->id)->first(['id', 'name', 'e_signature'])
             : null;
         $leave->setAttribute('signature_parties', [
+            'employee' => $leave->employee ? [
+                'id' => $leave->employee->id,
+                'name' => $leave->employee->name,
+                'e_signature' => $leave->employee->e_signature,
+            ] : null,
+            'alternate_employee' => $alternateEmployee ? [
+                'id' => $alternateEmployee->id,
+                'name' => $leave->alternate_employee_name ?: $alternateEmployee->name,
+                'e_signature' => $alternateEmployee->e_signature,
+            ] : null,
             'direct_manager' => ($directManagerEmployee || $directManagerUser) ? [
                 'id' => $directManagerEmployee?->id ?? $directManagerUser?->id,
                 'name' => $leave->direct_manager_name ?: ($directManagerEmployee?->name ?? $directManagerUser?->name),

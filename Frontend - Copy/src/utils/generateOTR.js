@@ -156,6 +156,7 @@ async function enrichOTRData(raw) {
 
   return {
     ...data,
+    employee_signature: signatureParties?.employee?.e_signature || workforceEmployee?.e_signature || employee?.e_signature || null,
     manager_is_depot_manager: Boolean(managerIsDepot),
     direct_manager_name: managerIsDepot ? '' : (data.direct_manager_name || directManager?.name || managerApprover?.name || ''),
     manager_signature: !managerIsDepot && ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
@@ -488,7 +489,8 @@ export async function generateOTR(d, { download = true } = {}) {
     ],
   })
 
-  const [managerSignatureImage, hrSignatureImage, depotSignatureImage] = await Promise.all([
+  const [employeeSignatureImage, managerSignatureImage, hrSignatureImage, depotSignatureImage] = await Promise.all([
+    signatureToCleanImage(data.employee_signature),
     signatureToCleanImage(data.manager_is_depot_manager ? null : data.manager_signature),
     signatureToCleanImage(data.hr_signature),
     signatureToCleanImage(data.depot_signature),
@@ -535,14 +537,20 @@ export async function generateOTR(d, { download = true } = {}) {
     })
   }
 
-  const row9  = sigRow(
+  const row9 = sigRow(
+    'Employee Signature',
+    'توقيع الموظف',
+    employeeSignatureImage,
+    data.created_at ? fmtApprovalDate(data.created_at) : ''
+  )
+  const row10  = sigRow(
     'Direct Manager Signature',
     'توقيع مدير المباشر',
     managerSignatureImage,
     !data.manager_is_depot_manager && data.manager_approved_at ? fmtApprovalDate(data.manager_approved_at) : ''
   )
-  const row10 = sigRow('HR Signature', 'توقيع الموارد البشرية', hrSignatureImage, data.hr_approved_at ? fmtApprovalDate(data.hr_approved_at) : '')
-  const row11 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', depotSignatureImage, data.approved_at ? fmtApprovalDate(data.approved_at) : '')
+  const row11 = sigRow('HR Signature', 'توقيع الموارد البشرية', hrSignatureImage, data.hr_approved_at ? fmtApprovalDate(data.hr_approved_at) : '')
+  const row12 = sigRow('Depot Manager Signature', 'توقيع مدير الموقع', depotSignatureImage, data.approved_at ? fmtApprovalDate(data.approved_at) : '')
 
   const mainTable = new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -555,7 +563,7 @@ export async function generateOTR(d, { download = true } = {}) {
       row4, spacerRow(),
       row5, row6,
       row7, row8,
-      row9, row10, row11,
+      row9, row10, row11, row12,
     ],
   })
 

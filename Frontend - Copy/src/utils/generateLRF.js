@@ -358,6 +358,9 @@ export async function generateLRF(d, { download = true } = {}) {
   // When the direct manager IS the depot manager (same user signed both), leave
   // the direct-manager slot blank so the depot only signs the depot row.
   const signatureParties = d.signature_parties || d.signatureParties || {}
+  const employeeParty = signatureParties.employee || d.employee || null
+  const alternateParty = signatureParties.alternate_employee || signatureParties.alternateEmployee
+    || d.alternate_employee || d.alternateEmployee || null
   const directManager = signatureParties.direct_manager || signatureParties.directManager
     || d.employee?.direct_manager || d.employee?.directManager || null
   const hrParty = signatureParties.hr || null
@@ -374,8 +377,8 @@ export async function generateLRF(d, { download = true } = {}) {
 
   // Resolve each signature slot to a docx image (PNG bytes). Runs in parallel.
   const [empSig, altSig, mgrSig, hrSig, depotSig] = await Promise.all([
-    signatureToImage(d.employee?.e_signature),
-    signatureToImage(d.alternate_employee?.e_signature),
+    signatureToImage(employeeParty?.e_signature),
+    signatureToImage(alternateParty?.e_signature),
     signatureToImage(managerIsDepot ? null : (directManager?.e_signature || d.manager_signature)),
     signatureToImage(hrParty?.e_signature || d.hr_signature),
     signatureToImage(depotParty?.e_signature || d.depot_signature),
