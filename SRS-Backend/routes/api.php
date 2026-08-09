@@ -27,6 +27,7 @@ use App\Http\Controllers\WithdrawalController;
 use App\Http\Controllers\PublicHolidayController;
 use App\Http\Controllers\MaintenanceTaskController;
 use App\Http\Controllers\PushController;
+use App\Http\Controllers\ResignationRequestController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -75,6 +76,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications',           [LeaveRequestController::class, 'notifications']);
     Route::post('/notifications/read-all', [LeaveRequestController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read',[LeaveRequestController::class, 'markRead']);
+
+    // Resignation tickets: HR creates; Depot Manager/Admin performs the decision.
+    Route::get('/resignation-requests', [ResignationRequestController::class, 'index']);
+    Route::post('/resignation-requests', [ResignationRequestController::class, 'store']);
+    Route::post('/resignation-requests/{resignationRequest}/approve', [ResignationRequestController::class, 'approve']);
+    Route::post('/resignation-requests/{resignationRequest}/reject', [ResignationRequestController::class, 'reject']);
 
     // ── Web push subscriptions — every authenticated user ─────────────────────
     Route::get('/push/public-key',   [PushController::class, 'publicKey']);

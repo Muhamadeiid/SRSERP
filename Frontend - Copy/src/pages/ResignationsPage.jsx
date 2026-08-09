@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
-import { Printer, Download, FileText, Search, Loader2 } from 'lucide-react'
-import { getEmployee, searchEmployees, getDepotManager, getHrOfficer, updateEmployee } from '../services/employeeService'
+import { useLocation } from 'react-router-dom'
+import { Printer, Download, FileText, Search, Loader2, BellRing, CheckCircle, XCircle } from 'lucide-react'
+import { getEmployee, searchEmployees, getDepotManager, getHrOfficer } from '../services/employeeService'
+import {
+  getResignationRequests, createResignationRequest,
+  approveResignationRequest, rejectResignationRequest,
+} from '../services/resignationService'
 
 // ── constants ─────────────────────────────────────────────────
 const DEPT_LABEL = {
@@ -308,9 +313,18 @@ const ERF_EMPTY = {
 
 // ── main page ─────────────────────────────────────────────────
 export default function ResignationsPage() {
+  const location = useLocation()
   const { user } = useSelector((s) => s.auth)
   const [form, setForm] = useState({ ...ERF_EMPTY })
   const [downloading, setDownloading] = useState(false)
+  const [tickets, setTickets] = useState([])
+  const [ticketsLoading, setTicketsLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [actionId, setActionId] = useState(null)
+  const role = user?.role
+  const canCreateTicket = ['hr', 'admin'].includes(role)
+  const canDecideTicket = ['depot_manager', 'admin'].includes(role)
+  const selectedTicketId = new URLSearchParams(location.search).get('ticket')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -323,6 +337,27 @@ export default function ResignationsPage() {
       })
       .catch(() => {})
   }, [])
+
+  const loadTickets = async () => {
+    setTicketsLoading(true)
+    try {
+      const result = await getResignationRequests()
+      setTickets(unwrapData(result) || [])
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setTicketsLoading(false)
+    }
+  }
+
+  useEffect(() => { loadTickets() }, [])
+
+  useEffect(() => {
+    if (!selectedTicketId || ticketsLoading) return
+    document.getElementById(`resignation-ticket-${selectedTicketId}`)?.scrollIntoView({
+      behavior: 'smooth', block: 'center',
+    })
+  }, [selectedTicketId, ticketsLoading, tickets])
 
   const handleEmployeeSelect = (emp) => {
     setForm(f => ({
@@ -351,23 +386,56 @@ export default function ResignationsPage() {
 
   const canSubmit = form.full_name && form.current_title && form.resign_start_date && form.last_working_date
 
-  const saveResignation = async () => {
-    if (!form.employee_id || !form.last_working_date) return
+  const submitResignation = async () => {
+    if (!canSubmit || !form.employee_id || !canCreateTicket) return
+    setSubmitting(true)
     try {
-      await updateEmployee(form.employee_id, {
-        name:              form.full_name,
-        position:          form.current_title,
-        resignation_date:  form.resign_start_date,
+      await createResignationRequest({
+        employee_id: form.employee_id,
+        tracking_no: form.tracking_no || null,
+        full_name: form.full_name,
+        department: form.department || null,
+        department_label: form.department_label || null,
+        current_title: form.current_title,
+        current_title_ar: form.current_title_ar || null,
+        resignation_date: form.resign_start_date,
         last_working_date: form.last_working_date,
+        direct_manager_name: form.direct_manager_name || null,
+        depot_manager_name: form.depot_manager_name || null,
+        declaration_name: form.declaration_name || null,
+        national_id: form.national_id || null,
+        declaration_date: form.declaration_date || null,
       })
-    } catch (err) {
-      console.error('Failed to save resignation on employee record', err)
+      alert('Resignation ticket sent to the Depot Manager for approval.')
+      setForm({ ...ERF_EMPTY, depot_manager_name: form.depot_manager_name })
+      await loadTickets()
+    } catch (error) {
+      alert(error.message || 'Could not submit resignation')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const decideTicket = async (ticket, approved) => {
+    let reason = null
+    if (!approved) {
+      reason = window.prompt('Enter rejection reason:')
+      if (!reason?.trim()) return
+    }
+    setActionId(ticket.id)
+    try {
+      if (approved) await approveResignationRequest(ticket.id)
+      else await rejectResignationRequest(ticket.id, reason.trim())
+      await loadTickets()
+    } catch (error) {
+      alert(error.message || 'Could not update resignation ticket')
+    } finally {
+      setActionId(null)
     }
   }
 
   const handlePrint = async () => {
     if (!canSubmit) return
-    await saveResignation()
     printERF(form)
   }
 
@@ -375,7 +443,6 @@ export default function ResignationsPage() {
     if (!canSubmit) return
     setDownloading(true)
     try {
-      await saveResignation()
       const { generateERF } = await import('../utils/generateERF')
       await generateERF(form)
     } catch (err) {
@@ -400,6 +467,16 @@ export default function ResignationsPage() {
           <p className="text-xs text-neutral-400 mt-0.5">SRS-HR-P05-F01 · Rev.04</p>
         </div>
         <div className="flex items-center gap-2">
+          {canCreateTicket && (
+            <button
+              onClick={submitResignation}
+              disabled={!canSubmit || submitting}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />}
+              Send for Depot Approval
+            </button>
+          )}
           <button
             onClick={handleReset}
             className="px-3 py-2 text-sm font-medium text-neutral-500 hover:text-secondary-700 hover:bg-neutral-50 rounded-lg transition-all"
@@ -424,6 +501,63 @@ export default function ResignationsPage() {
           </button>
         </div>
       </div>
+
+      <section className="mb-5 bg-white border border-neutral-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-neutral-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-secondary-700">Resignation Tickets</h2>
+            <p className="text-xs text-neutral-400">HR submission, Depot Manager decision, then automatic Ex-Employee transfer.</p>
+          </div>
+          <span className="text-xs font-semibold text-neutral-500">{tickets.length} requests</span>
+        </div>
+        {ticketsLoading ? (
+          <div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+        ) : tickets.length === 0 ? (
+          <div className="p-6 text-center text-sm text-neutral-400">No resignation tickets yet</div>
+        ) : (
+          <div className="divide-y divide-neutral-100">
+            {tickets.map(ticket => {
+              const pending = ticket.status === 'pending'
+              const badge = pending
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : ticket.status === 'approved'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
+              return (
+                <div
+                  key={ticket.id}
+                  id={`resignation-ticket-${ticket.id}`}
+                  className={`px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 transition-colors ${String(ticket.id) === selectedTicketId ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : ''}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-sm text-secondary-700">{ticket.full_name}</span>
+                      {ticket.tracking_no && <span className="text-xs text-neutral-400">{ticket.tracking_no}</span>}
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold capitalize ${badge}`}>{ticket.status.replace('_', ' ')}</span>
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      {ticket.current_title} · Last working day: {fmtDate(ticket.last_working_date)} · Created by {ticket.creator?.name || 'HR'}
+                    </p>
+                    {ticket.rejection_reason && <p className="text-xs text-red-600 mt-1">Reason: {ticket.rejection_reason}</p>}
+                  </div>
+                  {pending && canDecideTicket && (
+                    <div className="flex gap-2">
+                      <button onClick={() => decideTicket(ticket, false)} disabled={actionId === ticket.id}
+                        className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 disabled:opacity-50">
+                        <XCircle className="w-4 h-4" /> Reject
+                      </button>
+                      <button onClick={() => decideTicket(ticket, true)} disabled={actionId === ticket.id}
+                        className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md bg-green-600 text-white text-xs font-bold hover:bg-green-700 disabled:opacity-50">
+                        {actionId === ticket.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Approve
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Two-column layout: inputs (left) + preview (right) */}
       <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-5">

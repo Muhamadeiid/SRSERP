@@ -1,4 +1,11 @@
 export function notificationRequestTarget(notification) {
+  if (notification?.data?.resignation_request_id) {
+    return {
+      path: '/human-resources/resignations',
+      query: `ticket=${notification.data.resignation_request_id}`,
+    }
+  }
+
   const requestId = notification?.data?.leave_request_id
   if (!requestId) return null
 
