@@ -919,7 +919,12 @@ export default function AttendanceTab() {
     return rec.status
   }
 
-  const ovPresent = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && !isOverviewLate(r) && ['present','incomplete','wfh','intervention'].includes(effectiveOverviewStatus(r))).length
+  const isOnSiteOnOverview = rec =>
+    !isOnLeaveOnOverview(rec.employee_id)
+    && Boolean(rec.check_in)
+    && !['absent', 'off'].includes(effectiveOverviewStatus(rec))
+
+  const ovPresent = overviewRecs.filter(r => isOnSiteOnOverview(r)).length
   const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
   const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
   const ovOnLeave = fullDayLeaveEmployeeIds.size
@@ -927,7 +932,7 @@ export default function AttendanceTab() {
 
   const filteredRecs = overviewRecs.filter(rec => {
     const matchesMetric = overviewMetricFilter === 'all'
-      || (overviewMetricFilter === 'present' && !isOnLeaveOnOverview(rec.employee_id) && !isOverviewLate(rec) && ['present','incomplete','wfh','intervention'].includes(effectiveOverviewStatus(rec)))
+      || (overviewMetricFilter === 'present' && isOnSiteOnOverview(rec))
       || (overviewMetricFilter === 'late' && isOverviewLate(rec))
       || (overviewMetricFilter === 'absent' && rec.status === 'absent' && !isOnLeaveOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'leave' && isOnLeaveOnOverview(rec.employee_id))
@@ -1184,7 +1189,7 @@ export default function AttendanceTab() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             {[
               ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
-              ['late',     'Late',          `${ovLate} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-yellow-50 text-yellow-700 border-yellow-200'],
+              ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
               ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
               ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
               ['overtime', 'With Overtime', ovOT,         'bg-blue-50   text-blue-700   border-blue-200'],
