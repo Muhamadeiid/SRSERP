@@ -185,6 +185,58 @@ class AttendanceController extends Controller
                 ->get(['id', 'date', 'end_date', 'name_en', 'name_ar']);
         }
 
+        // Daily overview must include scheduled employees who have no punch.
+        // Full-day leave, weekly offs, Saturday rotation offs and public holidays
+        // are excluded; Early Leave still requires attendance for the worked hours.
+        if (!empty($filters['date']) && empty($filters['employee_id'])) {
+            $date = Carbon::parse($filters['date'])->startOfDay();
+            $dateKey = $date->toDateString();
+            $isHoliday = $holidays->contains(function ($holiday) use ($dateKey) {
+                $start = $holiday->date?->toDateString();
+                $end = $holiday->end_date?->toDateString() ?? $start;
+                return $start && $start <= $dateKey && $end >= $dateKey;
+            });
+
+            if (!$isHoliday && (empty($filters['status']) || $filters['status'] === 'absent')) {
+                $recordedIds = $attendances->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
+                $fullDayLeaveIds = $leaves
+                    ->whereIn('leave_type', ['annual', 'casual', 'sick'])
+                    ->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
+
+                $employeeQuery = Employee::active();
+                if (!empty($filters['department'])) {
+                    $employeeQuery->where('department', $filters['department']);
+                }
+
+                $missing = $employeeQuery
+                    ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'category', 'saturday_group', 'weekly_off_day'])
+                    ->filter(fn (Employee $employee) =>
+                        $employee->isWorkingDay($date->copy())
+                        && !$recordedIds->has((int) $employee->id)
+                        && !$fullDayLeaveIds->has((int) $employee->id)
+                    )
+                    ->map(fn (Employee $employee) => [
+                        'id' => null,
+                        'employee_id' => $employee->id,
+                        'date' => $dateKey,
+                        'check_in' => null,
+                        'check_out' => null,
+                        'work_hours' => 0,
+                        'overtime_hours' => 0,
+                        'late_minutes' => 0,
+                        'status' => 'absent',
+                        'notes' => null,
+                        'is_manual' => false,
+                        'is_virtual_absence' => true,
+                        'employee' => $employee,
+                    ]);
+
+                $attendances = $attendances->concat($missing)
+                    ->sortBy(fn ($row) => data_get($row, 'employee.name', ''))
+                    ->values();
+            }
+        }
+
         return response()->json([
             'success'  => true,
             'data'     => $attendances,

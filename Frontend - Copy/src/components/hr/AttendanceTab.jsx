@@ -847,6 +847,7 @@ export default function AttendanceTab() {
   const [overviewEditRec, setOverviewEditRec] = useState(null)   // for overview inline edit
   const [leaves,          setLeaves]          = useState([])     // approved leaves overlapping range
   const [overviewLeaves,  setOverviewLeaves]  = useState([])     // approved leaves on overview date
+  const [overviewOtrs,    setOverviewOtrs]    = useState([])     // approved OTRs on overview date
   const [otrs,            setOtrs]            = useState([])     // approved OTRs overlapping range
   const [holidays,        setHolidays]        = useState([])     // public holidays overlapping range
   const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
@@ -876,9 +877,11 @@ export default function AttendanceTab() {
       if (res.success) {
         setOverviewRecs(res.data ?? [])
         setOverviewLeaves(res.leaves ?? [])
+        setOverviewOtrs(res.otrs ?? [])
       } else {
         setOverviewRecs([])
         setOverviewLeaves([])
+        setOverviewOtrs([])
         setOverviewErr('Server returned an error — check console')
       }
     } catch (e) {
@@ -906,14 +909,17 @@ export default function AttendanceTab() {
   })
 
   // Helper: is an employee on approved leave on the overview date?
-  const isOnLeaveOnOverview = (employeeId) =>
-    overviewLeaves.some(l => l.employee_id === employeeId)
+  const fullDayOverviewLeaves = overviewLeaves.filter(leave =>
+    ['annual', 'casual', 'sick'].includes(leave.leave_type)
+  )
+  const fullDayLeaveEmployeeIds = new Set(fullDayOverviewLeaves.map(leave => Number(leave.employee_id)))
+  const isOnLeaveOnOverview = employeeId => fullDayLeaveEmployeeIds.has(Number(employeeId))
 
-  const ovPresent = overviewRecs.filter(r => ['present','incomplete','wfh','intervention'].includes(r.status)).length
-  const ovLate    = overviewRecs.filter(r => ['late','shortage'].includes(r.status)).length
+  const ovPresent = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && ['present','incomplete','wfh','intervention'].includes(r.status)).length
+  const ovLate    = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && ['late','shortage'].includes(r.status)).length
   const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
-  const ovOnLeave = new Set(overviewLeaves.map(l => l.employee_id)).size
-  const ovOT      = overviewRecs.filter(r => Number(r.overtime_hours) > 0).length
+  const ovOnLeave = fullDayLeaveEmployeeIds.size
+  const ovOT      = new Set(overviewOtrs.map(otr => Number(otr.employee_id))).size
 
   // ── Detail data ───────────────────────────────────────────────────────────
   const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, attendancePolicy)
