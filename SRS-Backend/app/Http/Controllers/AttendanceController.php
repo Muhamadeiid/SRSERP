@@ -208,15 +208,42 @@ class AttendanceController extends Controller
                     $employeeQuery->where('department', $filters['department']);
                 }
 
-                $missing = $employeeQuery
-                    ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'category', 'saturday_group', 'weekly_off_day'])
+                $activeEmployees = $employeeQuery
+                    ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'category', 'saturday_group', 'weekly_off_day']);
+
+                // Leave rows are for the overview only. They make the On Leave
+                // card filterable without creating attendance database records.
+                $leaveRows = empty($filters['status'])
+                    ? $activeEmployees
+                        ->filter(fn (Employee $employee) =>
+                            !$recordedIds->has((int) $employee->id)
+                            && $fullDayLeaveIds->has((int) $employee->id)
+                        )
+                        ->map(fn (Employee $employee) => [
+                            'id' => 'leave-'.$employee->id.'-'.$dateKey,
+                            'employee_id' => $employee->id,
+                            'date' => $dateKey,
+                            'check_in' => null,
+                            'check_out' => null,
+                            'work_hours' => 0,
+                            'overtime_hours' => 0,
+                            'late_minutes' => 0,
+                            'status' => 'on_leave',
+                            'notes' => null,
+                            'is_manual' => false,
+                            'is_virtual_leave' => true,
+                            'employee' => $employee,
+                        ])
+                    : collect();
+
+                $missing = $activeEmployees
                     ->filter(fn (Employee $employee) =>
                         $employee->isWorkingDay($date->copy())
                         && !$recordedIds->has((int) $employee->id)
                         && !$fullDayLeaveIds->has((int) $employee->id)
                     )
                     ->map(fn (Employee $employee) => [
-                        'id' => null,
+                        'id' => 'absent-'.$employee->id.'-'.$dateKey,
                         'employee_id' => $employee->id,
                         'date' => $dateKey,
                         'check_in' => null,
@@ -231,7 +258,7 @@ class AttendanceController extends Controller
                         'employee' => $employee,
                     ]);
 
-                $attendances = $attendances->concat($missing)
+                $attendances = $attendances->concat($leaveRows)->concat($missing)
                     ->sortBy(fn ($row) => data_get($row, 'employee.name', ''))
                     ->values();
             }
@@ -243,6 +270,7 @@ class AttendanceController extends Controller
             'leaves'   => $leaves,
             'otrs'     => $otrs,
             'holidays' => $holidays,
+            'total_workforce' => empty($filters['employee_id']) ? Employee::active()->count() : null,
         ], 200);
     }
 

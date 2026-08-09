@@ -827,6 +827,8 @@ export default function AttendanceTab() {
   const [overviewBusy,   setOverviewBusy]   = useState(false)
   const [overviewSearch, setOverviewSearch] = useState('')
   const [overviewErr,    setOverviewErr]    = useState(null)
+  const [overviewMetricFilter, setOverviewMetricFilter] = useState('all')
+  const [overviewTotalWorkforce, setOverviewTotalWorkforce] = useState(0)
 
   // ── Detail state ──────────────────────────────────────────────────────────
   const [employee,   setEmployee]   = useState(null)
@@ -878,6 +880,7 @@ export default function AttendanceTab() {
         setOverviewRecs(res.data ?? [])
         setOverviewLeaves(res.leaves ?? [])
         setOverviewOtrs(res.otrs ?? [])
+        setOverviewTotalWorkforce(Number(res.total_workforce ?? 0))
       } else {
         setOverviewRecs([])
         setOverviewLeaves([])
@@ -898,7 +901,38 @@ export default function AttendanceTab() {
     if (view === 'overview') loadOverview()
   }, [overviewDate, view])
 
+  // Helper: is an employee on approved leave on the overview date?
+  const fullDayOverviewLeaves = overviewLeaves.filter(leave =>
+    ['annual', 'casual', 'sick'].includes(leave.leave_type)
+  )
+  const fullDayLeaveEmployeeIds = new Set(fullDayOverviewLeaves.map(leave => Number(leave.employee_id)))
+  const isOnLeaveOnOverview = employeeId => fullDayLeaveEmployeeIds.has(Number(employeeId))
+  const overtimeEmployeeIds = new Set(overviewOtrs.map(otr => Number(otr.employee_id)))
+  const isOverviewLate = rec =>
+    !isOnLeaveOnOverview(rec.employee_id)
+    && !isInterventionEmployee(rec.employee)
+    && Boolean(rec.check_in)
+    && isLateCheckIn(rec.check_in, attendancePolicy)
+  const effectiveOverviewStatus = rec => {
+    if (isOverviewLate(rec)) return 'late'
+    if (isInterventionEmployee(rec.employee) && rec.status === 'late') return 'present'
+    return rec.status
+  }
+
+  const ovPresent = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && !isOverviewLate(r) && ['present','incomplete','wfh','intervention'].includes(effectiveOverviewStatus(r))).length
+  const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
+  const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
+  const ovOnLeave = fullDayLeaveEmployeeIds.size
+  const ovOT      = overtimeEmployeeIds.size
+
   const filteredRecs = overviewRecs.filter(rec => {
+    const matchesMetric = overviewMetricFilter === 'all'
+      || (overviewMetricFilter === 'present' && !isOnLeaveOnOverview(rec.employee_id) && !isOverviewLate(rec) && ['present','incomplete','wfh','intervention'].includes(effectiveOverviewStatus(rec)))
+      || (overviewMetricFilter === 'late' && isOverviewLate(rec))
+      || (overviewMetricFilter === 'absent' && rec.status === 'absent' && !isOnLeaveOnOverview(rec.employee_id))
+      || (overviewMetricFilter === 'leave' && isOnLeaveOnOverview(rec.employee_id))
+      || (overviewMetricFilter === 'overtime' && overtimeEmployeeIds.has(Number(rec.employee_id)))
+    if (!matchesMetric) return false
     if (!overviewSearch.trim()) return true
     const q = overviewSearch.toLowerCase()
     return (
@@ -907,19 +941,6 @@ export default function AttendanceTab() {
       (rec.employee?.position ?? '').toLowerCase().includes(q)
     )
   })
-
-  // Helper: is an employee on approved leave on the overview date?
-  const fullDayOverviewLeaves = overviewLeaves.filter(leave =>
-    ['annual', 'casual', 'sick'].includes(leave.leave_type)
-  )
-  const fullDayLeaveEmployeeIds = new Set(fullDayOverviewLeaves.map(leave => Number(leave.employee_id)))
-  const isOnLeaveOnOverview = employeeId => fullDayLeaveEmployeeIds.has(Number(employeeId))
-
-  const ovPresent = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && ['present','incomplete','wfh','intervention'].includes(r.status)).length
-  const ovLate    = overviewRecs.filter(r => !isOnLeaveOnOverview(r.employee_id) && ['late','shortage'].includes(r.status)).length
-  const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
-  const ovOnLeave = fullDayLeaveEmployeeIds.size
-  const ovOT      = new Set(overviewOtrs.map(otr => Number(otr.employee_id))).size
 
   // ── Detail data ───────────────────────────────────────────────────────────
   const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, attendancePolicy)
@@ -1146,7 +1167,7 @@ export default function AttendanceTab() {
                 className="w-48 pl-9 pr-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all" />
             </div>
             <p className="ml-auto text-xs text-neutral-400">
-              {overviewRecs.length} record{overviewRecs.length !== 1 ? 's' : ''} for {fmtDate(overviewDate)}
+              {filteredRecs.length} shown of {overviewTotalWorkforce || overviewRecs.length} for {fmtDate(overviewDate)}
             </p>
           </div>
 
@@ -1162,16 +1183,19 @@ export default function AttendanceTab() {
           {/* ── Overview summary cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             {[
-              ['Present',         ovPresent,  'bg-green-50  text-green-700  border-green-200'],
-              ['Late / Shortage', ovLate,     'bg-yellow-50 text-yellow-700 border-yellow-200'],
-              ['Absent',          ovAbsent,   'bg-red-50    text-red-600    border-red-200'],
-              ['On Leave',        ovOnLeave,  'bg-violet-50 text-violet-700 border-violet-200'],
-              ['With Overtime',   ovOT,       'bg-blue-50   text-blue-700   border-blue-200'],
-            ].map(([l,v,cls]) => (
-              <div key={l} className={`rounded-2xl border p-4 text-center ${cls}`}>
+              ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
+              ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
+              ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
+              ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
+              ['overtime', 'With Overtime', ovOT,         'bg-blue-50   text-blue-700   border-blue-200'],
+            ].map(([key,l,v,cls]) => (
+              <button type="button" key={key}
+                onClick={() => setOverviewMetricFilter(current => current === key ? 'all' : key)}
+                aria-pressed={overviewMetricFilter === key}
+                className={`rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/30 ${cls} ${overviewMetricFilter === key ? 'ring-2 ring-current shadow-md' : ''}`}>
                 <p className="text-3xl font-black">{v}</p>
                 <p className="text-xs font-semibold mt-1 opacity-70">{l}</p>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -1200,11 +1224,12 @@ export default function AttendanceTab() {
                   <tbody>
                     {filteredRecs.map((rec, i) => {
                       const emp = rec.employee
-                      const onLeaveInfo = overviewLeaves.find(l => l.employee_id === rec.employee_id)
+                      const onLeaveInfo = overviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
                       const isOnLeave   = !!onLeaveInfo
+                      const displayedStatus = effectiveOverviewStatus(rec)
                       const cfg = isOnLeave
                         ? { label: 'On Leave', cls: 'bg-violet-100 text-violet-700 border-violet-200' }
-                        : (STATUS_CFG[rec.status] ?? { label: rec.status, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' })
+                        : (STATUS_CFG[displayedStatus] ?? { label: displayedStatus, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' })
                       return (
                         <tr key={rec.id}
                           onClick={() => emp && openDetail(emp)}
@@ -1236,7 +1261,7 @@ export default function AttendanceTab() {
                           <td className="px-3 py-2.5 text-neutral-500 whitespace-nowrap">{emp?.work_location ?? '—'}</td>
                           {/* Check In */}
                           <td className={`px-3 py-2.5 font-mono font-semibold whitespace-nowrap ${
-                            isLateCheckIn(rec.check_in, attendancePolicy) ? 'text-red-600' : 'text-green-600'
+                            isOverviewLate(rec) ? 'text-red-600' : 'text-green-600'
                           }`}>
                             {rec.check_in
                               ? fmt12(rec.check_in)
