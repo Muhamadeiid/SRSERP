@@ -928,6 +928,7 @@ export default function AttendanceTab() {
   const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
   const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
   const ovOnLeave = fullDayLeaveEmployeeIds.size
+  const ovDayOff  = overviewRecs.filter(r => r.status === 'off' && !isOnLeaveOnOverview(r.employee_id)).length
   const ovOT      = overtimeEmployeeIds.size
 
   const filteredRecs = overviewRecs.filter(rec => {
@@ -936,6 +937,7 @@ export default function AttendanceTab() {
       || (overviewMetricFilter === 'late' && isOverviewLate(rec))
       || (overviewMetricFilter === 'absent' && rec.status === 'absent' && !isOnLeaveOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'leave' && isOnLeaveOnOverview(rec.employee_id))
+      || (overviewMetricFilter === 'day_off' && rec.status === 'off' && !isOnLeaveOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'overtime' && overtimeEmployeeIds.has(Number(rec.employee_id)))
     if (!matchesMetric) return false
     if (!overviewSearch.trim()) return true
@@ -1186,12 +1188,13 @@ export default function AttendanceTab() {
           )}
 
           {/* ── Overview summary cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
             {[
               ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
               ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
               ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
               ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
+              ['day_off',  'Day Off',       ovDayOff,     'bg-neutral-100 text-neutral-700 border-neutral-300'],
               ['overtime', 'With Overtime', ovOT,         'bg-blue-50   text-blue-700   border-blue-200'],
             ].map(([key,l,v,cls]) => (
               <button type="button" key={key}

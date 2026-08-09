@@ -185,9 +185,9 @@ class AttendanceController extends Controller
                 ->get(['id', 'date', 'end_date', 'name_en', 'name_ar']);
         }
 
-        // Daily overview must include scheduled employees who have no punch.
-        // Full-day leave, weekly offs, Saturday rotation offs and public holidays
-        // are excluded; Early Leave still requires attendance for the worked hours.
+        // Daily overview includes every active employee exactly once. Missing
+        // employees are represented for display as either Absent or Day Off;
+        // these virtual rows are never written to the attendance table.
         if (!empty($filters['date']) && empty($filters['employee_id'])) {
             $date = Carbon::parse($filters['date'])->startOfDay();
             $dateKey = $date->toDateString();
@@ -197,7 +197,7 @@ class AttendanceController extends Controller
                 return $start && $start <= $dateKey && $end >= $dateKey;
             });
 
-            if (!$isHoliday && (empty($filters['status']) || $filters['status'] === 'absent')) {
+            if (empty($filters['status']) || in_array($filters['status'], ['absent', 'off'], true)) {
                 $recordedIds = $attendances->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
                 $fullDayLeaveIds = $leaves
                     ->whereIn('leave_type', ['annual', 'casual', 'sick'])
@@ -236,12 +236,15 @@ class AttendanceController extends Controller
                         ])
                     : collect();
 
-                $missing = $activeEmployees
+                $unrecorded = $activeEmployees
                     ->filter(fn (Employee $employee) =>
-                        $employee->isWorkingDay($date->copy())
-                        && !$recordedIds->has((int) $employee->id)
+                        !$recordedIds->has((int) $employee->id)
                         && !$fullDayLeaveIds->has((int) $employee->id)
-                    )
+                    );
+
+                $missing = (empty($filters['status']) || $filters['status'] === 'absent')
+                    ? $unrecorded
+                    ->filter(fn (Employee $employee) => !$isHoliday && $employee->isWorkingDay($date->copy()))
                     ->map(fn (Employee $employee) => [
                         'id' => 'absent-'.$employee->id.'-'.$dateKey,
                         'employee_id' => $employee->id,
@@ -256,9 +259,30 @@ class AttendanceController extends Controller
                         'is_manual' => false,
                         'is_virtual_absence' => true,
                         'employee' => $employee,
-                    ]);
+                    ])
+                    : collect();
 
-                $attendances = $attendances->concat($leaveRows)->concat($missing)
+                $dayOffRows = (empty($filters['status']) || $filters['status'] === 'off')
+                    ? $unrecorded
+                    ->filter(fn (Employee $employee) => $isHoliday || !$employee->isWorkingDay($date->copy()))
+                    ->map(fn (Employee $employee) => [
+                        'id' => 'off-'.$employee->id.'-'.$dateKey,
+                        'employee_id' => $employee->id,
+                        'date' => $dateKey,
+                        'check_in' => null,
+                        'check_out' => null,
+                        'work_hours' => 0,
+                        'overtime_hours' => 0,
+                        'late_minutes' => 0,
+                        'status' => 'off',
+                        'notes' => $isHoliday ? 'Public Holiday' : 'Day Off',
+                        'is_manual' => false,
+                        'is_virtual_day_off' => true,
+                        'employee' => $employee,
+                    ])
+                    : collect();
+
+                $attendances = $attendances->concat($leaveRows)->concat($missing)->concat($dayOffRows)
                     ->sortBy(fn ($row) => data_get($row, 'employee.name', ''))
                     ->values();
             }
