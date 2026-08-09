@@ -2068,7 +2068,7 @@ function ApprovalProgress({ req }) {
     && !req.manager_approved_at
   const steps = [
     { key: 'submitted', label: 'Submitted',       done: true,                                              date: req.created_at },
-    { key: 'manager',   label: managerSkipped ? 'Manager Skipped' : 'Manager Approval', done: ['manager_approved','hr_approved', ...approvedStatuses].includes(req.status), date: req.manager_approved_at, name: managerSkipped ? 'Not assigned' : (req.manager_approver?.name || req.direct_manager_name) },
+    { key: 'manager',   label: managerSkipped ? 'Manager Skipped' : 'Manager Approval', done: ['manager_approved','hr_approved', ...approvedStatuses].includes(req.status), date: req.manager_approved_at, name: managerSkipped ? 'Not assigned' : (req.employee?.user_manager?.name || req.employee?.userManager?.name || req.employee?.direct_manager?.name || req.employee?.directManager?.name || req.manager_approver?.name || req.direct_manager_name) },
     { key: 'hr',        label: 'HR Approval',     done: ['hr_approved', ...approvedStatuses].includes(req.status),  date: req.hr_approved_at,      name: req.hr_approver?.name },
     { key: 'depot',     label: 'Depot Approval',  done: approvedStatuses.includes(req.status),                        date: req.approved_at,         name: req.approver?.name },
   ]
@@ -2224,6 +2224,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   }, [focusApproval, req])
 
   if (!req) return null
+  const fullEmployeeName = req.employee?.name || req.employee_name
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
   const canHrApprove = userRole === 'admin' || userRole === 'hr' || hasHrApprovalAccess
@@ -2416,7 +2417,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
         {/* Details */}
         <div className="px-4 sm:px-6 pb-4 divide-y divide-neutral-100 text-sm">
           {[
-            ['Employee',   req.employee_name],
+            ['Employee',   fullEmployeeName],
             ['Job Title',  req.job_title],
             ['Department', req.department_label || resolveDept(req.department)],
             isLRF ? ['Leave Type', req.leave_type?.replace('_',' ')] : ['Date', fmtShort(req.ot_date)],
