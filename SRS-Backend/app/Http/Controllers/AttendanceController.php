@@ -10,6 +10,7 @@ use App\Models\LeaveRequest;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -236,6 +237,38 @@ class AttendanceController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /** Save a block pasted into one employee's attendance sheet atomically. */
+    public function bulkManual(Request $request)
+    {
+        $data = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'rows' => 'required|array|min:1|max:366',
+            'rows.*.date' => 'required|date',
+            'rows.*.check_in' => 'nullable|date_format:H:i',
+            'rows.*.check_out' => 'nullable|date_format:H:i',
+            'rows.*.status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
+            'rows.*.notes' => 'nullable|string|max:500',
+        ]);
+
+        $saved = DB::transaction(function () use ($data) {
+            return collect($data['rows'])->map(function ($row) use ($data) {
+                return $this->attendanceService->createManualEntry([
+                    ...$row,
+                    'employee_id' => $data['employee_id'],
+                    'check_in' => $row['check_in'] ?: null,
+                    'check_out' => $row['check_out'] ?: null,
+                    'notes' => $row['notes'] ?: null,
+                ], auth()->id());
+            });
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$saved->count()} attendance rows saved.",
+            'saved' => $saved->count(),
+        ]);
     }
 
     public function ccpDaily(Request $request)

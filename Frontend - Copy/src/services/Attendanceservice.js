@@ -62,6 +62,10 @@ export const attendanceService = {
     const response = await api.post('/attendance/manual', data)
     return response.data
   },
+  saveManualBulk: async (data) => {
+    const response = await api.post('/attendance/manual/bulk', data)
+    return response.data
+  },
 
   /**
    * Get employee attendance summary

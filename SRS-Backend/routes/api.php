@@ -161,6 +161,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/upload',                   [AttendanceController::class, 'upload']);
             Route::post('/upload-excel',             [AttendanceController::class, 'uploadExcel']);
             Route::post('/manual',                   [AttendanceController::class, 'manual']);
+            Route::post('/manual/bulk',              [AttendanceController::class, 'bulkManual']);
             Route::get('/summary/{employee_id}',     [AttendanceController::class, 'summary']);
             Route::delete('/{id}',                   [AttendanceController::class, 'destroy']);
             Route::get('/export',                    [AttendanceController::class, 'exportExcel']);

@@ -6,7 +6,7 @@ import { getSettings } from '../../services/settingsService'
 import { useLookups } from '../../hooks/useLookups'
 import {
   Search, Upload, Download, RefreshCw, Printer,
-  Loader2, X, Pencil, Plus, CalendarDays
+  Loader2, X, Pencil, Plus, CalendarDays, Save, ClipboardPaste
 } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -151,6 +151,26 @@ const STATUS_CFG = {
   intervention: { label: 'Intervention', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
 }
 const STATUS_OPTIONS = ['present','late','shortage','absent','incomplete','wfh','intervention']
+const EDITABLE_COLUMNS = ['check_in', 'check_out', 'status', 'notes']
+
+const normalizePastedTime = value => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i)
+  if (!match) return raw
+  let hour = Number(match[1])
+  const minute = Number(match[2])
+  const meridiem = match[3]?.toUpperCase()
+  if (meridiem === 'PM' && hour < 12) hour += 12
+  if (meridiem === 'AM' && hour === 12) hour = 0
+  return `${pad(hour)}:${pad(minute)}`
+}
+
+const normalizePastedStatus = value => {
+  const raw = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const aliases = { present: 'present', absent: 'absent', late: 'late', wfh: 'wfh', intervention: 'intervention', incomplete: 'incomplete', shortage: 'shortage' }
+  return aliases[raw] || raw
+}
 
 // ── schedule helpers ───────────────────────────────────────────────────────
 // Returns true if the given date is a working day for the employee
@@ -815,6 +835,11 @@ export default function AttendanceTab() {
   const [records,    setRecords]    = useState([])
   const [balance,    setBalance]    = useState(null)
   const [loading,    setLoading]    = useState(false)
+  const [sheetEditing, setSheetEditing] = useState(false)
+  const [sheetDraft, setSheetDraft] = useState({})
+  const [dirtyDates, setDirtyDates] = useState(new Set())
+  const [savingSheet, setSavingSheet] = useState(false)
+  const [activeCell, setActiveCell] = useState(null)
 
   // ── Shared ────────────────────────────────────────────────────────────────
   const [showUpload,      setShowUpload]      = useState(false)
@@ -892,6 +917,88 @@ export default function AttendanceTab() {
 
   // ── Detail data ───────────────────────────────────────────────────────────
   const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, attendancePolicy)
+
+  const beginSheetEdit = () => {
+    const draft = {}
+    rows.forEach(row => {
+      draft[row.dateStr] = {
+        check_in: row.record?.check_in?.slice(0, 5) || '',
+        check_out: row.record?.check_out?.slice(0, 5) || '',
+        status: row.record?.status || 'present',
+        notes: row.record?.notes || '',
+      }
+    })
+    setSheetDraft(draft)
+    setDirtyDates(new Set())
+    setActiveCell(null)
+    setSheetEditing(true)
+  }
+
+  const cancelSheetEdit = () => {
+    setSheetEditing(false)
+    setSheetDraft({})
+    setDirtyDates(new Set())
+    setActiveCell(null)
+  }
+
+  const updateSheetCell = (date, field, value) => {
+    const normalized = field === 'status' ? normalizePastedStatus(value) : value
+    setSheetDraft(current => ({
+      ...current,
+      [date]: { ...(current[date] || {}), [field]: normalized },
+    }))
+    setDirtyDates(current => new Set(current).add(date))
+  }
+
+  const pasteSheetBlock = (event, startRow, startColumn) => {
+    event.preventDefault()
+    const matrix = event.clipboardData.getData('text/plain')
+      .replace(/\r/g, '')
+      .split('\n')
+      .filter((line, index, lines) => line !== '' || index < lines.length - 1)
+      .map(line => line.split('\t'))
+    if (!matrix.length) return
+
+    setSheetDraft(current => {
+      const next = { ...current }
+      const changed = new Set(dirtyDates)
+      matrix.forEach((sourceRow, rowOffset) => {
+        const target = rows[startRow + rowOffset]
+        if (!target || (target.leave && target.leave.leave_type !== 'early')) return
+        const values = { ...(next[target.dateStr] || {}) }
+        sourceRow.forEach((rawValue, columnOffset) => {
+          const field = EDITABLE_COLUMNS[startColumn + columnOffset]
+          if (!field) return
+          values[field] = field === 'check_in' || field === 'check_out'
+            ? normalizePastedTime(rawValue)
+            : field === 'status' ? normalizePastedStatus(rawValue) : rawValue.trim()
+        })
+        next[target.dateStr] = values
+        changed.add(target.dateStr)
+      })
+      setDirtyDates(changed)
+      return next
+    })
+  }
+
+  const saveSheetChanges = async () => {
+    if (!employee || dirtyDates.size === 0) return
+    const changedRows = rows
+      .filter(row => dirtyDates.has(row.dateStr))
+      .map(row => ({ date: row.dateStr, ...sheetDraft[row.dateStr] }))
+    setSavingSheet(true)
+    try {
+      await attendanceService.saveManualBulk({ employee_id: employee.id, rows: changedRows })
+      cancelSheetEdit()
+      await load()
+    } catch (error) {
+      const validation = error?.response?.data?.errors
+      const first = validation ? Object.values(validation).flat()[0] : null
+      alert(first || error?.response?.data?.message || error.message || 'Could not save attendance sheet')
+    } finally {
+      setSavingSheet(false)
+    }
+  }
   const withRec     = rows.filter(r => r.record)
   const totalOT     = rows.reduce((s,r) => { const ot = otTimes(r.otr, attendancePolicy); return s + (ot?.total ?? 0) }, 0)
   const totalHrs    = withRec.reduce((s,r) => s + Number(r.record.work_hours||0), 0)
@@ -937,6 +1044,7 @@ export default function AttendanceTab() {
     if (!emp) return
     setEmployee(emp)
     setRecords([])
+    cancelSheetEdit()
     loadBalance(emp)
     setView('detail')
   }
@@ -1176,7 +1284,7 @@ export default function AttendanceTab() {
           {/* ── Detail Header ── */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <button onClick={() => { setView('overview'); setEmployee(null) }}
+              <button onClick={() => { cancelSheetEdit(); setView('overview'); setEmployee(null) }}
                 className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 transition-all">
                 ← Back
               </button>
@@ -1186,6 +1294,24 @@ export default function AttendanceTab() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {sheetEditing ? (
+                <>
+                  <button onClick={cancelSheetEdit} disabled={savingSheet}
+                    className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 transition-all">
+                    <X className="w-4 h-4" />Cancel Edit
+                  </button>
+                  <button onClick={saveSheetChanges} disabled={savingSheet || dirtyDates.size === 0}
+                    className="flex items-center gap-1.5 px-4 h-9 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-all">
+                    {savingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Changes ({dirtyDates.size})
+                  </button>
+                </>
+              ) : (
+                <button onClick={beginSheetEdit} disabled={loading || rows.length === 0}
+                  className="flex items-center gap-1.5 px-4 h-9 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 transition-all">
+                  <Pencil className="w-4 h-4" />Edit Sheet
+                </button>
+              )}
               <button onClick={load} disabled={loading}
                 className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 transition-all">
                 <RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`} />Refresh
@@ -1207,18 +1333,18 @@ export default function AttendanceTab() {
 
           {/* ── Detail Filter bar ── */}
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 flex items-center gap-4 flex-wrap">
-            <EmployeeSearch onSelect={emp => { if (emp) { setEmployee(emp); setRecords([]); loadBalance(emp) } }} />
+            <EmployeeSearch onSelect={emp => { if (emp) { cancelSheetEdit(); setEmployee(emp); setRecords([]); loadBalance(emp) } }} />
             <div className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-neutral-400 shrink-0" />
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              <input type="date" value={startDate} disabled={sheetEditing} onChange={e => setStartDate(e.target.value)}
                 className="px-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
               <span className="text-sm text-neutral-400 font-bold">→</span>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              <input type="date" value={endDate} disabled={sheetEditing} onChange={e => setEndDate(e.target.value)}
                 className="px-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
             </div>
             <div className="flex items-center gap-1.5 ml-auto">
               {[['This Month',setThisMonth],['Last Month',setLastMonth],['Last 7 Days',setLast7]].map(([l,fn]) => (
-                <button key={l} onClick={fn}
+                <button key={l} onClick={fn} disabled={sheetEditing}
                   className="px-2.5 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-500 rounded-lg hover:bg-primary/10 hover:text-primary transition-all">{l}</button>
               ))}
             </div>
@@ -1312,6 +1438,12 @@ export default function AttendanceTab() {
 
               {/* Attendance table */}
               <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden" style={{display:'grid',gridTemplateColumns:'1fr'}}>
+                {sheetEditing && (
+                  <div className="flex items-center gap-2 border-b border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    <ClipboardPaste className="h-4 w-4 shrink-0" />
+                    Select the first editable cell, then paste a copied Excel range. Columns: Check In, Check Out, Status, Notes.
+                  </div>
+                )}
                 {loading ? (
                   <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -1333,7 +1465,7 @@ export default function AttendanceTab() {
                             'Day OT Rate','Night OT Rate','Double Pay',
                             'Total Over Time',
                             'Deductions (HRS)','Deductions (MIN)',
-                            'Notes',''
+                            'Status','Notes',''
                           ].map((h,i) => (
                             <th key={i} className="px-2 py-2.5 text-[10px] font-bold text-center whitespace-nowrap border-r border-neutral-700 last:border-0">{h}</th>
                           ))}
@@ -1386,12 +1518,30 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center font-mono font-semibold text-secondary-700 whitespace-nowrap">{fmtDate(r.dateStr)}</td>
                               <td className="px-2 py-2 text-center text-neutral-500">{r.dayName}</td>
                               <td className="px-2 py-2 text-center font-mono">
-                                {onLeave
+                                {sheetEditing && !onLeave ? (
+                                  <input
+                                    value={sheetDraft[r.dateStr]?.check_in ?? ''}
+                                    onFocus={() => setActiveCell(`${i}:0`)}
+                                    onPaste={event => pasteSheetBlock(event, i, 0)}
+                                    onChange={event => updateSheetCell(r.dateStr, 'check_in', normalizePastedTime(event.target.value))}
+                                    placeholder="HH:MM"
+                                    className={`h-7 w-[76px] border bg-white px-1.5 text-center font-mono outline-none ${activeCell === `${i}:0` ? 'border-blue-500 ring-1 ring-blue-300' : 'border-neutral-300'}`}
+                                  />
+                                ) : onLeave
                                   ? <span className="text-violet-600 text-[10px] font-semibold">{leaveLabel}</span>
                                   : rec?.check_in ? <span className={`${isLateCheckIn(rec.check_in, attendancePolicy) ? 'text-red-600' : 'text-green-600'} font-semibold`}>{fmt12(rec.check_in)}</span> : ''}
                               </td>
                               <td className="px-2 py-2 text-center font-mono">
-                                {onLeave
+                                {sheetEditing && !onLeave ? (
+                                  <input
+                                    value={sheetDraft[r.dateStr]?.check_out ?? ''}
+                                    onFocus={() => setActiveCell(`${i}:1`)}
+                                    onPaste={event => pasteSheetBlock(event, i, 1)}
+                                    onChange={event => updateSheetCell(r.dateStr, 'check_out', normalizePastedTime(event.target.value))}
+                                    placeholder="HH:MM"
+                                    className={`h-7 w-[76px] border bg-white px-1.5 text-center font-mono outline-none ${activeCell === `${i}:1` ? 'border-blue-500 ring-1 ring-blue-300' : 'border-neutral-300'}`}
+                                  />
+                                ) : onLeave
                                   ? <span className="text-violet-600 text-[10px] font-semibold">{leaveLabel}</span>
                                   : rec?.check_out ? <span className="text-blue-600 font-semibold">{fmt12(rec.check_out)}</span> : ''}
                               </td>
@@ -1423,7 +1573,31 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center">
                                 {dedMin > 0 ? <span className="text-red-500 font-semibold">{dedMin}</span> : <span className="text-neutral-300">0</span>}
                               </td>
-                              <td className="px-2 py-2 text-center text-neutral-500 max-w-[140px] truncate" title={noteText}>{noteText}</td>
+                              <td className="px-2 py-2 text-center">
+                                {sheetEditing && !onLeave ? (
+                                  <select
+                                    value={sheetDraft[r.dateStr]?.status ?? 'present'}
+                                    onFocus={() => setActiveCell(`${i}:2`)}
+                                    onPaste={event => pasteSheetBlock(event, i, 2)}
+                                    onChange={event => updateSheetCell(r.dateStr, 'status', event.target.value)}
+                                    className={`h-7 w-[92px] border bg-white px-1 text-[10px] outline-none ${activeCell === `${i}:2` ? 'border-blue-500 ring-1 ring-blue-300' : 'border-neutral-300'}`}
+                                  >
+                                    {STATUS_OPTIONS.map(option => <option key={option} value={option}>{STATUS_CFG[option]?.label || option}</option>)}
+                                  </select>
+                                ) : onLeave ? <span className="text-violet-600 text-[10px] font-semibold">On Leave</span>
+                                  : cfg ? <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${cfg.cls}`}>{cfg.label}</span> : ''}
+                              </td>
+                              <td className="px-2 py-2 text-center text-neutral-500 max-w-[160px]" title={noteText}>
+                                {sheetEditing && !onLeave ? (
+                                  <input
+                                    value={sheetDraft[r.dateStr]?.notes ?? ''}
+                                    onFocus={() => setActiveCell(`${i}:3`)}
+                                    onPaste={event => pasteSheetBlock(event, i, 3)}
+                                    onChange={event => updateSheetCell(r.dateStr, 'notes', event.target.value)}
+                                    className={`h-7 w-[150px] border bg-white px-1.5 outline-none ${activeCell === `${i}:3` ? 'border-blue-500 ring-1 ring-blue-300' : 'border-neutral-300'}`}
+                                  />
+                                ) : <span className="block truncate">{noteText}</span>}
+                              </td>
                               <td className="px-1 py-2 text-center">
                                 {!r.isWeekend && (
                                   <button onClick={() => setEditRow(r)} title={rec ? 'Edit' : 'Add'}
