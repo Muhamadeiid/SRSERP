@@ -1352,6 +1352,9 @@ export default function AttendanceTab() {
                           // because the person actually worked part of the day under permission.
                           const isEarly = r.leave?.leave_type === 'early'
                           const onLeave = !!r.leave && !r.isWeekend && !isEarly
+                          const leaveLabel = onLeave
+                            ? ({ annual: 'Annual', casual: 'Casual', sick: 'Sick' }[r.leave?.leave_type] || '')
+                            : ''
                           // Double pay = hours worked on a holiday (from attendance work_hours)
                           const doublePayHrs = isHoliday && rec?.work_hours > 0 ? Math.round(Number(rec.work_hours)) : 0
                           // Early-leave permission note
@@ -1384,12 +1387,12 @@ export default function AttendanceTab() {
                               <td className="px-2 py-2 text-center text-neutral-500">{r.dayName}</td>
                               <td className="px-2 py-2 text-center font-mono">
                                 {onLeave
-                                  ? <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-[10px] font-bold rounded-full uppercase">On Leave</span>
+                                  ? <span className="text-violet-600 text-[10px] font-semibold">{leaveLabel}</span>
                                   : rec?.check_in ? <span className={`${isLateCheckIn(rec.check_in, attendancePolicy) ? 'text-red-600' : 'text-green-600'} font-semibold`}>{fmt12(rec.check_in)}</span> : ''}
                               </td>
                               <td className="px-2 py-2 text-center font-mono">
                                 {onLeave
-                                  ? <span className="text-violet-600 text-[10px] font-semibold capitalize">{(r.leave.leave_type||'').replace('_',' ')}</span>
+                                  ? <span className="text-violet-600 text-[10px] font-semibold">{leaveLabel}</span>
                                   : rec?.check_out ? <span className="text-blue-600 font-semibold">{fmt12(rec.check_out)}</span> : ''}
                               </td>
                               <td className="px-2 py-2 text-center font-bold font-mono">
