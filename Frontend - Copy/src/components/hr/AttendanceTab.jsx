@@ -1184,7 +1184,7 @@ export default function AttendanceTab() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             {[
               ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
-              ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
+              ['late',     'Late',          `${ovLate} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-yellow-50 text-yellow-700 border-yellow-200'],
               ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
               ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
               ['overtime', 'With Overtime', ovOT,         'bg-blue-50   text-blue-700   border-blue-200'],
