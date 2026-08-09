@@ -1229,7 +1229,7 @@ export default function AttendanceTab() {
                   <tbody>
                     {filteredRecs.map((rec, i) => {
                       const emp = rec.employee
-                      const onLeaveInfo = overviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
+                      const onLeaveInfo = fullDayOverviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
                       const isOnLeave   = !!onLeaveInfo
                       const displayedStatus = effectiveOverviewStatus(rec)
                       const cfg = isOnLeave
