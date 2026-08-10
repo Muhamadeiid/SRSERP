@@ -152,7 +152,9 @@ class AttendanceController extends Controller
 
             $otrQuery = LeaveRequest::query()
                 ->where('type', 'otr')
-                ->whereIn('status', ['approved', 'cancellation_pending'])
+                // Attendance shows that an OTR paper exists. Payroll queries
+                // elsewhere in this controller still require final approval.
+                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
                 ->whereNotNull('employee_id')
                 ->whereDate('ot_date', '>=', $start)
                 ->whereDate('ot_date', '<=', $end);
@@ -163,7 +165,7 @@ class AttendanceController extends Controller
 
             $otrs = $otrQuery->get([
                 'id', 'employee_id', 'employee_name',
-                'ot_date', 'start_time', 'end_time', 'hours', 'tracking_no',
+                'ot_date', 'start_time', 'end_time', 'hours', 'tracking_no', 'status',
             ]);
         }
 
