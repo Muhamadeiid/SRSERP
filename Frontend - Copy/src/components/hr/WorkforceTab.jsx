@@ -621,8 +621,11 @@ export default function WorkforceTab() {
   };
 
   const handleRemoveFromWorkforce = async (emp) => {
+    const fromExEmployees = view === 'ex';
     const confirmed = window.confirm(
-      `Remove ${emp.name} from Workforce?\n\nThey will not appear in Ex-Employees. Historical attendance, leave, assets, and requests will be kept.`
+      fromExEmployees
+        ? `Remove ${emp.name} from Ex-Employees?\n\nHistorical attendance, leave, assets, and requests will be kept.`
+        : `Remove ${emp.name} from Workforce?\n\nThey will not appear in Ex-Employees. Historical attendance, leave, assets, and requests will be kept.`
     );
     if (!confirmed) return;
 
@@ -1343,7 +1346,8 @@ export default function WorkforceTab() {
           error={formErr}
           onClose={() => setFormOpen(false)}
           onSave={handleFormSave}
-          onRemove={view === 'active' ? handleRemoveFromWorkforce : undefined}
+          onRemove={handleRemoveFromWorkforce}
+          removeLabel={view === 'ex' ? 'Remove from Ex-Employees' : 'Remove from Workforce'}
           managers={managers}
           users={users}
           onSignatureSave={(empId, dataURL) => {
@@ -1525,7 +1529,7 @@ function PositionPicker({ value, valueArabic, onChange, onTextChange }) {
   )
 }
 
-function EmployeeFormModal({ emp, saving, error, onClose, onSave, onRemove, managers = [], users = [], onSignatureSave }) {
+function EmployeeFormModal({ emp, saving, error, onClose, onSave, onRemove, removeLabel = 'Remove from Workforce', managers = [], users = [], onSignatureSave }) {
   const [form, setForm] = useState(() => buildInitialForm(emp));
   const [tab, setTab] = useState('basic');
   const { departments: lookupDepts, categories: lookupCats, locations: lookupLocs } = useLookups();
@@ -2011,7 +2015,7 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, onRemove, mana
             {emp && onRemove ? (
               <button type="button" onClick={() => onRemove(emp)} disabled={saving}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-all">
-                <Trash2 className="w-4 h-4" /> Remove from Workforce
+                <Trash2 className="w-4 h-4" /> {removeLabel}
               </button>
             ) : <span />}
             <div className="flex gap-3">
