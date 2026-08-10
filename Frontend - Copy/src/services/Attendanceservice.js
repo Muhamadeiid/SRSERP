@@ -72,6 +72,12 @@ export const attendanceService = {
     })
     return response.data
   },
+  getLateDeductions: async (employeeId, startDate, endDate) => {
+    const response = await api.get(`/attendance/late-deductions/${employeeId}`, {
+      params: { start_date: startDate, end_date: endDate },
+    })
+    return response.data
+  },
 
   /**
    * Get employee attendance summary

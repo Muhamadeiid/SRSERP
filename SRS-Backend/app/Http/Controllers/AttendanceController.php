@@ -10,6 +10,7 @@ use App\Models\LeaveRequest;
 use App\Services\AttendancePolicy;
 use App\Services\AttendanceService;
 use App\Services\AbsenceDeductionService;
+use App\Services\LateDeductionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,11 +28,13 @@ class AttendanceController extends Controller
 {
     protected $attendanceService;
     protected $absenceDeductions;
+    protected $lateDeductions;
 
-    public function __construct(AttendanceService $attendanceService, AbsenceDeductionService $absenceDeductions)
+    public function __construct(AttendanceService $attendanceService, AbsenceDeductionService $absenceDeductions, LateDeductionService $lateDeductions)
     {
         $this->attendanceService = $attendanceService;
         $this->absenceDeductions = $absenceDeductions;
+        $this->lateDeductions = $lateDeductions;
     }
 
     /**
@@ -333,6 +336,9 @@ class AttendanceController extends Controller
             'notes' => 'nullable|string|max:500',
             'absence_deduction_override_hours' => 'nullable|numeric|min:0|max:240',
             'absence_deduction_override_reason' => 'nullable|string|max:500',
+            'late_penalty_override_hours' => 'nullable|numeric|min:0|max:240',
+            'late_penalty_override_reason' => 'nullable|string|max:500',
+            'late_caused_disruption' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -377,6 +383,9 @@ class AttendanceController extends Controller
             'rows.*.notes' => 'nullable|string|max:500',
             'rows.*.absence_deduction_override_hours' => 'nullable|numeric|min:0|max:240',
             'rows.*.absence_deduction_override_reason' => 'nullable|string|max:500',
+            'rows.*.late_penalty_override_hours' => 'nullable|numeric|min:0|max:240',
+            'rows.*.late_penalty_override_reason' => 'nullable|string|max:500',
+            'rows.*.late_caused_disruption' => 'nullable|boolean',
         ]);
 
         $saved = DB::transaction(function () use ($data) {
@@ -389,6 +398,9 @@ class AttendanceController extends Controller
                     'notes' => $row['notes'] ?: null,
                     'absence_deduction_override_hours' => $row['absence_deduction_override_hours'] ?? null,
                     'absence_deduction_override_reason' => $row['absence_deduction_override_reason'] ?? null,
+                    'late_penalty_override_hours' => $row['late_penalty_override_hours'] ?? null,
+                    'late_penalty_override_reason' => $row['late_penalty_override_reason'] ?? null,
+                    'late_caused_disruption' => $row['late_caused_disruption'] ?? false,
                 ], auth()->id());
             });
         });
@@ -411,6 +423,20 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'data' => $this->absenceDeductions->forEmployee($employee, $data['start_date'], $data['end_date']),
+        ]);
+    }
+
+    /** Return payroll-period late penalties and any HR overrides for one sheet. */
+    public function lateDeductions(Request $request, Employee $employee)
+    {
+        $data = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->lateDeductions->forEmployee($employee, $data['start_date'], $data['end_date']),
         ]);
     }
 
@@ -1670,7 +1696,6 @@ class AttendanceController extends Controller
 
         $nightStartMin = 19 * 60;
         $dailyHours = AttendancePolicy::float('attendance_salary_daily_hours');
-        $monthlyLateGraceMinutes = AttendancePolicy::int('attendance_late_grace_minutes');
         $totalDayOT    = 0;
         $totalNightOT  = 0;
         $doublePayOT   = 0;
@@ -1800,18 +1825,17 @@ class AttendanceController extends Controller
                 $unpaidDays += (float) $lv->days;
             }
         }
-        $lateMinutes = (int) $attendances->sum('late_minutes');
-        $deductibleLateMinutes = max(0, $lateMinutes - $monthlyLateGraceMinutes);
         $absenceDeductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
         $absenceHours = round(collect($absenceDeductions)->sum('deduction_hours'), 2);
+        $lateDeductions = $this->lateDeductions->forEmployee($employee, $startDate, $endDate);
+        $lateHours = round(collect($lateDeductions)->sum('deduction_hours'), 2);
         $unpaidHours = $unpaidDays * $dailyHours;
-        $lateHours = $deductibleLateMinutes / 60;
         $disciplinaryHours = round(collect($disciplinaryCases)->sum('deduction_hours'), 2);
         $deductionHrs = round($absenceHours + $unpaidHours + $lateHours + $disciplinaryHours, 2);
         $remarks = [];
         if ($absenceHours > 0) $remarks[] = "Absence & penalty: {$absenceHours}h";
         if ($unpaidHours > 0) $remarks[] = "Unpaid leave: {$unpaidHours}h";
-        if ($deductibleLateMinutes > 0) $remarks[] = "Late: {$deductibleLateMinutes}m";
+        if ($lateHours > 0) $remarks[] = "Late penalty: {$lateHours}h";
         if ($disciplinaryHours > 0) $remarks[] = "Disciplinary: {$disciplinaryHours}h";
 
         return [

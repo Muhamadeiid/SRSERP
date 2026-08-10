@@ -156,7 +156,6 @@ async function enrichOTRData(raw) {
 
   return {
     ...data,
-    employee_signature: signatureParties?.employee?.e_signature || workforceEmployee?.e_signature || employee?.e_signature || null,
     manager_is_depot_manager: Boolean(managerIsDepot),
     direct_manager_name: managerIsDepot ? '' : (data.direct_manager_name || directManager?.name || managerApprover?.name || ''),
     manager_signature: !managerIsDepot && ['manager_approved', 'hr_approved', 'approved'].includes(data.status)
@@ -489,15 +488,13 @@ export async function generateOTR(d, { download = true } = {}) {
     ],
   })
 
-  const [employeeSignatureImage, managerSignatureImage, hrSignatureImage, depotSignatureImage] = await Promise.all([
-    signatureToCleanImage(data.employee_signature),
+  const [managerSignatureImage, hrSignatureImage, depotSignatureImage] = await Promise.all([
     signatureToCleanImage(data.manager_is_depot_manager ? null : data.manager_signature),
     signatureToCleanImage(data.hr_signature),
     signatureToCleanImage(data.depot_signature),
   ])
 
-  // Four separate cells exactly as the approved signature-table layout.
-  // Names are deliberately omitted: the E-Signature is the identity mark.
+  // Approval signatures only. The employee does not sign an OTR Word form.
   const sigRow = (enLabel, arLabel, signatureImage, dateValue) => {
     const labelChildren = [
       new Paragraph({ spacing: { after: 0, before: 0 }, children: [new TextRun({ text: enLabel, bold: true, size: 18, font: 'Arial' })] }),
@@ -537,12 +534,14 @@ export async function generateOTR(d, { download = true } = {}) {
     })
   }
 
+  /* Employee signature is intentionally not included in the OTR document.
   const row9 = sigRow(
     'Employee Signature',
     'توقيع الموظف',
     employeeSignatureImage,
     data.created_at ? fmtApprovalDate(data.created_at) : ''
   )
+  ) */
   const row10  = sigRow(
     'Direct Manager Signature',
     'توقيع مدير المباشر',
@@ -563,7 +562,7 @@ export async function generateOTR(d, { download = true } = {}) {
       row4, spacerRow(),
       row5, row6,
       row7, row8,
-      row9, row10, row11, row12,
+      row10, row11, row12,
     ],
   })
 

@@ -224,7 +224,7 @@ function leaveOnDate(leaves, employeeId, dateStr) {
   ) ?? null
 }
 
-function buildRows(startDate, endDate, records, employee, leaves = [], otrs = [], holidays = [], absenceDeductions = {}, policy = ATTENDANCE_POLICY_DEFAULTS) {
+function buildRows(startDate, endDate, records, employee, leaves = [], otrs = [], holidays = [], absenceDeductions = {}, lateDeductions = {}, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!startDate || !endDate) return []
   const rows = []
   const cur  = new Date(startDate + 'T00:00:00')
@@ -244,6 +244,7 @@ function buildRows(startDate, endDate, records, employee, leaves = [], otrs = []
       otr:     otrOnDate(otrs, employee?.id, dateStr),
       holiday: holidayOnDate(holidays, dateStr),
       absence: absenceDeductions[dateStr] ?? null,
+      late: lateDeductions[dateStr] ?? null,
     })
     cur.setDate(cur.getDate() + 1)
   }
@@ -447,10 +448,13 @@ function EditModal({ row, employee, onClose, onSaved }) {
   const [form, setForm] = useState({
     check_in:  existing?.check_in  ? String(existing.check_in).slice(0,5)  : '',
     check_out: existing?.check_out ? String(existing.check_out).slice(0,5) : '',
-    status:    existing?.status ?? (row.absence ? 'absent' : 'present'),
+    status:    existing?.status ?? (row.absence ? 'absent' : (row.late ? 'late' : 'present')),
     notes:     existing?.notes  ?? '',
     absence_deduction_override_hours: existing?.absence_deduction_override_hours ?? '',
     absence_deduction_override_reason: existing?.absence_deduction_override_reason ?? '',
+    late_penalty_override_hours: existing?.late_penalty_override_hours ?? '',
+    late_penalty_override_reason: existing?.late_penalty_override_reason ?? '',
+    late_caused_disruption: !!existing?.late_caused_disruption,
   })
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState(null)
@@ -482,6 +486,9 @@ function EditModal({ row, employee, onClose, onSaved }) {
         status: form.status, notes: form.notes || null, is_manual: true,
         absence_deduction_override_hours: form.absence_deduction_override_hours === '' ? null : Number(form.absence_deduction_override_hours),
         absence_deduction_override_reason: form.absence_deduction_override_reason || null,
+        late_penalty_override_hours: form.late_penalty_override_hours === '' ? null : Number(form.late_penalty_override_hours),
+        late_penalty_override_reason: form.late_penalty_override_reason || null,
+        late_caused_disruption: form.late_caused_disruption,
       })
       onSaved()
     } catch (e) {
@@ -532,6 +539,28 @@ function EditModal({ row, employee, onClose, onSaved }) {
                 <label className="block text-xs font-semibold text-neutral-600 mb-1">Override Reason</label>
                 <input type="text" value={form.absence_deduction_override_reason} onChange={set('absence_deduction_override_reason')} placeholder="Optional"
                   className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
+              </div>
+            </div>
+          )}
+          {form.status === 'late' && (
+            <div className="space-y-3 rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
+                <input type="checkbox" checked={form.late_caused_disruption}
+                  onChange={event => setForm(current => ({ ...current, late_caused_disruption: event.target.checked }))} />
+                Caused work disruption
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Deduction Hours</label>
+                  <input type="number" min="0" max="240" step="0.25" value={form.late_penalty_override_hours}
+                    onChange={set('late_penalty_override_hours')} placeholder={row.late ? String(row.late.default_hours) : 'Automatic'}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Override Reason</label>
+                  <input type="text" value={form.late_penalty_override_reason} onChange={set('late_penalty_override_reason')} placeholder="Optional"
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
+                </div>
               </div>
             </div>
           )}
@@ -857,6 +886,7 @@ export default function AttendanceTab() {
   const [endDate,    setEndDate]    = useState(monthEnd)
   const [records,    setRecords]    = useState([])
   const [absenceDeductions, setAbsenceDeductions] = useState({})
+  const [lateDeductions, setLateDeductions] = useState({})
   const [balance,    setBalance]    = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [sheetEditing, setSheetEditing] = useState(false)
@@ -972,7 +1002,7 @@ export default function AttendanceTab() {
   })
 
   // ── Detail data ───────────────────────────────────────────────────────────
-  const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, absenceDeductions, attendancePolicy)
+  const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, absenceDeductions, lateDeductions, attendancePolicy)
 
   const beginSheetEdit = () => {
     const draft = {}
@@ -980,10 +1010,13 @@ export default function AttendanceTab() {
       draft[row.dateStr] = {
         check_in: row.record?.check_in?.slice(0, 5) || '',
         check_out: row.record?.check_out?.slice(0, 5) || '',
-        status: row.record?.status || (row.absence ? 'absent' : 'present'),
+        status: row.record?.status || (row.absence ? 'absent' : (row.late ? 'late' : 'present')),
         notes: row.record?.notes || '',
         absence_deduction_override_hours: row.record?.absence_deduction_override_hours ?? '',
         absence_deduction_override_reason: row.record?.absence_deduction_override_reason ?? '',
+        late_penalty_override_hours: row.record?.late_penalty_override_hours ?? '',
+        late_penalty_override_reason: row.record?.late_penalty_override_reason ?? '',
+        late_caused_disruption: !!row.record?.late_caused_disruption,
       }
     })
     setSheetDraft(draft)
@@ -1008,6 +1041,9 @@ export default function AttendanceTab() {
         [field]: normalized,
         ...(field === 'status' && normalized !== 'absent'
           ? { absence_deduction_override_hours: '', absence_deduction_override_reason: '' }
+          : {}),
+        ...(field === 'status' && normalized !== 'late'
+          ? { late_penalty_override_hours: '', late_penalty_override_reason: '', late_caused_disruption: false }
           : {}),
       },
     }))
@@ -1071,7 +1107,10 @@ export default function AttendanceTab() {
   const isPermissionCovered = (r) => !!earlyPermissionWindow(r.leave)
   const totalLatMin = withRec.reduce((s,r) => s + (isPermissionCovered(r) ? 0 : Number(r.record.late_minutes||0)), 0)
   // Absences on approved-leave days OR public holidays don't count as deductions
-  const totalDedMin = rows.reduce((total, row) => total + (row.absence ? Number(row.absence.deduction_hours || 0) * 60 : 0), 0)
+  const totalDedMin = rows.reduce((total, row) => {
+    const penalty = row.absence ?? row.late
+    return total + (penalty ? Number(penalty.deduction_hours || 0) * 60 : 0)
+  }, 0)
   const summary = {
     workingDays: rows.filter(r => !r.isWeekend && !r.holiday).length,
     present:     withRec.filter(r => r.record.status === 'present').length,
@@ -1084,11 +1123,13 @@ export default function AttendanceTab() {
     if (!employee || !startDate || !endDate) return
     setLoading(true)
     try {
-      const [res, absenceRes] = await Promise.all([
+      const [res, absenceRes, lateRes] = await Promise.all([
         attendanceService.getAttendance({
         employee_id: employee.id, start_date: startDate, end_date: endDate,
         }),
         attendanceService.getAbsenceDeductions(employee.id, startDate, endDate)
+          .catch(() => ({ success: false, data: {} })),
+        attendanceService.getLateDeductions(employee.id, startDate, endDate)
           .catch(() => ({ success: false, data: {} })),
       ])
       setRecords(res.success ? (res.data ?? []) : [])
@@ -1096,7 +1137,8 @@ export default function AttendanceTab() {
       setOtrs(res.success ? (res.otrs ?? []) : [])
       setHolidays(res.success ? (res.holidays ?? []) : [])
       setAbsenceDeductions(absenceRes.success ? (absenceRes.data ?? {}) : {})
-    } catch { setRecords([]); setLeaves([]); setOtrs([]); setHolidays([]); setAbsenceDeductions({}) }
+      setLateDeductions(lateRes.success ? (lateRes.data ?? {}) : {})
+    } catch { setRecords([]); setLeaves([]); setOtrs([]); setHolidays([]); setAbsenceDeductions({}); setLateDeductions({}) }
     finally { setLoading(false) }
   }
 
@@ -1550,15 +1592,19 @@ export default function AttendanceTab() {
                           const rec    = r.record
                           const ot     = otTimes(r.otr, attendancePolicy)
                           const isAutoAbsent = !!r.absence && !rec
-                          const s      = rec?.status ?? (isAutoAbsent ? 'absent' : null)
+                          const isAutoLate = !!r.late && !rec
+                          const s      = rec?.status ?? (isAutoAbsent ? 'absent' : (isAutoLate ? 'late' : null))
                           const cfg    = STATUS_CFG[s]
                           const isHoliday = !!r.holiday
                           // A saved manual record is an explicit override of the
                           // scheduled OFF day, so it should read like a normal row.
                           const isManualOffOverride = r.isWeekend && !!rec?.is_manual
                           const isAutomaticDayOff = r.isWeekend && !isManualOffOverride
-                          const absenceDeductionHrs = s === 'absent' ? Number(r.absence?.deduction_hours || 0) : 0
-                          const dedMin = Math.round(absenceDeductionHrs * 60)
+                          // More than one hour late follows the absence rule; otherwise use late policy.
+                          const penaltyKind = r.absence ? 'absence' : (r.late ? 'late' : null)
+                          const penalty = r.absence ?? r.late
+                          const deductionHrs = Number(penalty?.deduction_hours || 0)
+                          const dedMin = Math.round(deductionHrs * 60)
                           // Full-day leave (annual/casual/sick) hides check-in/out; early leave keeps them
                           // because the person actually worked part of the day under permission.
                           const isEarly = r.leave?.leave_type === 'early'
@@ -1592,7 +1638,7 @@ export default function AttendanceTab() {
                                   ? 'bg-rose-50 hover:bg-rose-100'
                                 : isAutomaticDayOff
                                     ? 'bg-neutral-100 text-neutral-400'
-                                    : isAutoAbsent
+                                    : r.absence
                                       ? 'bg-red-50 hover:bg-red-100'
                                     : onLeave
                                       ? 'bg-violet-50 hover:bg-violet-100'
@@ -1655,13 +1701,13 @@ export default function AttendanceTab() {
                                   : <span className="text-neutral-300">0</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
-                                {sheetEditing && s === 'absent' ? (
+                                {sheetEditing && penaltyKind ? (
                                   <input type="number" min="0" max="240" step="0.25"
-                                    value={sheetDraft[r.dateStr]?.absence_deduction_override_hours ?? ''}
-                                    placeholder={r.absence ? String(r.absence.default_hours) : '0'}
-                                    onChange={event => updateSheetCell(r.dateStr, 'absence_deduction_override_hours', event.target.value)}
+                                    value={sheetDraft[r.dateStr]?.[penaltyKind === 'absence' ? 'absence_deduction_override_hours' : 'late_penalty_override_hours'] ?? ''}
+                                    placeholder={penalty ? String(penalty.default_hours) : '0'}
+                                    onChange={event => updateSheetCell(r.dateStr, penaltyKind === 'absence' ? 'absence_deduction_override_hours' : 'late_penalty_override_hours', event.target.value)}
                                     className="h-7 w-[62px] border border-red-200 bg-white px-1 text-center font-mono text-red-600 outline-none focus:border-red-400" />
-                                ) : dedMin > 0 ? <span className="text-red-500 font-semibold">{absenceDeductionHrs.toFixed(2).replace(/\.00$/, '')}</span> : <span className="text-neutral-300">0</span>}
+                                ) : dedMin > 0 ? <span className="text-red-500 font-semibold">{deductionHrs.toFixed(2).replace(/\.00$/, '')}</span> : <span className="text-neutral-300">0</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {dedMin > 0 ? <span className="text-red-500 font-semibold">{dedMin}</span> : <span className="text-neutral-300">0</span>}
