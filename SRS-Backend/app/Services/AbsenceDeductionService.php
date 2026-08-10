@@ -13,13 +13,16 @@ class AbsenceDeductionService
     private const DEDUCTION_HOURS = [10, 12, 16, 24];
 
     /**
-     * Build the absence sequence through the employee's available attendance history.
+     * Build the absence sequence inside the selected payroll period only.
      * An HR override on a daily attendance entry always wins over the automatic amount.
      */
     public function forEmployee(Employee $employee, string $periodStart, string $periodEnd): array
     {
         $end = Carbon::parse($periodEnd)->min(Carbon::today());
-        $start = $this->historyStart($employee, Carbon::parse($periodStart));
+        $start = Carbon::parse($periodStart)->startOfDay();
+        if ($employee->hiring_date) {
+            $start = $start->max($employee->hiring_date->copy()->startOfDay());
+        }
         if ($start->gt($end)) {
             return [];
         }
@@ -95,20 +98,5 @@ class AbsenceDeductionService
         }
 
         return $result;
-    }
-
-    private function historyStart(Employee $employee, Carbon $requestedStart): Carbon
-    {
-        // Do not infer absences before the system has any evidence for this employee.
-        $firstAttendance = Attendance::where('employee_id', $employee->id)->min('date');
-        $firstLeave = LeaveRequest::where('type', 'lrf')->where('employee_id', $employee->id)->min('start_date');
-        $knownDates = collect([$firstAttendance, $firstLeave])->filter()->map(fn ($date) => Carbon::parse($date));
-        $knownStart = $knownDates->isNotEmpty() ? $knownDates->min() : $requestedStart->copy();
-
-        if ($employee->hiring_date) {
-            $knownStart = $knownStart->max($employee->hiring_date->copy()->startOfDay());
-        }
-
-        return $knownStart->startOfDay();
     }
 }
