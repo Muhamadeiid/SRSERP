@@ -1690,6 +1690,14 @@ class AttendanceController extends Controller
                 PHP_ROUND_HALF_UP
             );
 
+            // An approved OTR on the employee's scheduled day off is paid as
+            // double time. Keep normal day/night splits untouched for workdays.
+            $otDate = Carbon::parse($otr->ot_date);
+            if (!$employee->isWorkingDay($otDate)) {
+                $doublePayOT += $approvedHours;
+                continue;
+            }
+
             // Split the approved whole-hour total without creating fractional salary hours.
             $dayHours = intdiv($dayMins, 60);
             $nightHours = intdiv($nightMins, 60);

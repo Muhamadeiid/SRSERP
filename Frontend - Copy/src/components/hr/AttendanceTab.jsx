@@ -629,7 +629,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 
   const rowsHtml = rows.map((r,i) => {
     const rec = r.record
-    const off = r.isWeekend
+    const off = r.isWeekend && !rec?.is_manual
     const ot  = rec ? getOT(rec) : null
     const dedMin = rec?.status==='absent' ? 540 : 0
     const workStr = rec ? (rec.status==='absent'?'0:00':decHHMM(rec.work_hours)) : (off?'0:00':'')
@@ -1517,6 +1517,10 @@ export default function AttendanceTab() {
                           const s      = rec?.status
                           const cfg    = STATUS_CFG[s]
                           const isHoliday = !!r.holiday
+                          // A saved manual record is an explicit override of the
+                          // scheduled OFF day, so it should read like a normal row.
+                          const isManualOffOverride = r.isWeekend && !!rec?.is_manual
+                          const isAutomaticDayOff = r.isWeekend && !isManualOffOverride
                           // Absence on holiday or on approved leave doesn't deduct
                           const dedMin = rec?.status === 'absent' && !r.leave && !isHoliday ? policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes') : 0
                           // Full-day leave (annual/casual/sick) hides check-in/out; early leave keeps them
@@ -1526,8 +1530,11 @@ export default function AttendanceTab() {
                           const leaveLabel = onLeave
                             ? ({ annual: 'Annual', casual: 'Casual', sick: 'Sick' }[r.leave?.leave_type] || '')
                             : ''
-                          // Double pay = hours worked on a holiday (from attendance work_hours)
-                          const doublePayHrs = isHoliday && rec?.work_hours > 0 ? Math.round(Number(rec.work_hours)) : 0
+                          // Approved OTR on a scheduled OFF day is double pay.
+                          // Holiday attendance keeps the existing double-pay display.
+                          const doublePayHrs = isAutomaticDayOff && ot?.total > 0
+                            ? ot.total
+                            : (isHoliday && rec?.work_hours > 0 ? Math.round(Number(rec.work_hours)) : 0)
                           // Early-leave permission note
                           const permWindow = earlyPermissionWindow(r.leave)
                           const noteParts = []
@@ -1547,7 +1554,7 @@ export default function AttendanceTab() {
                               className={`border-b border-neutral-100 transition-colors group ${
                                 isHoliday
                                   ? 'bg-rose-50 hover:bg-rose-100'
-                                  : r.isWeekend
+                                : isAutomaticDayOff
                                     ? 'bg-neutral-100 text-neutral-400'
                                     : onLeave
                                       ? 'bg-violet-50 hover:bg-violet-100'
@@ -1591,7 +1598,7 @@ export default function AttendanceTab() {
                                   ? <span className="text-violet-500">—</span>
                                   : rec
                                     ? (rec.status==='absent' ? <span className="text-neutral-400">0:00</span> : decToHHMM(rec.work_hours))
-                                    : (r.isWeekend ? <span className="text-neutral-300">0:00</span> : '')}
+                                    : (isAutomaticDayOff ? <span className="text-neutral-300">0:00</span> : '')}
                               </td>
                               <td className="px-2 py-2 text-center text-neutral-400">0</td>
                               <td className="px-2 py-2 text-center font-mono text-blue-600">{ot && ot.total > 0 ? fmt12(ot.start) : ''}</td>
@@ -1640,7 +1647,7 @@ export default function AttendanceTab() {
                                 ) : <span className="block truncate">{noteText}</span>}
                               </td>
                               <td className="px-1 py-2 text-center">
-                                {!r.isWeekend && (
+                                {!onLeave && (
                                   <button onClick={() => setEditRow(r)} title={rec ? 'Edit' : 'Add'}
                                     className={`p-1 rounded transition-all opacity-0 group-hover:opacity-100 ${
                                       rec ? 'text-neutral-400 hover:bg-primary/10 hover:text-primary'
