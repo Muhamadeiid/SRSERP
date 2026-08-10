@@ -207,6 +207,10 @@ class AttendanceController extends Controller
                     ->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
 
                 $employeeQuery = Employee::active();
+                $employeeQuery->where(function ($query) use ($dateKey) {
+                    $query->whereNull('hiring_date')
+                        ->orWhereDate('hiring_date', '<=', $dateKey);
+                });
                 if (!empty($filters['department'])) {
                     $employeeQuery->where('department', $filters['department']);
                 }
@@ -297,7 +301,16 @@ class AttendanceController extends Controller
             'leaves'   => $leaves,
             'otrs'     => $otrs,
             'holidays' => $holidays,
-            'total_workforce' => empty($filters['employee_id']) ? Employee::active()->count() : null,
+            'total_workforce' => empty($filters['employee_id'])
+                ? Employee::active()
+                    ->when(!empty($filters['date']), function ($query) use ($filters) {
+                        $query->where(function ($hired) use ($filters) {
+                            $hired->whereNull('hiring_date')
+                                ->orWhereDate('hiring_date', '<=', $filters['date']);
+                        });
+                    })
+                    ->count()
+                : null,
         ], 200);
     }
 
