@@ -19,6 +19,8 @@ class Attendance extends Model
         'expected_hours',
         'late_minutes',
         'overtime_hours',
+        'absence_deduction_override_hours',
+        'absence_deduction_override_reason',
         'status',
         'is_manual',
         'created_by',
@@ -32,6 +34,7 @@ class Attendance extends Model
         'work_hours' => 'decimal:2',
         'expected_hours' => 'decimal:2',
         'overtime_hours' => 'decimal:2',
+        'absence_deduction_override_hours' => 'decimal:2',
         'is_manual' => 'boolean',
     ];
 

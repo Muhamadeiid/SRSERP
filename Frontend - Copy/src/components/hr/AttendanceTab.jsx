@@ -224,7 +224,7 @@ function leaveOnDate(leaves, employeeId, dateStr) {
   ) ?? null
 }
 
-function buildRows(startDate, endDate, records, employee, leaves = [], otrs = [], holidays = [], policy = ATTENDANCE_POLICY_DEFAULTS) {
+function buildRows(startDate, endDate, records, employee, leaves = [], otrs = [], holidays = [], absenceDeductions = {}, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!startDate || !endDate) return []
   const rows = []
   const cur  = new Date(startDate + 'T00:00:00')
@@ -234,14 +234,16 @@ function buildRows(startDate, endDate, records, employee, leaves = [], otrs = []
     const dow = cur.getDay()
     const dateStr   = `${y}-${pad(m)}-${pad(d)}`
     const isDayOff  = !isWorkingDay(employee, new Date(cur), policy)
+    const record = records.find(r => r.date?.slice(0,10) === dateStr) ?? null
     rows.push({
       day: d, dayName: DAYS[dow], dateStr,
       isWeekend: isDayOff,        // reuse isWeekend flag for any day-off
       dayOffLabel: dayOffLabel(employee, dow, policy),
-      record:  records.find(r => r.date?.slice(0,10) === dateStr) ?? null,
+      record,
       leave:   leaveOnDate(leaves, employee?.id, dateStr),
       otr:     otrOnDate(otrs, employee?.id, dateStr),
       holiday: holidayOnDate(holidays, dateStr),
+      absence: absenceDeductions[dateStr] ?? null,
     })
     cur.setDate(cur.getDate() + 1)
   }
@@ -445,8 +447,10 @@ function EditModal({ row, employee, onClose, onSaved }) {
   const [form, setForm] = useState({
     check_in:  existing?.check_in  ? String(existing.check_in).slice(0,5)  : '',
     check_out: existing?.check_out ? String(existing.check_out).slice(0,5) : '',
-    status:    existing?.status ?? 'present',
+    status:    existing?.status ?? (row.absence ? 'absent' : 'present'),
     notes:     existing?.notes  ?? '',
+    absence_deduction_override_hours: existing?.absence_deduction_override_hours ?? '',
+    absence_deduction_override_reason: existing?.absence_deduction_override_reason ?? '',
   })
   const [busy, setBusy] = useState(false)
   const [err,  setErr]  = useState(null)
@@ -476,6 +480,8 @@ function EditModal({ row, employee, onClose, onSaved }) {
         check_out: form.check_out || null,
         work_hours, expected_hours: 9, late_minutes, overtime_hours,
         status: form.status, notes: form.notes || null, is_manual: true,
+        absence_deduction_override_hours: form.absence_deduction_override_hours === '' ? null : Number(form.absence_deduction_override_hours),
+        absence_deduction_override_reason: form.absence_deduction_override_reason || null,
       })
       onSaved()
     } catch (e) {
@@ -514,6 +520,21 @@ function EditModal({ row, employee, onClose, onSaved }) {
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_CFG[s]?.label ?? s}</option>)}
             </select>
           </div>
+          {form.status === 'absent' && (
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-red-100 bg-red-50/40 p-3">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Deduction Hours</label>
+                <input type="number" min="0" max="240" step="0.25" value={form.absence_deduction_override_hours}
+                  onChange={set('absence_deduction_override_hours')} placeholder={row.absence ? String(row.absence.default_hours) : 'Automatic'}
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Override Reason</label>
+                <input type="text" value={form.absence_deduction_override_reason} onChange={set('absence_deduction_override_reason')} placeholder="Optional"
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-neutral-600 mb-1">Notes <span className="font-normal text-neutral-300">(optional)</span></label>
             <input type="text" value={form.notes} onChange={set('notes')} placeholder="e.g. WFH approved…"
@@ -835,6 +856,7 @@ export default function AttendanceTab() {
   const [startDate,  setStartDate]  = useState(monthStart)
   const [endDate,    setEndDate]    = useState(monthEnd)
   const [records,    setRecords]    = useState([])
+  const [absenceDeductions, setAbsenceDeductions] = useState({})
   const [balance,    setBalance]    = useState(null)
   const [loading,    setLoading]    = useState(false)
   const [sheetEditing, setSheetEditing] = useState(false)
@@ -950,7 +972,7 @@ export default function AttendanceTab() {
   })
 
   // ── Detail data ───────────────────────────────────────────────────────────
-  const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, attendancePolicy)
+  const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, absenceDeductions, attendancePolicy)
 
   const beginSheetEdit = () => {
     const draft = {}
@@ -958,8 +980,10 @@ export default function AttendanceTab() {
       draft[row.dateStr] = {
         check_in: row.record?.check_in?.slice(0, 5) || '',
         check_out: row.record?.check_out?.slice(0, 5) || '',
-        status: row.record?.status || 'present',
+        status: row.record?.status || (row.absence ? 'absent' : 'present'),
         notes: row.record?.notes || '',
+        absence_deduction_override_hours: row.record?.absence_deduction_override_hours ?? '',
+        absence_deduction_override_reason: row.record?.absence_deduction_override_reason ?? '',
       }
     })
     setSheetDraft(draft)
@@ -979,7 +1003,13 @@ export default function AttendanceTab() {
     const normalized = field === 'status' ? normalizePastedStatus(value) : value
     setSheetDraft(current => ({
       ...current,
-      [date]: { ...(current[date] || {}), [field]: normalized },
+      [date]: {
+        ...(current[date] || {}),
+        [field]: normalized,
+        ...(field === 'status' && normalized !== 'absent'
+          ? { absence_deduction_override_hours: '', absence_deduction_override_reason: '' }
+          : {}),
+      },
     }))
     setDirtyDates(current => new Set(current).add(date))
   }
@@ -1041,11 +1071,11 @@ export default function AttendanceTab() {
   const isPermissionCovered = (r) => !!earlyPermissionWindow(r.leave)
   const totalLatMin = withRec.reduce((s,r) => s + (isPermissionCovered(r) ? 0 : Number(r.record.late_minutes||0)), 0)
   // Absences on approved-leave days OR public holidays don't count as deductions
-  const totalDedMin = withRec.filter(r => r.record.status === 'absent' && !r.leave && !r.holiday).length * policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes')
+  const totalDedMin = rows.reduce((total, row) => total + (row.absence ? Number(row.absence.deduction_hours || 0) * 60 : 0), 0)
   const summary = {
     workingDays: rows.filter(r => !r.isWeekend && !r.holiday).length,
     present:     withRec.filter(r => r.record.status === 'present').length,
-    absent:      withRec.filter(r => r.record.status === 'absent' && !r.leave && !r.holiday).length,
+    absent:      rows.filter(r => !!r.absence).length,
     late:        withRec.filter(r => ['late','shortage'].includes(r.record.status) && !isPermissionCovered(r)).length,
     onLeave:     rows.filter(r => r.leave && !r.isWeekend).length,
   }
@@ -1054,14 +1084,19 @@ export default function AttendanceTab() {
     if (!employee || !startDate || !endDate) return
     setLoading(true)
     try {
-      const res = await attendanceService.getAttendance({
+      const [res, absenceRes] = await Promise.all([
+        attendanceService.getAttendance({
         employee_id: employee.id, start_date: startDate, end_date: endDate,
-      })
+        }),
+        attendanceService.getAbsenceDeductions(employee.id, startDate, endDate)
+          .catch(() => ({ success: false, data: {} })),
+      ])
       setRecords(res.success ? (res.data ?? []) : [])
       setLeaves(res.success ? (res.leaves ?? []) : [])
       setOtrs(res.success ? (res.otrs ?? []) : [])
       setHolidays(res.success ? (res.holidays ?? []) : [])
-    } catch { setRecords([]); setLeaves([]); setOtrs([]); setHolidays([]) }
+      setAbsenceDeductions(absenceRes.success ? (absenceRes.data ?? {}) : {})
+    } catch { setRecords([]); setLeaves([]); setOtrs([]); setHolidays([]); setAbsenceDeductions({}) }
     finally { setLoading(false) }
   }
 
@@ -1514,15 +1549,16 @@ export default function AttendanceTab() {
                         {rows.map((r, i) => {
                           const rec    = r.record
                           const ot     = otTimes(r.otr, attendancePolicy)
-                          const s      = rec?.status
+                          const isAutoAbsent = !!r.absence && !rec
+                          const s      = rec?.status ?? (isAutoAbsent ? 'absent' : null)
                           const cfg    = STATUS_CFG[s]
                           const isHoliday = !!r.holiday
                           // A saved manual record is an explicit override of the
                           // scheduled OFF day, so it should read like a normal row.
                           const isManualOffOverride = r.isWeekend && !!rec?.is_manual
                           const isAutomaticDayOff = r.isWeekend && !isManualOffOverride
-                          // Absence on holiday or on approved leave doesn't deduct
-                          const dedMin = rec?.status === 'absent' && !r.leave && !isHoliday ? policyNumber(attendancePolicy, 'attendance_absent_deduction_minutes') : 0
+                          const absenceDeductionHrs = s === 'absent' ? Number(r.absence?.deduction_hours || 0) : 0
+                          const dedMin = Math.round(absenceDeductionHrs * 60)
                           // Full-day leave (annual/casual/sick) hides check-in/out; early leave keeps them
                           // because the person actually worked part of the day under permission.
                           const isEarly = r.leave?.leave_type === 'early'
@@ -1556,6 +1592,8 @@ export default function AttendanceTab() {
                                   ? 'bg-rose-50 hover:bg-rose-100'
                                 : isAutomaticDayOff
                                     ? 'bg-neutral-100 text-neutral-400'
+                                    : isAutoAbsent
+                                      ? 'bg-red-50 hover:bg-red-100'
                                     : onLeave
                                       ? 'bg-violet-50 hover:bg-violet-100'
                                       : ot && ot.total > 0
@@ -1597,7 +1635,8 @@ export default function AttendanceTab() {
                                 {onLeave
                                   ? <span className="text-violet-500">—</span>
                                   : rec
-                                    ? (rec.status==='absent' ? <span className="text-neutral-400">0:00</span> : decToHHMM(rec.work_hours))
+                                    ? (s==='absent' ? <span className="text-neutral-400">0:00</span> : decToHHMM(rec.work_hours))
+                                    : isAutoAbsent ? <span className="text-neutral-400">0:00</span>
                                     : (isAutomaticDayOff ? <span className="text-neutral-300">0:00</span> : '')}
                               </td>
                               <td className="px-2 py-2 text-center text-neutral-400">0</td>
@@ -1616,7 +1655,13 @@ export default function AttendanceTab() {
                                   : <span className="text-neutral-300">0</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
-                                {dedMin > 0 ? <span className="text-red-500 font-semibold">{(dedMin/60).toFixed(1)}</span> : <span className="text-neutral-300">0</span>}
+                                {sheetEditing && s === 'absent' ? (
+                                  <input type="number" min="0" max="240" step="0.25"
+                                    value={sheetDraft[r.dateStr]?.absence_deduction_override_hours ?? ''}
+                                    placeholder={r.absence ? String(r.absence.default_hours) : '0'}
+                                    onChange={event => updateSheetCell(r.dateStr, 'absence_deduction_override_hours', event.target.value)}
+                                    className="h-7 w-[62px] border border-red-200 bg-white px-1 text-center font-mono text-red-600 outline-none focus:border-red-400" />
+                                ) : dedMin > 0 ? <span className="text-red-500 font-semibold">{absenceDeductionHrs.toFixed(2).replace(/\.00$/, '')}</span> : <span className="text-neutral-300">0</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {dedMin > 0 ? <span className="text-red-500 font-semibold">{dedMin}</span> : <span className="text-neutral-300">0</span>}

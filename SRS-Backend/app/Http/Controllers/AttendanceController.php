@@ -9,6 +9,7 @@ use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Services\AttendancePolicy;
 use App\Services\AttendanceService;
+use App\Services\AbsenceDeductionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,10 +26,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AttendanceController extends Controller
 {
     protected $attendanceService;
+    protected $absenceDeductions;
 
-    public function __construct(AttendanceService $attendanceService)
+    public function __construct(AttendanceService $attendanceService, AbsenceDeductionService $absenceDeductions)
     {
         $this->attendanceService = $attendanceService;
+        $this->absenceDeductions = $absenceDeductions;
     }
 
     /**
@@ -328,6 +331,8 @@ class AttendanceController extends Controller
             'check_out' => 'nullable|date_format:H:i',
             'status' => 'nullable|in:present,absent,late,wfh,intervention,incomplete,shortage',
             'notes' => 'nullable|string|max:500',
+            'absence_deduction_override_hours' => 'nullable|numeric|min:0|max:240',
+            'absence_deduction_override_reason' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -370,6 +375,8 @@ class AttendanceController extends Controller
             'rows.*.check_out' => 'nullable|date_format:H:i',
             'rows.*.status' => 'required|in:present,absent,late,wfh,intervention,incomplete,shortage',
             'rows.*.notes' => 'nullable|string|max:500',
+            'rows.*.absence_deduction_override_hours' => 'nullable|numeric|min:0|max:240',
+            'rows.*.absence_deduction_override_reason' => 'nullable|string|max:500',
         ]);
 
         $saved = DB::transaction(function () use ($data) {
@@ -380,6 +387,8 @@ class AttendanceController extends Controller
                     'check_in' => $row['check_in'] ?: null,
                     'check_out' => $row['check_out'] ?: null,
                     'notes' => $row['notes'] ?: null,
+                    'absence_deduction_override_hours' => $row['absence_deduction_override_hours'] ?? null,
+                    'absence_deduction_override_reason' => $row['absence_deduction_override_reason'] ?? null,
                 ], auth()->id());
             });
         });
@@ -388,6 +397,20 @@ class AttendanceController extends Controller
             'success' => true,
             'message' => "{$saved->count()} attendance rows saved.",
             'saved' => $saved->count(),
+        ]);
+    }
+
+    /** Return automatic absence penalties and any HR overrides for one sheet. */
+    public function absenceDeductions(Request $request, Employee $employee)
+    {
+        $data = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->absenceDeductions->forEmployee($employee, $data['start_date'], $data['end_date']),
         ]);
     }
 
@@ -598,6 +621,9 @@ class AttendanceController extends Controller
             'start_date'  => $startDate,
             'end_date'    => $endDate,
         ]);
+        $absenceDeductions = $employee
+            ? $this->absenceDeductions->forEmployee($employee, $startDate, $endDate)
+            : [];
 
         // ── helpers ──────────────────────────────────────────────
         $timeStr = function($t): ?string {
@@ -636,14 +662,13 @@ class AttendanceController extends Controller
             $ds  = $cur->toDateString();
             $rec = $attendances->first(fn($a) => $a->date?->format('Y-m-d') === $ds);
             $off = $employee ? !$employee->isWorkingDay($cur->copy()) : in_array($cur->dayOfWeek,[5,6]);
-            $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec];
+            $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec, 'absence' => $absenceDeductions[$ds] ?? null];
             $cur->addDay();
         }
 
         // ── totals ───────────────────────────────────────────────
         // OT is rounded the same way as the OT-rate columns: floor(mins/60) per row
-        $absentCount  = $attendances->where('status','absent')->count();
-        $totalDedMin  = $absentCount * 540;
+        $totalDedMin  = collect($absenceDeductions)->sum(fn ($absence) => (float) $absence['deduction_hours'] * 60);
         $totalDedHrs  = $totalDedMin / 60;
         $totalDayOT   = 0;   // integer — sum of per-row floor(dayMins/60)
         $totalNightOT = 0;   // integer — sum of per-row max(1,floor(nightMins/60))
@@ -906,15 +931,17 @@ class AttendanceController extends Controller
 
             // Deductions
             $dedHrs = $dedMin = '';
-            if ($rec && $rec->status === 'absent') {
-                $dedHrs = 9;
-                $dedMin = 540;
+            if ($dr['absence']) {
+                $dedHrs = (float) $dr['absence']['deduction_hours'];
+                $dedMin = $dedHrs * 60;
             }
 
             // Work hours string
             $workHrsStr = '';
             if ($rec) {
                 $workHrsStr = $rec->status === 'absent' ? '0:00' : $decHHMM($rec->work_hours);
+            } elseif ($dr['absence']) {
+                $workHrsStr = '0:00';
             } elseif ($off) {
                 $workHrsStr = '0:00';
             }
@@ -946,9 +973,11 @@ class AttendanceController extends Controller
                 $sheet->setCellValue("{$col}{$row}", $val);
             }
 
-            $bg = $off
+            $bg = $dr['absence']
+                ? 'F4CCCC'
+                : ($off
                 ? $C_DAYOFF
-                : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT));
+                : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
 
             $txtRgb = $off ? 'AAAAAA' : '000000';
 
@@ -1057,6 +1086,7 @@ class AttendanceController extends Controller
             ->whereDate('start_date', '<=', $endDate)
             ->whereDate('end_date', '>=', $startDate)
             ->get();
+        $absenceDeductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
 
         // ── helpers ──────────────────────────────────────────────
         $timeStr = function($t): ?string {
@@ -1092,13 +1122,12 @@ class AttendanceController extends Controller
             $ds  = $cur->toDateString();
             $rec = $attendances->first(fn($a) => $a->date?->format('Y-m-d') === $ds);
             $off = !$employee->isWorkingDay($cur->copy());
-            $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec];
+            $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec, 'absence' => $absenceDeductions[$ds] ?? null];
             $cur->addDay();
         }
 
         // ── totals ───────────────────────────────────────────────
-        $absentCount  = $attendances->where('status','absent')->count();
-        $totalDedMin  = $absentCount * 540;
+        $totalDedMin  = collect($absenceDeductions)->sum(fn ($absence) => (float) $absence['deduction_hours'] * 60);
         $totalDedHrs  = $totalDedMin / 60;
         $totalDayOT   = 0;
         $totalNightOT = 0;
@@ -1324,11 +1353,16 @@ class AttendanceController extends Controller
             }
 
             $dedHrs = $dedMin = '';
-            if ($rec && $rec->status === 'absent') { $dedHrs = 9; $dedMin = 540; }
+            if ($dr['absence']) {
+                $dedHrs = (float) $dr['absence']['deduction_hours'];
+                $dedMin = $dedHrs * 60;
+            }
 
             $workHrsStr = '';
             if ($rec) {
                 $workHrsStr = $rec->status === 'absent' ? '0:00' : $decHHMM($rec->work_hours);
+            } elseif ($dr['absence']) {
+                $workHrsStr = '0:00';
             } elseif ($off) {
                 $workHrsStr = '0:00';
             }
@@ -1372,7 +1406,7 @@ class AttendanceController extends Controller
                 $sheet->setCellValue("{$col}{$row}", $val);
             }
 
-            $bg = $rec?->status === 'absent'
+            $bg = $dr['absence']
                 ? $C_ABSENT
                 : ($off ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
 
@@ -1728,34 +1762,22 @@ class AttendanceController extends Controller
             }
         }
 
-        // Deductions: absences that aren't on holidays and aren't on approved leave
-        $onLeaveDates = [];
+        // Unpaid leave always deducts the approved day fraction at 8 hours per day.
         $unpaidDays = 0.0;
         foreach ($approvedLeaves as $lv) {
             if ($lv->paid === false) {
                 $unpaidDays += (float) $lv->days;
             }
-            $s = is_string($lv->start_date) ? substr($lv->start_date, 0, 10) : ($lv->start_date?->format('Y-m-d') ?? '');
-            $e = is_string($lv->end_date)   ? substr($lv->end_date,   0, 10) : ($lv->end_date?->format('Y-m-d')   ?? $s);
-            $cur = \Carbon\Carbon::parse($s);
-            $lim = \Carbon\Carbon::parse($e);
-            while ($cur->lte($lim)) { $onLeaveDates[$cur->format('Y-m-d')] = true; $cur->addDay(); }
-        }
-        $absentCount = 0;
-        foreach ($attendances->where('status', 'absent') as $att) {
-            $d = is_string($att->date) ? substr($att->date, 0, 10) : ($att->date?->format('Y-m-d') ?? '');
-            if (isset($holidaysSet[$d])) continue;
-            if (isset($onLeaveDates[$d])) continue;
-            $absentCount++;
         }
         $lateMinutes = (int) $attendances->sum('late_minutes');
         $deductibleLateMinutes = max(0, $lateMinutes - $monthlyLateGraceMinutes);
-        $absenceHours = $absentCount * $dailyHours;
+        $absenceDeductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
+        $absenceHours = round(collect($absenceDeductions)->sum('deduction_hours'), 2);
         $unpaidHours = $unpaidDays * $dailyHours;
         $lateHours = $deductibleLateMinutes / 60;
         $deductionHrs = round($absenceHours + $unpaidHours + $lateHours, 2);
         $remarks = [];
-        if ($absenceHours > 0) $remarks[] = "Absence: {$absenceHours}h";
+        if ($absenceHours > 0) $remarks[] = "Absence & penalty: {$absenceHours}h";
         if ($unpaidHours > 0) $remarks[] = "Unpaid leave: {$unpaidHours}h";
         if ($deductibleLateMinutes > 0) $remarks[] = "Late: {$deductibleLateMinutes}m";
 

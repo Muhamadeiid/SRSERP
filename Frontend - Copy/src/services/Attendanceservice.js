@@ -66,6 +66,12 @@ export const attendanceService = {
     const response = await api.post('/attendance/manual/bulk', data)
     return response.data
   },
+  getAbsenceDeductions: async (employeeId, startDate, endDate) => {
+    const response = await api.get(`/attendance/absence-deductions/${employeeId}`, {
+      params: { start_date: startDate, end_date: endDate },
+    })
+    return response.data
+  },
 
   /**
    * Get employee attendance summary
