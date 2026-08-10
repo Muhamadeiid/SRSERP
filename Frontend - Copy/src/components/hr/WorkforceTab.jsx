@@ -24,6 +24,7 @@ import {
   GraduationCap,
   Shield,
   AlertTriangle,
+  Trash2,
   FileCheck,
   Settings,
   Hammer,
@@ -36,6 +37,7 @@ import {
   downloadBlob,
   createEmployee,
   updateEmployee,
+  deleteEmployee,
   bulkUpdateSaturdayGroup,
   bulkUpdateDirectManager,
 } from "../../services/employeeService";
@@ -616,6 +618,27 @@ export default function WorkforceTab() {
     setBulkSelectedIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  };
+
+  const handleRemoveFromWorkforce = async (emp) => {
+    const confirmed = window.confirm(
+      `Remove ${emp.name} from Workforce?\n\nThey will not appear in Ex-Employees. Historical attendance, leave, assets, and requests will be kept.`
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setFormErr(null);
+    try {
+      await deleteEmployee(emp.id);
+      setFormOpen(false);
+      setSelected(null);
+      fetchEmployees();
+      fetchStats();
+    } catch (e) {
+      setFormErr(e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleVisibleSelected = () => {
@@ -1320,6 +1343,7 @@ export default function WorkforceTab() {
           error={formErr}
           onClose={() => setFormOpen(false)}
           onSave={handleFormSave}
+          onRemove={view === 'active' ? handleRemoveFromWorkforce : undefined}
           managers={managers}
           users={users}
           onSignatureSave={(empId, dataURL) => {
@@ -1501,7 +1525,7 @@ function PositionPicker({ value, valueArabic, onChange, onTextChange }) {
   )
 }
 
-function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [], users = [], onSignatureSave }) {
+function EmployeeFormModal({ emp, saving, error, onClose, onSave, onRemove, managers = [], users = [], onSignatureSave }) {
   const [form, setForm] = useState(() => buildInitialForm(emp));
   const [tab, setTab] = useState('basic');
   const { departments: lookupDepts, categories: lookupCats, locations: lookupLocs } = useLookups();
@@ -1983,13 +2007,21 @@ function EmployeeFormModal({ emp, saving, error, onClose, onSave, managers = [],
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 px-6 py-4 border-t border-neutral-100 sticky bottom-0 bg-white">
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-neutral-100 sticky bottom-0 bg-white">
+            {emp && onRemove ? (
+              <button type="button" onClick={() => onRemove(emp)} disabled={saving}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-all">
+                <Trash2 className="w-4 h-4" /> Remove from Workforce
+              </button>
+            ) : <span />}
+            <div className="flex gap-3">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-semibold text-neutral-500 hover:text-secondary rounded-lg hover:bg-neutral-100 transition-all">
               Cancel
             </button>
             <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-bold bg-primary hover:bg-primary/90 text-white rounded-lg transition-all disabled:opacity-60">
               {saving ? 'Saving...' : emp ? 'Save Changes' : 'Add Member'}
             </button>
+            </div>
           </div>
         </form>
       </div>
