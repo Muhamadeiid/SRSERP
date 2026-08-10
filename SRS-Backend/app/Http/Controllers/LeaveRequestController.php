@@ -38,7 +38,7 @@ class LeaveRequestController extends Controller
         }
 
         $user = auth()->user();
-        $query = LeaveRequest::with([
+        $relations = [
             // List pages only need identity/approval metadata. Signature images
             // are loaded by show() when a request is opened or printed.
             'approver:id,name,role',
@@ -46,12 +46,15 @@ class LeaveRequestController extends Controller
             'hrApprover:id,name,role',
             'cancellationRequester:id,name',
             'cancellationRejecter:id,name',
-            'pendingAmendment.requester:id,name',
             'user:id,name',
             'employee:id,name,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id',
             'employee.userManager:id,name',
-        ]);
+        ];
+        if (Schema::hasTable('leave_request_amendments')) {
+            $relations[] = 'pendingAmendment.requester:id,name';
+        }
+        $query = LeaveRequest::with($relations);
 
         if (
             in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
@@ -385,15 +388,12 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        $leave = $leaveRequest->load([
+        $relations = [
             'approver:id,name,e_signature,role',
             'managerApprover:id,name,e_signature,role',
             'hrApprover:id,name,e_signature,role',
             'cancellationRequester:id,name',
             'cancellationRejecter:id,name',
-            'pendingAmendment.requester:id,name',
-            'amendments.requester:id,name',
-            'amendments.reviewer:id,name',
             'user:id,name',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.user:id,name,e_signature',
@@ -402,7 +402,15 @@ class LeaveRequestController extends Controller
             'employee.userManager:id,name,role,e_signature',
             'alternateEmployee:id,name,e_signature,user_id',
             'alternateEmployee.user:id,name,e_signature',
-        ]);
+        ];
+        if (Schema::hasTable('leave_request_amendments')) {
+            array_push($relations,
+                'pendingAmendment.requester:id,name',
+                'amendments.requester:id,name',
+                'amendments.reviewer:id,name'
+            );
+        }
+        $leave = $leaveRequest->load($relations);
 
         // A signature may have been uploaded from Workforce or saved on the
         // employee's linked login account. Forms should accept either source.

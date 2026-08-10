@@ -9,20 +9,22 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('leave_request_amendments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('leave_request_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('requested_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->text('reason');
-            $table->json('original_data');
-            $table->json('proposed_data');
-            $table->string('status', 20)->default('pending');
-            $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamp('reviewed_at')->nullable();
-            $table->text('rejection_reason')->nullable();
-            $table->timestamps();
-            $table->index(['leave_request_id', 'status']);
-        });
+        if (!Schema::hasTable('leave_request_amendments')) {
+            Schema::create('leave_request_amendments', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('leave_request_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('requested_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->text('reason');
+                $table->json('original_data');
+                $table->json('proposed_data');
+                $table->string('status', 20)->default('pending');
+                $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamp('reviewed_at')->nullable();
+                $table->text('rejection_reason')->nullable();
+                $table->timestamps();
+                $table->index(['leave_request_id', 'status']);
+            });
+        }
 
         if (DB::getDriverName() === 'mysql') {
             DB::statement("
