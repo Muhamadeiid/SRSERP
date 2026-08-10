@@ -67,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leave-requests/{leaveRequest}/cancel',          [LeaveRequestController::class, 'cancel']);
     Route::post('/leave-requests/{leaveRequest}/approve-cancellation', [LeaveRequestController::class, 'approveCancellation']);
     Route::post('/leave-requests/{leaveRequest}/reject-cancellation',  [LeaveRequestController::class, 'rejectCancellation']);
+    Route::post('/leave-requests/{leaveRequest}/request-amendment',    [LeaveRequestController::class, 'requestAmendment']);
+    Route::post('/leave-requests/{leaveRequest}/approve-amendment',    [LeaveRequestController::class, 'approveAmendment']);
+    Route::post('/leave-requests/{leaveRequest}/reject-amendment',     [LeaveRequestController::class, 'rejectAmendment']);
     Route::post('/leave-requests/{leaveRequest}/reschedule',      [LeaveRequestController::class, 'reschedule']);
     Route::post('/leave-requests/{leaveRequest}/archive',         [LeaveRequestController::class, 'archive']);
     Route::delete('/leave-requests/{leaveRequest}/archive',       [LeaveRequestController::class, 'unarchive']);

@@ -13,6 +13,7 @@ import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
   approveLeaveCancellation, rejectLeaveCancellation, getLeaveMedicalAttachment,
+  requestLeaveAmendment, approveLeaveAmendment, rejectLeaveAmendment,
   updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
@@ -393,6 +394,7 @@ function StatusBadge({ status }) {
     rejected:         { label: 'Rejected',         cls: 'bg-red-50 text-red-600 border-red-200',           Icon: XCircle      },
     cancelled:        { label: 'Cancelled',        cls: 'bg-neutral-100 text-neutral-500 border-neutral-200', Icon: Ban       },
     cancellation_pending: { label: 'Cancellation Pending', cls: 'bg-amber-50 text-amber-700 border-amber-200', Icon: Clock },
+    amendment_pending: { label: 'Amendment Pending', cls: 'bg-blue-50 text-blue-700 border-blue-200', Icon: Clock },
     rescheduled:      { label: 'Reschedule',       cls: 'bg-amber-50 text-amber-600 border-amber-200',     Icon: CalendarClock},
   }[status] ?? { label: status, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200', Icon: Clock }
   return (
@@ -2062,7 +2064,7 @@ function SigStamp({ label, name, date, sig }) {
 
 // ── Approval steps progress bar ───────────────────────────────
 function ApprovalProgress({ req }) {
-  const approvedStatuses = ['approved', 'cancellation_pending']
+  const approvedStatuses = ['approved', 'cancellation_pending', 'amendment_pending']
   const managerSkipped = ['manager_approved','hr_approved', ...approvedStatuses].includes(req.status)
     && !req.manager_approved_by
     && !req.manager_approved_at
@@ -2173,6 +2175,18 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const [loadingMedicalAttachment, setLoadingMedicalAttachment] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsSaved, setDetailsSaved] = useState(false)
+  const [showAmendment, setShowAmendment] = useState(false)
+  const [amendmentReason, setAmendmentReason] = useState('')
+  const [amendmentDraft, setAmendmentDraft] = useState({
+    leave_type: req?.leave_type || 'annual', paid: req?.paid !== false,
+    start_date: req?.start_date ? String(req.start_date).slice(0, 10) : '',
+    end_date: req?.end_date ? String(req.end_date).slice(0, 10) : '',
+    early_from: normalizeTime(req?.early_from), early_to: normalizeTime(req?.early_to),
+    purpose: req?.purpose || '', ot_date: req?.ot_date ? String(req.ot_date).slice(0, 10) : '',
+    start_time: normalizeTime(req?.start_time), end_time: normalizeTime(req?.end_time),
+    explanation: req?.explanation || '', overtime_results: req?.overtime_results || '',
+  })
+  const [savingAmendment, setSavingAmendment] = useState(false)
   const approvalActionsRef = useRef(null)
 
   useEffect(() => {
@@ -2248,7 +2262,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const canViewLeaveBalance = isLRF
     && req.available_balance !== null
     && req.available_balance !== undefined
-    && (isHR || isDirectManager || ['approved', 'cancellation_pending'].includes(req.status))
+    && (isHR || isDirectManager || ['approved', 'cancellation_pending', 'amendment_pending'].includes(req.status))
+  const canRequestAmendment = req.status === 'approved'
+    && (String(req.user_id || '') === String(currentUserId || '') || isDirectManager || isHR)
+  const pendingAmendment = req.pending_amendment || req.pendingAmendment
   const hrEarlyDays = hrLeaveDraft.leave_type === 'early'
     ? earlyDays(hrLeaveDraft.early_from, hrLeaveDraft.early_to)
     : ''
@@ -2317,6 +2334,45 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     } finally {
       setSavingDetails(false)
     }
+  }
+  const submitAmendment = async () => {
+    if (!amendmentReason.trim()) { alert('Enter the reason for this amendment.'); return }
+    const payload = isLRF
+      ? {
+          reason: amendmentReason.trim(), leave_type: amendmentDraft.leave_type,
+          paid: amendmentDraft.paid, start_date: amendmentDraft.start_date,
+          end_date: amendmentDraft.end_date || amendmentDraft.start_date,
+          early_from: amendmentDraft.leave_type === 'early' ? amendmentDraft.early_from : null,
+          early_to: amendmentDraft.leave_type === 'early' ? amendmentDraft.early_to : null,
+          purpose: amendmentDraft.purpose,
+        }
+      : {
+          reason: amendmentReason.trim(), ot_date: amendmentDraft.ot_date,
+          start_time: amendmentDraft.start_time, end_time: amendmentDraft.end_time,
+          explanation: amendmentDraft.explanation,
+          overtime_results: amendmentDraft.overtime_results,
+        }
+    try {
+      setSavingAmendment(true)
+      await requestLeaveAmendment(req.id, payload)
+      await onUpdated?.()
+      onClose()
+    } catch (e) { alert(e.message || 'Could not request amendment') }
+    finally { setSavingAmendment(false) }
+  }
+  const decideAmendment = async (approved) => {
+    try {
+      setSavingAmendment(true)
+      if (approved) await approveLeaveAmendment(req.id)
+      else {
+        const reason = window.prompt('Why is the amendment being rejected?')
+        if (!reason?.trim()) return
+        await rejectLeaveAmendment(req.id, reason.trim())
+      }
+      await onUpdated?.()
+      onClose()
+    } catch (e) { alert(e.message || 'Could not process amendment') }
+    finally { setSavingAmendment(false) }
   }
   const signatureParties = req.signature_parties || req.signatureParties || {}
   const employeeSignatureParty = signatureParties.employee || req.employee || null
@@ -2552,6 +2608,45 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         )}
 
+        {showAmendment && canRequestAmendment && (
+          <div className="mx-6 mb-4 p-4 border border-blue-200 bg-blue-50 rounded-lg space-y-3">
+            <div>
+              <p className="text-xs font-bold text-blue-800 uppercase">Request an amendment</p>
+              <p className="text-xs text-blue-600 mt-1">The approved request remains effective until Depot Manager approves these changes.</p>
+            </div>
+            {isLRF ? (
+              <div className="grid grid-cols-2 gap-3">
+                <label><span className={LBL}>Leave type</span><select className={INP} value={amendmentDraft.leave_type} onChange={e => setAmendmentDraft(d => ({...d, leave_type:e.target.value}))}><option value="annual">Annual</option><option value="casual">Casual</option><option value="sick">Sick</option><option value="early">Early Leave</option></select></label>
+                <label><span className={LBL}>Payment</span><select className={INP} value={amendmentDraft.paid ? '1':'0'} onChange={e => setAmendmentDraft(d => ({...d, paid:e.target.value === '1'}))}><option value="1">Paid</option><option value="0">Unpaid</option></select></label>
+                <label><span className={LBL}>From date</span><input type="date" className={INP} value={amendmentDraft.start_date} onChange={e => setAmendmentDraft(d => ({...d, start_date:e.target.value}))}/></label>
+                <label><span className={LBL}>To date</span><input type="date" className={INP} value={amendmentDraft.end_date} onChange={e => setAmendmentDraft(d => ({...d, end_date:e.target.value}))}/></label>
+                {amendmentDraft.leave_type === 'early' && <><label><span className={LBL}>From time</span><input type="time" className={INP} value={amendmentDraft.early_from} onChange={e => setAmendmentDraft(d => ({...d, early_from:e.target.value}))}/></label><label><span className={LBL}>To time</span><input type="time" className={INP} value={amendmentDraft.early_to} onChange={e => setAmendmentDraft(d => ({...d, early_to:e.target.value}))}/></label></>}
+                <label className="col-span-2"><span className={LBL}>Purpose</span><textarea className={INP} rows={2} value={amendmentDraft.purpose} onChange={e => setAmendmentDraft(d => ({...d, purpose:e.target.value}))}/></label>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="col-span-2"><span className={LBL}>Date</span><input type="date" className={INP} value={amendmentDraft.ot_date} onChange={e => setAmendmentDraft(d => ({...d, ot_date:e.target.value}))}/></label>
+                <label><span className={LBL}>From</span><input type="time" className={INP} value={amendmentDraft.start_time} onChange={e => setAmendmentDraft(d => ({...d, start_time:e.target.value}))}/></label>
+                <label><span className={LBL}>To</span><input type="time" className={INP} value={amendmentDraft.end_time} onChange={e => setAmendmentDraft(d => ({...d, end_time:e.target.value}))}/></label>
+                <label className="col-span-2"><span className={LBL}>Explanation</span><textarea className={INP} rows={2} value={amendmentDraft.explanation} onChange={e => setAmendmentDraft(d => ({...d, explanation:e.target.value}))}/></label>
+                <label className="col-span-2"><span className={LBL}>Overtime result</span><textarea className={INP} rows={2} value={amendmentDraft.overtime_results} onChange={e => setAmendmentDraft(d => ({...d, overtime_results:e.target.value}))}/></label>
+              </div>
+            )}
+            <label className="block"><span className={LBL}>Reason for amendment</span><textarea className={INP} rows={2} value={amendmentReason} onChange={e => setAmendmentReason(e.target.value)} placeholder="Required for the audit history"/></label>
+            <div className="flex justify-end gap-2"><button onClick={() => setShowAmendment(false)} className="px-4 py-2 text-xs font-semibold text-neutral-600">Close</button><button onClick={submitAmendment} disabled={savingAmendment} className="px-4 py-2 rounded-lg bg-blue-700 text-white text-xs font-bold disabled:opacity-60">Submit amendment</button></div>
+          </div>
+        )}
+
+        {req.status === 'amendment_pending' && pendingAmendment && (
+          <div className="mx-6 mb-4 p-4 border border-blue-200 bg-blue-50 rounded-lg">
+            <p className="text-xs font-bold text-blue-800 uppercase">Amendment awaiting Depot Manager</p>
+            <p className="text-xs text-blue-700 mt-1">Requested by {pendingAmendment.requester?.name || 'User'}: {pendingAmendment.reason}</p>
+            <div className="mt-3 divide-y divide-blue-100 border-y border-blue-100">
+              {Object.entries(pendingAmendment.proposed_data || {}).map(([field, value]) => <div key={field} className="grid grid-cols-3 gap-2 py-2 text-xs"><span className="font-semibold text-neutral-500">{field.replaceAll('_',' ')}</span><span className="text-neutral-500">{String(pendingAmendment.original_data?.[field] ?? '-')}</span><span className="font-semibold text-blue-800">{String(value ?? '-')}</span></div>)}
+            </div>
+          </div>
+        )}
+
         {/* Each slot reads from the same server-resolved signature source. */}
         {(
           <div className="px-6 pb-4 border-t border-neutral-100">
@@ -2597,6 +2692,26 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 <Ban className="w-4 h-4" />
                 <span className="sm:hidden">{req.status === 'approved' ? 'Request Cancellation' : 'Cancel'}</span>
               </button>
+            )}
+
+            {canRequestAmendment && (
+              <button onClick={() => setShowAmendment(true)}
+                className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-sm font-semibold">
+                <FileText className="w-4 h-4" /> Request Amendment
+              </button>
+            )}
+
+            {req.status === 'amendment_pending' && isDepotAdmin && (
+              <>
+                <button onClick={() => decideAmendment(false)} disabled={savingAmendment}
+                  className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-sm font-semibold">
+                  <XCircle className="w-4 h-4" /> Reject Amendment
+                </button>
+                <button onClick={() => decideAmendment(true)} disabled={savingAmendment}
+                  className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-white bg-blue-700 hover:bg-blue-800 rounded-xl text-sm font-semibold">
+                  <CheckCircle className="w-4 h-4" /> Approve Amendment
+                </button>
+              </>
             )}
 
             {req.status === 'cancellation_pending' && isDepotAdmin && (
@@ -2798,12 +2913,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     // disabled for wrong stages because they key off can_approve_* flags.
     (r.status === 'hr_approved' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r))) ||
     (r.status === 'cancellation_pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r)))
+    || (r.status === 'amendment_pending' && (isDepotAdmin || isHrApprover || isDirectManagerOf(r)))
   )
   const approvalStageFor = (request) => {
     if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'manager'
     if (request.status === 'pending' || request.status === 'manager_approved') return 'hr'
     if (request.status === 'hr_approved') return 'depot'
     if (request.status === 'cancellation_pending') return 'depot'
+    if (request.status === 'amendment_pending') return 'depot'
     return null
   }
   const approvalStages = [
@@ -2820,13 +2937,14 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   // role owns the current approval step.
   const mySubmittedRequests = typeFiltered.filter(request =>
     String(request.user_id || '') === String(user?.id || '')
-    && ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending'].includes(request.status)
+    && ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending', 'amendment_pending'].includes(request.status)
   )
   const waitingOnLabel = request => {
     if (request.status === 'pending' && !requestHasNoDirectManager(request)) return 'Waiting for Direct Manager'
     if (request.status === 'pending' || request.status === 'manager_approved') return 'Waiting for HR'
     if (request.status === 'hr_approved') return 'Waiting for Depot Manager'
     if (request.status === 'cancellation_pending') return 'Cancellation waiting for Depot Manager'
+    if (request.status === 'amendment_pending') return 'Amendment waiting for Depot Manager'
     return 'In progress'
   }
 
@@ -2860,7 +2978,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors">
           <Eye className="w-4 h-4" />
         </button>
-        {['approved', 'cancellation_pending'].includes(r.status) && (
+        {['approved', 'cancellation_pending', 'amendment_pending'].includes(r.status) && (
           <button
             onClick={() => downloadRequestWord(r)}
             className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Download Word">

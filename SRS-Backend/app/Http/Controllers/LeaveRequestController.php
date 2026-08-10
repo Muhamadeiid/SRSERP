@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestAmendment;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\LeaveDeductionService;
@@ -45,6 +46,7 @@ class LeaveRequestController extends Controller
             'hrApprover:id,name,role',
             'cancellationRequester:id,name',
             'cancellationRejecter:id,name',
+            'pendingAmendment.requester:id,name',
             'user:id,name',
             'employee:id,name,direct_manager_id,user_id,user_manager_id',
             'employee.directManager:id,name,position,user_id',
@@ -89,7 +91,7 @@ class LeaveRequestController extends Controller
         if ($request->filled('scope')) {
             if ($request->scope === 'active') {
                 $query->where(function ($q) {
-                    $q->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending'])
+                    $q->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending', 'amendment_pending'])
                       ->orWhere(function ($qq) {
                           $qq->where('type', 'lrf')
                             ->where('status', 'approved')
@@ -225,7 +227,7 @@ class LeaveRequestController extends Controller
             $end = $request->end_date ?? $request->start_date;
             $conflict = LeaveRequest::where('employee_id', $request->employee_id)
                 ->where('type', 'lrf')
-                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
+                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween('start_date', [$start, $end])
                         ->orWhereBetween('end_date', [$start, $end])
@@ -389,6 +391,9 @@ class LeaveRequestController extends Controller
             'hrApprover:id,name,e_signature,role',
             'cancellationRequester:id,name',
             'cancellationRejecter:id,name',
+            'pendingAmendment.requester:id,name',
+            'amendments.requester:id,name',
+            'amendments.reviewer:id,name',
             'user:id,name',
             'employee:id,name,e_signature,direct_manager_id,user_id,user_manager_id',
             'employee.user:id,name,e_signature',
@@ -727,7 +732,7 @@ class LeaveRequestController extends Controller
                 'message' => 'Only the staff account that submitted this request can withdraw it. Approvers must reject it instead.',
             ], 403);
         }
-        if (in_array($leaveRequest->status, ['cancelled', 'rejected', 'rescheduled', 'cancellation_pending'], true)) {
+        if (in_array($leaveRequest->status, ['cancelled', 'rejected', 'rescheduled', 'cancellation_pending', 'amendment_pending'], true)) {
             return response()->json(['success' => false, 'message' => 'Cannot cancel this request'], 422);
         }
 
@@ -855,6 +860,130 @@ class LeaveRequestController extends Controller
         ]);
     }
 
+    public function requestAmendment(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        $canRequest = (int) $leaveRequest->user_id === (int) $user->id
+            || $this->isDirectManager($leaveRequest, $user->id)
+            || in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
+            || $user->hasPermission('leaves.approve_hr');
+        abort_unless($canRequest, 403, 'You cannot request an amendment for this request.');
+
+        $validated = $request->validate(['reason' => 'required|string|max:2000']);
+        $changes = $this->validatedFinalAmendmentChanges($request, $leaveRequest);
+        if (empty($changes)) {
+            throw ValidationException::withMessages(['changes' => 'Change at least one request detail.']);
+        }
+
+        $amendment = DB::transaction(function () use ($leaveRequest, $user, $validated, $changes) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'approved') {
+                throw ValidationException::withMessages(['status' => 'Only a fully approved request can be amended.']);
+            }
+            if ($locked->amendments()->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['status' => 'An amendment is already awaiting approval.']);
+            }
+
+            $original = collect(array_keys($changes))->mapWithKeys(
+                fn ($field) => [$field => $this->serializableRequestValue($locked, $field)]
+            )->all();
+            $amendment = $locked->amendments()->create([
+                'requested_by' => $user->id,
+                'reason' => $validated['reason'],
+                'original_data' => $original,
+                'proposed_data' => $changes,
+                'status' => 'pending',
+            ]);
+            $locked->update(['status' => 'amendment_pending']);
+
+            return $amendment;
+        });
+
+        $label = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
+        Notification::notifyRole('depot_manager', $leaveRequest->type . '_amendment_requested', "{$label} Amendment Required", "{$user->name} requested changes to {$leaveRequest->tracking_no}.", $data, true);
+        Notification::notifyRole('admin', $leaveRequest->type . '_amendment_requested', "{$label} Amendment Required", "{$user->name} requested changes to {$leaveRequest->tracking_no}.", $data);
+
+        return response()->json(['success' => true, 'message' => 'Amendment sent for Depot Manager approval', 'data' => $amendment->load('requester:id,name')]);
+    }
+
+    public function approveAmendment(LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless(in_array($user->role, ['admin', 'depot_manager'], true), 403, 'Only Admin or Depot Manager can approve amendments.');
+
+        $leaveRequest = DB::transaction(function () use ($leaveRequest, $user) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'amendment_pending') {
+                throw ValidationException::withMessages(['status' => 'This request is not awaiting amendment approval.']);
+            }
+            $amendment = $locked->amendments()->where('status', 'pending')->lockForUpdate()->firstOrFail();
+            $changes = $amendment->proposed_data;
+
+            if ($locked->type === 'lrf' && $locked->balance_deducted_at && $locked->employee_id) {
+                $balance = LeaveBalance::where('employee_id', $locked->employee_id)->lockForUpdate()->first();
+                if ($balance) {
+                    if ($locked->paid !== false) {
+                        $balance->restore($locked->leave_type, (float) $locked->days);
+                    }
+                    $changes['available_balance'] = $balance->getEffectiveRemaining('annual');
+                    $changes['casual_available_balance'] = $balance->getEffectiveRemaining('casual');
+                    if (($changes['paid'] ?? $locked->paid) !== false && !$balance->deduct($changes['leave_type'], (float) $changes['days'])) {
+                        throw ValidationException::withMessages(['balance' => 'The employee does not have enough balance for the amended request.']);
+                    }
+                    $changes['balance_deducted_at'] = ($changes['paid'] ?? $locked->paid) !== false ? now() : null;
+                }
+            } elseif ($locked->type === 'lrf' && $locked->employee_id) {
+                $available = $this->availableLeaveBalances((int) $locked->employee_id, (int) $locked->id);
+                $changes['available_balance'] = $available['annual'];
+                $changes['casual_available_balance'] = $available['casual'];
+            }
+
+            $locked->update(array_merge($changes, ['status' => 'approved']));
+            $amendment->update(['status' => 'approved', 'reviewed_by' => $user->id, 'reviewed_at' => now()]);
+            return $locked;
+        });
+
+        $this->notifyAmendmentDecision($leaveRequest, true);
+        return response()->json(['success' => true, 'message' => 'Amendment approved', 'data' => $leaveRequest->fresh()]);
+    }
+
+    public function rejectAmendment(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless(in_array($user->role, ['admin', 'depot_manager'], true), 403, 'Only Admin or Depot Manager can reject amendments.');
+        $validated = $request->validate(['reason' => 'required|string|max:2000']);
+
+        $leaveRequest = DB::transaction(function () use ($leaveRequest, $user, $validated) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'amendment_pending') {
+                throw ValidationException::withMessages(['status' => 'This request is not awaiting amendment approval.']);
+            }
+            $amendment = $locked->amendments()->where('status', 'pending')->lockForUpdate()->firstOrFail();
+            $amendment->update([
+                'status' => 'rejected', 'reviewed_by' => $user->id,
+                'reviewed_at' => now(), 'rejection_reason' => $validated['reason'],
+            ]);
+            $locked->update(['status' => 'approved']);
+            return $locked;
+        });
+
+        $this->notifyAmendmentDecision($leaveRequest, false);
+        return response()->json(['success' => true, 'message' => 'Amendment rejected', 'data' => $leaveRequest->fresh()]);
+    }
+
+    private function notifyAmendmentDecision(LeaveRequest $leaveRequest, bool $approved): void
+    {
+        $label = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        $event = $leaveRequest->type . ($approved ? '_amendment_approved' : '_amendment_rejected');
+        $title = "{$label} Amendment " . ($approved ? 'Approved' : 'Rejected');
+        $body = "Changes to {$leaveRequest->tracking_no} were " . ($approved ? 'approved.' : 'rejected.');
+        $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
+        if ($leaveRequest->user_id) Notification::notifyUser($leaveRequest->user_id, $event, $title, $body, $data, true);
+        Notification::notifyRole('hr', $event, $title, $body, $data);
+        Notification::notifyRole('admin', $event, $title, $body, $data);
+    }
+
     private function notifyCancellationDecision(LeaveRequest $leaveRequest, bool $approved): void
     {
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
@@ -912,7 +1041,7 @@ class LeaveRequestController extends Controller
         $this->deductions->processDue();
 
         $requests = LeaveRequest::where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->select('id', 'employee_name', 'leave_type', 'start_date', 'end_date', 'days', 'department_label', 'approved_at', 'balance_deducted_at')
             ->orderBy('start_date')
             ->get();
@@ -1095,6 +1224,10 @@ class LeaveRequestController extends Controller
                 'can_approve_cancellation',
                 $isDepotAdmin && $request->status === 'cancellation_pending'
             );
+            $request->setAttribute(
+                'can_approve_amendment',
+                $isDepotAdmin && $request->status === 'amendment_pending'
+            );
         }
     }
 
@@ -1127,7 +1260,7 @@ class LeaveRequestController extends Controller
         $ids = LeaveRequest::query()
             ->where('tracking_no', 'like', $prefix . '%')
             ->where(function ($query) {
-                $query->whereIn('status', ['approved', 'cancellation_pending'])
+                $query->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
                     ->orWhere(function ($cancelled) {
                         $cancelled->where('status', 'cancelled')->whereNotNull('approved_at');
                     });
@@ -1168,7 +1301,7 @@ class LeaveRequestController extends Controller
             ->where('type', 'lrf')
             ->where('employee_id', $employeeId)
             ->whereNull('balance_deducted_at')
-            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
+            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
             ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
             ->where('days', '>', 0)
             ->where(function ($q) {
@@ -1215,7 +1348,7 @@ class LeaveRequestController extends Controller
             return true;
         }
 
-        return in_array($leaveRequest->status, ['approved', 'cancellation_pending'], true)
+        return in_array($leaveRequest->status, ['approved', 'cancellation_pending', 'amendment_pending'], true)
             && (int) $leaveRequest->user_id === (int) $user->id;
     }
 
@@ -1369,6 +1502,74 @@ class LeaveRequestController extends Controller
             'paid' => $paid,
             'days' => $days,
         ]);
+    }
+
+    private function validatedFinalAmendmentChanges(Request $request, LeaveRequest $leaveRequest): array
+    {
+        if ($leaveRequest->type === 'otr') {
+            $data = $request->validate([
+                'ot_date' => 'required|date',
+                'start_time' => 'required|date_format:H:i',
+                'end_time' => 'required|date_format:H:i',
+                'explanation' => 'required|string|max:2000',
+                'overtime_results' => 'nullable|string|max:2000',
+            ]);
+            $hours = $this->overtimeHours($data['ot_date'], $data['start_time'], $data['end_time']);
+            if ($hours === null) {
+                throw ValidationException::withMessages(['end_time' => 'Overtime end time must be after start time and within 24 hours.']);
+            }
+            $data['hours'] = $hours;
+            return $this->onlyChangedRequestValues($leaveRequest, $data);
+        }
+
+        $data = $request->validate([
+            'leave_type' => 'required|in:annual,casual,sick,early',
+            'paid' => 'required|boolean',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'early_from' => 'nullable|required_if:leave_type,early|date_format:H:i',
+            'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i',
+            'purpose' => 'nullable|string|max:1000',
+        ]);
+        if ($data['leave_type'] === 'early') {
+            $data['days'] = $this->earlyLeaveDays($data['early_from'], $data['early_to']);
+            if ($data['days'] === null) {
+                throw ValidationException::withMessages(['early_to' => 'Early Leave must be between 1 minute and 6 hours.']);
+            }
+        } else {
+            $data['days'] = \Carbon\Carbon::parse($data['start_date'])->diffInDays(\Carbon\Carbon::parse($data['end_date'])) + 1;
+            $data['early_from'] = null;
+            $data['early_to'] = null;
+        }
+
+        if ($data['paid'] && !$leaveRequest->balance_deducted_at && $leaveRequest->employee_id && !$this->hasAvailableLeaveBalance(
+            (int) $leaveRequest->employee_id,
+            $data['leave_type'],
+            (float) $data['days'],
+            (int) $leaveRequest->id
+        )) {
+            throw ValidationException::withMessages(['leave_type' => 'The employee does not have enough available leave balance for these changes.']);
+        }
+
+        return $this->onlyChangedRequestValues($leaveRequest, $data);
+    }
+
+    private function onlyChangedRequestValues(LeaveRequest $leaveRequest, array $values): array
+    {
+        return collect($values)->filter(function ($value, $field) use ($leaveRequest) {
+            return (string) $this->serializableRequestValue($leaveRequest, $field) !== (string) $value;
+        })->all();
+    }
+
+    private function serializableRequestValue(LeaveRequest $leaveRequest, string $field): mixed
+    {
+        $value = $leaveRequest->{$field};
+        if ($value instanceof \DateTimeInterface) return $value->format('Y-m-d');
+        if ($field === 'paid') return (bool) $value;
+        if (in_array($field, ['early_from', 'early_to', 'start_time', 'end_time'], true) && $value) {
+            return substr((string) $value, 0, 5);
+        }
+        return $value;
     }
 
     private function earlyLeaveDays(?string $from, ?string $to): ?float

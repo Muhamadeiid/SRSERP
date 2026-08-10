@@ -122,7 +122,7 @@ class AttendanceController extends Controller
 
             $leaveQuery = LeaveRequest::query()
                 ->where('type', 'lrf')
-                ->whereIn('status', ['approved', 'cancellation_pending'])
+                ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
                 ->whereNotNull('employee_id')
                 ->where(function ($q) use ($start, $end) {
                     // any overlap with [start, end]
@@ -155,7 +155,7 @@ class AttendanceController extends Controller
                 ->where('type', 'otr')
                 // Attendance shows that an OTR paper exists. Payroll queries
                 // elsewhere in this controller still require final approval.
-                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
+                ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
                 ->whereNotNull('employee_id')
                 ->whereDate('ot_date', '>=', $start)
                 ->whereDate('ot_date', '<=', $end);
@@ -407,7 +407,7 @@ class AttendanceController extends Controller
 
         $leaveIds = LeaveRequest::query()
             ->where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereIn('employee_id', $employees->pluck('id'))
             ->whereDate('start_date', '<=', $date)
             ->whereDate('end_date', '>=', $date)
@@ -1053,7 +1053,7 @@ class AttendanceController extends Controller
         ]);
         $approvedLeaves = LeaveRequest::where('employee_id', $employee->id)
             ->where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereDate('start_date', '<=', $endDate)
             ->whereDate('end_date', '>=', $startDate)
             ->get();
@@ -1424,7 +1424,7 @@ class AttendanceController extends Controller
             ->get();
 
         $approvedOTRs = LeaveRequest::where('type', 'otr')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereDate('ot_date', '>=', $startDate)
             ->whereDate('ot_date', '<=', $endDate)
             ->get();
@@ -1468,7 +1468,7 @@ class AttendanceController extends Controller
             ->get();
 
         $approvedOTRs = LeaveRequest::where('type', 'otr')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereDate('ot_date', '>=', $startDate)
             ->whereDate('ot_date', '<=', $endDate)
             ->get();
@@ -1565,7 +1565,7 @@ class AttendanceController extends Controller
 
         $leaves = LeaveRequest::query()
             ->where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereIn('employee_id', $employeeIds)
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('start_date', [$startDate, $endDate])
@@ -1626,7 +1626,7 @@ class AttendanceController extends Controller
 
         if ($approvedOTRs === null) {
             $approvedOTRs = LeaveRequest::where('type', 'otr')
-                ->whereIn('status', ['approved', 'cancellation_pending'])
+                ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
                 ->where('employee_id', $employee->id)
                 ->whereDate('ot_date', '>=', $startDate)
                 ->whereDate('ot_date', '<=', $endDate)
@@ -1661,7 +1661,7 @@ class AttendanceController extends Controller
         }
         if ($approvedLeaves === null) {
             $approvedLeaves = LeaveRequest::where('type', 'lrf')
-                ->whereIn('status', ['approved', 'cancellation_pending'])
+                ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
                 ->where('employee_id', $employee->id)
                 ->where(function($q) use ($startDate, $endDate) {
                     $q->whereBetween('start_date', [$startDate, $endDate])

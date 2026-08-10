@@ -65,4 +65,6 @@ class LeaveRequest extends Model
     public function cancellationRejecter(){ return $this->belongsTo(User::class, 'cancellation_rejected_by'); }
     public function managerApprover(){ return $this->belongsTo(User::class, 'manager_approved_by'); }
     public function rescheduler()    { return $this->belongsTo(User::class, 'rescheduled_by'); }
+    public function amendments()     { return $this->hasMany(LeaveRequestAmendment::class)->latest(); }
+    public function pendingAmendment(){ return $this->hasOne(LeaveRequestAmendment::class)->where('status', 'pending')->latestOfMany(); }
 }

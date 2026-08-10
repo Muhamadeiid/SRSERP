@@ -12,7 +12,7 @@ class LeaveDeductionService
     {
         $query = LeaveRequest::query()
             ->where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
             ->whereNull('balance_deducted_at')
             ->whereNotNull('employee_id')
             ->where('days', '>', 0)

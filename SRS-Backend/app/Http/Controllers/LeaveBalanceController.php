@@ -28,7 +28,7 @@ class LeaveBalanceController extends Controller
             ->where('type', 'lrf')
             ->where('employee_id', $employeeId)
             ->whereNull('balance_deducted_at')
-            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending'])
+            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
             ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
             ->where('days', '>', 0)
             ->where(function ($q) {
