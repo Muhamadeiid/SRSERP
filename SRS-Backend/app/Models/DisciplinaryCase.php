@@ -20,6 +20,7 @@ class DisciplinaryCase extends Model
         'description',
         'employee_statement',
         'action_taken',
+        'deduction_hours',
         'action_date',
         'status',
         'hr_notes',
@@ -32,6 +33,7 @@ class DisciplinaryCase extends Model
         'incident_date' => 'date',
         'action_date' => 'date',
         'approved_at' => 'datetime',
+        'deduction_hours' => 'decimal:2',
     ];
 
     protected $appends = ['violation_label', 'action_label'];

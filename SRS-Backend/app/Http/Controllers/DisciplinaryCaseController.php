@@ -72,6 +72,9 @@ class DisciplinaryCaseController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
+        if (($data['action_taken'] ?? null) !== 'deduction') {
+            $data['deduction_hours'] = null;
+        }
         $data['created_by'] = auth()->id();
         $data['occurrence_no'] = $this->nextOccurrence($data['employee_id'], $data['violation_type']);
 
@@ -107,6 +110,9 @@ class DisciplinaryCaseController extends Controller
 
         $newEmployeeId = $data['employee_id'] ?? $disciplinaryCase->employee_id;
         $newViolation = $data['violation_type'] ?? $disciplinaryCase->violation_type;
+        if (array_key_exists('action_taken', $data) && $data['action_taken'] !== 'deduction') {
+            $data['deduction_hours'] = null;
+        }
         if ($newEmployeeId !== $disciplinaryCase->employee_id || $newViolation !== $disciplinaryCase->violation_type) {
             $data['occurrence_no'] = $this->nextOccurrence($newEmployeeId, $newViolation, $disciplinaryCase->id);
         }
@@ -167,6 +173,7 @@ class DisciplinaryCaseController extends Controller
             'description' => [$required, 'string', 'max:5000'],
             'employee_statement' => ['nullable', 'string', 'max:5000'],
             'action_taken' => [$required, Rule::in($this->actions)],
+            'deduction_hours' => ['nullable', 'numeric', 'min:0', 'max:240'],
             'action_date' => ['nullable', 'date'],
             'status' => ['nullable', Rule::in($this->statuses)],
             'hr_notes' => ['nullable', 'string', 'max:5000'],

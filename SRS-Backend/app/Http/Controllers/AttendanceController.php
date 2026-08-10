@@ -1475,7 +1475,8 @@ class AttendanceController extends Controller
                 $endDate,
                 $approvedOTRs,
                 $salaryContext['holidays'],
-                $salaryContext['leaves']->get($employee->id, collect())
+                $salaryContext['leaves']->get($employee->id, collect()),
+                $salaryContext['disciplinary']->get($employee->id, collect())
             );
             $rows[] = $row;
         }
@@ -1518,7 +1519,8 @@ class AttendanceController extends Controller
                 $endDate,
                 $approvedOTRs,
                 $salaryContext['holidays'],
-                $salaryContext['leaves']->get($employee->id, collect())
+                $salaryContext['leaves']->get($employee->id, collect()),
+                $salaryContext['disciplinary']->get($employee->id, collect())
             );
         }
 
@@ -1612,6 +1614,20 @@ class AttendanceController extends Controller
             ->get()
             ->groupBy('employee_id');
 
+        $disciplinary = \App\Models\DisciplinaryCase::query()
+            ->where('status', 'approved')
+            ->where('action_taken', 'deduction')
+            ->whereIn('employee_id', $employeeIds)
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('action_date', [$startDate, $endDate])
+                    ->orWhere(function ($withoutActionDate) use ($startDate, $endDate) {
+                        $withoutActionDate->whereNull('action_date')
+                            ->whereBetween('incident_date', [$startDate, $endDate]);
+                    });
+            })
+            ->get()
+            ->groupBy('employee_id');
+
         $holidayRecords = \App\Models\PublicHoliday::query()
             ->whereDate('date', '<=', $endDate)
             ->where(function ($query) use ($startDate) {
@@ -1638,11 +1654,12 @@ class AttendanceController extends Controller
         return [
             'attendances' => $attendances,
             'leaves' => $leaves,
+            'disciplinary' => $disciplinary,
             'holidays' => array_values(array_unique($holidays)),
         ];
     }
 
-    private function calcSalaryRow(Employee $employee, $attendances, string $startDate, string $endDate, $approvedOTRs = null, $holidays = null, $approvedLeaves = null): array
+    private function calcSalaryRow(Employee $employee, $attendances, string $startDate, string $endDate, $approvedOTRs = null, $holidays = null, $approvedLeaves = null, $disciplinaryCases = null): array
     {
         $timeToMin = function($t): ?int {
             if (!$t) return null;
@@ -1704,6 +1721,20 @@ class AttendanceController extends Controller
                           $qq->where('start_date', '<=', $startDate)
                              ->where('end_date',   '>=', $endDate);
                       });
+                })
+                ->get();
+        }
+        if ($disciplinaryCases === null) {
+            $disciplinaryCases = \App\Models\DisciplinaryCase::query()
+                ->where('employee_id', $employee->id)
+                ->where('status', 'approved')
+                ->where('action_taken', 'deduction')
+                ->where(function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('action_date', [$startDate, $endDate])
+                        ->orWhere(function ($withoutActionDate) use ($startDate, $endDate) {
+                            $withoutActionDate->whereNull('action_date')
+                                ->whereBetween('incident_date', [$startDate, $endDate]);
+                        });
                 })
                 ->get();
         }
@@ -1775,11 +1806,13 @@ class AttendanceController extends Controller
         $absenceHours = round(collect($absenceDeductions)->sum('deduction_hours'), 2);
         $unpaidHours = $unpaidDays * $dailyHours;
         $lateHours = $deductibleLateMinutes / 60;
-        $deductionHrs = round($absenceHours + $unpaidHours + $lateHours, 2);
+        $disciplinaryHours = round(collect($disciplinaryCases)->sum('deduction_hours'), 2);
+        $deductionHrs = round($absenceHours + $unpaidHours + $lateHours + $disciplinaryHours, 2);
         $remarks = [];
         if ($absenceHours > 0) $remarks[] = "Absence & penalty: {$absenceHours}h";
         if ($unpaidHours > 0) $remarks[] = "Unpaid leave: {$unpaidHours}h";
         if ($deductibleLateMinutes > 0) $remarks[] = "Late: {$deductibleLateMinutes}m";
+        if ($disciplinaryHours > 0) $remarks[] = "Disciplinary: {$disciplinaryHours}h";
 
         return [
             'id'              => $employee->id,

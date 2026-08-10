@@ -52,6 +52,7 @@ const emptyForm = (violationType = 'attendance_delay') => ({
   description: '',
   employee_statement: '',
   action_taken: 'written_warning',
+  deduction_hours: '',
   action_date: new Date().toISOString().slice(0, 10),
   status: 'approved',
   hr_notes: '',
@@ -90,6 +91,7 @@ function downloadWord(caseItem, violations) {
     ['Violation Type', labelFrom(violations, caseItem.violation_type)],
     ['Occurrence No.', caseItem.occurrence_no],
     ['Action Taken', actionLabel(caseItem.action_taken)],
+    ['Deduction Hours', caseItem.action_taken === 'deduction' ? caseItem.deduction_hours : '-'],
     ['Action Date', fmtDate(caseItem.action_date)],
     ['Status', caseItem.status],
     ['Reported By', caseItem.reported_by],
@@ -265,6 +267,15 @@ function CaseForm({ initial, violations, onClose, onSave, saving, error }) {
               </select>
             </div>
           </div>
+
+          {form.action_taken === 'deduction' && (
+            <div className="rounded-xl border border-red-100 bg-red-50/40 p-4">
+              <label className="block text-xs font-bold text-red-700 uppercase mb-1">Salary Deduction (Hours)</label>
+              <input type="number" min="0" max="240" step="0.25" required value={form.deduction_hours ?? ''} onChange={e => set('deduction_hours', e.target.value)}
+                placeholder="e.g. 8" className="w-full max-w-xs px-3 py-2 text-sm border border-red-200 rounded-xl outline-none focus:border-red-500 bg-white" />
+              <p className="mt-1 text-xs text-red-600">Included automatically in Internal Salary after this case is approved.</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -462,7 +473,7 @@ export default function DisciplinaryTab() {
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-neutral-800 text-white">
-                  {['Employee', 'Incident', 'Violation', 'Occurrence', 'Action', 'Status', 'Warnings', ''].map(h => (
+                  {['Employee', 'Incident', 'Violation', 'Occurrence', 'Action', 'Deduction', 'Status', 'Warnings', ''].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left font-bold whitespace-nowrap border-r border-neutral-700 last:border-0">{h}</th>
                   ))}
                 </tr>
@@ -485,6 +496,7 @@ export default function DisciplinaryTab() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-neutral-600">{actionLabel(item.action_taken)}</td>
+                    <td className="px-3 py-2.5 text-center font-semibold text-red-600">{item.action_taken === 'deduction' && item.deduction_hours ? `${item.deduction_hours}h` : '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex px-2 py-0.5 rounded-full border text-[10px] font-bold ${statusCls(item.status)}`}>
                         {item.status}
