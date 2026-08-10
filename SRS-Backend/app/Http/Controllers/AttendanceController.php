@@ -1412,16 +1412,20 @@ class AttendanceController extends Controller
             ->whereDate('ot_date', '<=', $endDate)
             ->get();
 
+        $salaryContext = $this->loadSalaryContext($employees, $startDate, $endDate);
+
         $rows = [];
 
         foreach ($employees as $employee) {
-            $attendances = $this->attendanceService->getAttendance([
-                'employee_id' => $employee->id,
-                'start_date'  => $startDate,
-                'end_date'    => $endDate,
-            ]);
-
-            $row = $this->calcSalaryRow($employee, $attendances, $startDate, $endDate, $approvedOTRs);
+            $row = $this->calcSalaryRow(
+                $employee,
+                $salaryContext['attendances']->get($employee->id, collect()),
+                $startDate,
+                $endDate,
+                $approvedOTRs,
+                $salaryContext['holidays'],
+                $salaryContext['leaves']->get($employee->id, collect())
+            );
             $rows[] = $row;
         }
 
@@ -1452,14 +1456,19 @@ class AttendanceController extends Controller
             ->whereDate('ot_date', '<=', $endDate)
             ->get();
 
+        $salaryContext = $this->loadSalaryContext($employees, $startDate, $endDate);
+
         $rows = [];
         foreach ($employees as $employee) {
-            $attendances = $this->attendanceService->getAttendance([
-                'employee_id' => $employee->id,
-                'start_date'  => $startDate,
-                'end_date'    => $endDate,
-            ]);
-            $rows[] = $this->calcSalaryRow($employee, $attendances, $startDate, $endDate, $approvedOTRs);
+            $rows[] = $this->calcSalaryRow(
+                $employee,
+                $salaryContext['attendances']->get($employee->id, collect()),
+                $startDate,
+                $endDate,
+                $approvedOTRs,
+                $salaryContext['holidays'],
+                $salaryContext['leaves']->get($employee->id, collect())
+            );
         }
 
         $spreadsheet = new Spreadsheet();
@@ -1524,6 +1533,62 @@ class AttendanceController extends Controller
             $filename,
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
         );
+    }
+
+    private function loadSalaryContext($employees, string $startDate, string $endDate): array
+    {
+        $employeeIds = $employees->pluck('id');
+
+        $attendances = \App\Models\Attendance::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get()
+            ->groupBy('employee_id');
+
+        $leaves = LeaveRequest::query()
+            ->where('type', 'lrf')
+            ->whereIn('status', ['approved', 'cancellation_pending'])
+            ->whereIn('employee_id', $employeeIds)
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('start_date', [$startDate, $endDate])
+                    ->orWhereBetween('end_date', [$startDate, $endDate])
+                    ->orWhere(function ($overlap) use ($startDate, $endDate) {
+                        $overlap->where('start_date', '<=', $startDate)
+                            ->where('end_date', '>=', $endDate);
+                    });
+            })
+            ->get()
+            ->groupBy('employee_id');
+
+        $holidayRecords = \App\Models\PublicHoliday::query()
+            ->whereDate('date', '<=', $endDate)
+            ->where(function ($query) use ($startDate) {
+                $query->whereDate('end_date', '>=', $startDate)
+                    ->orWhere(function ($singleDay) use ($startDate) {
+                        $singleDay->whereNull('end_date')->whereDate('date', '>=', $startDate);
+                    });
+            })
+            ->get(['date', 'end_date']);
+
+        $holidays = [];
+        foreach ($holidayRecords as $holiday) {
+            $cursor = $holiday->date->copy();
+            $last = ($holiday->end_date ?? $holiday->date)->copy();
+            while ($cursor->lte($last)) {
+                $date = $cursor->toDateString();
+                if ($date >= $startDate && $date <= $endDate) {
+                    $holidays[] = $date;
+                }
+                $cursor->addDay();
+            }
+        }
+
+        return [
+            'attendances' => $attendances,
+            'leaves' => $leaves,
+            'holidays' => array_values(array_unique($holidays)),
+        ];
     }
 
     private function calcSalaryRow(Employee $employee, $attendances, string $startDate, string $endDate, $approvedOTRs = null, $holidays = null, $approvedLeaves = null): array
