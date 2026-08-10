@@ -1531,12 +1531,14 @@ export default function AttendanceTab() {
                           // Early-leave permission note
                           const permWindow = earlyPermissionWindow(r.leave)
                           const noteParts = []
-                          if (rec?.notes) noteParts.push(rec.notes)
+                          const rawNotes = String(rec?.notes || '').trim()
+                          const legacyPermissionNote = isEarly && /^(?:إذن|اذن|permission)\s*\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}$/i.test(rawNotes)
+                          if (rawNotes && !legacyPermissionNote) noteParts.push(rawNotes)
                           if (permWindow) {
-                            // Strip seconds from time values ("08:00:00" → "08:00") and force LTR direction with LRM
-                            const from = String(permWindow.from).slice(0, 5)
-                            const to   = String(permWindow.to).slice(0, 5)
-                            noteParts.push(`إذن ‎${from}–${to}`)
+                            // Strip seconds from time values ("08:00:00" → "08:00").
+                            const fraction = Number(r.leave?.days || 0)
+                            const formattedFraction = fraction.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+                            noteParts.push(`ELR ${formattedFraction}`)
                           }
                           if (isHoliday) noteParts.push(r.holiday.name_en || r.holiday.name_ar || 'Holiday')
                           const noteText = noteParts.join(' · ')

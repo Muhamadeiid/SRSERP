@@ -1340,6 +1340,9 @@ class AttendanceController extends Controller
                 : null;
             $notes = trim((string) ($rec?->notes ?? ''));
             if ($earlyLeave) {
+                if (preg_match('/^(?:إذن|اذن|permission)\s*\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}$/iu', $notes)) {
+                    $notes = '';
+                }
                 $fraction = rtrim(rtrim(number_format((float) $earlyLeave->days, 2, '.', ''), '0'), '.');
                 $elrNote = 'ELR ' . $fraction;
                 $notes = $notes === '' ? $elrNote : $notes . ' | ' . $elrNote;
