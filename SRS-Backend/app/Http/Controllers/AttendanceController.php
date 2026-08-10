@@ -117,6 +117,16 @@ class AttendanceController extends Controller
 
         $attendances = $this->attendanceService->getAttendance($filters);
 
+        // Never surface attendance records before an employee's starting date.
+        // This also protects historical views from any legacy/manual rows that
+        // were saved before the employee was added to the workforce.
+        $attendances = $attendances
+            ->filter(function ($attendance) {
+                $hiringDate = $attendance->employee?->hiring_date;
+                return !$hiringDate || $attendance->date->gte($hiringDate->copy()->startOfDay());
+            })
+            ->values();
+
         // ── Pull approved leaves overlapping the same date range ──
         $rangeStart = $filters['start_date'] ?? $filters['date'] ?? null;
         $rangeEnd   = $filters['end_date']   ?? $filters['date'] ?? null;

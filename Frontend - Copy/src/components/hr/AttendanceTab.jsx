@@ -233,6 +233,13 @@ function buildRows(startDate, endDate, records, employee, leaves = [], otrs = []
     const y   = cur.getFullYear(), m = cur.getMonth()+1, d = cur.getDate()
     const dow = cur.getDay()
     const dateStr   = `${y}-${pad(m)}-${pad(d)}`
+    const hiringDate = employee?.hiring_date ? String(employee.hiring_date).slice(0, 10) : ''
+    // No attendance row exists before the employee actually joined. An empty
+    // hiring date intentionally keeps the person visible for all dates.
+    if (hiringDate && dateStr < hiringDate) {
+      cur.setDate(cur.getDate() + 1)
+      continue
+    }
     const isDayOff  = !isWorkingDay(employee, new Date(cur), policy)
     const record = records.find(r => r.date?.slice(0,10) === dateStr) ?? null
     rows.push({
