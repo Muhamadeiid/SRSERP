@@ -20,6 +20,9 @@ class LeaveDeductionService
             ->where(function ($q) {
                 $q->where('paid', true)->orWhereNull('paid');
             })
+            ->where(function ($q) {
+                $q->where('company_paid', false)->orWhereNull('company_paid');
+            })
             ->whereDate('end_date', '<', Carbon::today());
 
         if ($employeeId) {

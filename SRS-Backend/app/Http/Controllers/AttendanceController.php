@@ -1361,6 +1361,7 @@ class AttendanceController extends Controller
                 return $from && $from <= $dateKey && $to >= $dateKey;
             });
             $fullDayLeave = $dayLeaves->first(fn($leave) => in_array($leave->leave_type, ['annual', 'casual', 'sick'], true));
+            $companyPaidLeave = $dayLeaves->first(fn($leave) => (bool) $leave->company_paid);
             $earlyLeave = $dayLeaves->first(fn($leave) => $leave->leave_type === 'early');
 
             $otStartStr = $otEndStr = '';
@@ -1408,7 +1409,11 @@ class AttendanceController extends Controller
             $leaveLabel = $fullDayLeave
                 ? ['annual' => 'Annual', 'casual' => 'Casual', 'sick' => 'Sick'][$fullDayLeave->leave_type]
                 : null;
-            $notes = trim((string) ($rec?->notes ?? ''));
+            // Company-paid leave is deliberately styled like a scheduled day
+            // off and its approved purpose is always visible in Notes.
+            $notes = $companyPaidLeave
+                ? trim((string) $companyPaidLeave->purpose)
+                : trim((string) ($rec?->notes ?? ''));
             if ($earlyLeave) {
                 if (preg_match('/^(?:إذن|اذن|permission)\s*\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}$/iu', $notes)) {
                     $notes = '';
@@ -1442,13 +1447,14 @@ class AttendanceController extends Controller
                 $sheet->setCellValue("{$col}{$row}", $val);
             }
 
+            $companyPaidDay = (bool) $companyPaidLeave;
             $bg = $dr['absence']
                 ? $C_ABSENT
-                : ($off ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
+                : (($off || $companyPaidDay) ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
 
             $sheet->getStyle("{$firstCol}{$row}:{$lastCol}{$row}")->applyFromArray([
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $bg]],
-                'font'      => ['name' => 'Arial', 'size' => 8, 'color' => ['rgb' => $off ? 'AAAAAA' : '000000']],
+                'font'      => ['name' => 'Arial', 'size' => 8, 'color' => ['rgb' => ($off || $companyPaidDay) ? 'AAAAAA' : '000000']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => $thin],
             ]);

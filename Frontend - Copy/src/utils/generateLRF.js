@@ -321,7 +321,7 @@ export async function generateLRF(d, { download = true } = {}) {
         width: LBL_W,
         rowspan: 2,
       }),
-      cell([para(d.leave_type === 'annual' ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
+      cell([para((d.company_paid || d.leave_type === 'annual') ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
       cell([para('Annual Leave', { size: 18 })], { width: TXT_W }),
       cell([para(d.leave_type === 'casual' ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
       cell([para('Casual Leave', { size: 18 })], { width: TXT_W }),
@@ -346,9 +346,9 @@ export async function generateLRF(d, { download = true } = {}) {
   const paidRow = new TableRow({
     children: [
       cell(labelPara('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر'), { width: LBL_W }),
-      cell([para(d.paid === true ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
+      cell([para((d.company_paid || d.paid === true) ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
       cell([para('Paid', { size: 18 })], { colspan: 3 }),
-      cell([para(d.paid === false ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
+      cell([para((!d.company_paid && d.paid === false) ? '☒' : '☐', { size: 22, align: AlignmentType.CENTER })], { width: CHK_W }),
       cell([para('Unpaid', { size: 18 })], { colspan: 3 }),
     ],
   })

@@ -204,6 +204,8 @@ class LeaveRequestController extends Controller
             'employee_id' => 'nullable|exists:employees,id',
             'leave_type' => 'required_if:type,lrf|nullable|in:annual,casual,sick,early',
             'paid' => 'nullable|boolean',
+            'company_paid' => 'nullable|boolean',
+            'company_paid_purpose' => 'nullable|in:business_trip,marriage,exam,paternity,other',
             'available_balance' => 'nullable|numeric|min:0',
             'request_date' => 'nullable|date',
             'start_date' => 'required_if:type,lrf|nullable|date',
@@ -247,6 +249,15 @@ class LeaveRequestController extends Controller
         }
 
         $data = $v->validated();
+        $data['company_paid'] = (bool) ($data['company_paid'] ?? false);
+        if ($data['company_paid']) {
+            $this->validateCompanyPaidPurpose($data);
+            // The official Word form has only Paid/Unpaid. Company-paid is
+            // represented as Paid there, while this flag protects the balance.
+            $data['paid'] = true;
+        } else {
+            $data['company_paid_purpose'] = null;
+        }
         unset($data['medical_attachment']);
         if ($data['type'] === 'lrf' && ($data['leave_type'] ?? null) === 'early') {
             $earlyDays = $this->earlyLeaveDays($data['early_from'] ?? null, $data['early_to'] ?? null);
@@ -303,6 +314,7 @@ class LeaveRequestController extends Controller
             $data['type'] === 'lrf'
             && $employee
             && ($data['paid'] ?? true)
+            && !$data['company_paid']
             && in_array($data['leave_type'] ?? null, ['annual', 'casual', 'sick', 'early'], true)
             && (float) ($data['days'] ?? 0) > 0
             && !$this->hasAvailableLeaveBalance($employee->id, $data['leave_type'], (float) $data['days'])
@@ -316,6 +328,7 @@ class LeaveRequestController extends Controller
             $data['type'] === 'lrf'
             && $employee
             && ($data['paid'] ?? true)
+            && !$data['company_paid']
             && in_array($data['leave_type'] ?? null, ['annual', 'casual', 'sick', 'early'], true)
         ) {
             $available = $this->availableLeaveBalances($employee->id);
@@ -813,6 +826,7 @@ class LeaveRequestController extends Controller
                 && $locked->balance_deducted_at
                 && $locked->employee_id
                 && (float) $locked->days > 0
+                && !$locked->company_paid
                 && in_array($locked->leave_type, ['annual', 'casual', 'sick', 'early'], true)
             ) {
                 $balance = LeaveBalance::where('employee_id', $locked->employee_id)->lockForUpdate()->first();
@@ -931,15 +945,16 @@ class LeaveRequestController extends Controller
             if ($locked->type === 'lrf' && $locked->balance_deducted_at && $locked->employee_id) {
                 $balance = LeaveBalance::where('employee_id', $locked->employee_id)->lockForUpdate()->first();
                 if ($balance) {
-                    if ($locked->paid !== false) {
+                    if ($locked->paid !== false && !$locked->company_paid) {
                         $balance->restore($locked->leave_type, (float) $locked->days);
                     }
                     $changes['available_balance'] = $balance->getEffectiveRemaining('annual');
                     $changes['casual_available_balance'] = $balance->getEffectiveRemaining('casual');
-                    if (($changes['paid'] ?? $locked->paid) !== false && !$balance->deduct($changes['leave_type'], (float) $changes['days'])) {
+                    $companyPaid = (bool) ($changes['company_paid'] ?? $locked->company_paid);
+                    if (!$companyPaid && ($changes['paid'] ?? $locked->paid) !== false && !$balance->deduct($changes['leave_type'], (float) $changes['days'])) {
                         throw ValidationException::withMessages(['balance' => 'The employee does not have enough balance for the amended request.']);
                     }
-                    $changes['balance_deducted_at'] = ($changes['paid'] ?? $locked->paid) !== false ? now() : null;
+                    $changes['balance_deducted_at'] = (!$companyPaid && ($changes['paid'] ?? $locked->paid) !== false) ? now() : null;
                 }
             } elseif ($locked->type === 'lrf' && $locked->employee_id) {
                 $available = $this->availableLeaveBalances((int) $locked->employee_id, (int) $locked->id);
@@ -1309,6 +1324,9 @@ class LeaveRequestController extends Controller
             ->where('type', 'lrf')
             ->where('employee_id', $employeeId)
             ->whereNull('balance_deducted_at')
+            ->where(function ($q) {
+                $q->where('company_paid', false)->orWhereNull('company_paid');
+            })
             ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
             ->whereIn('leave_type', ['annual', 'casual', 'sick', 'early'])
             ->where('days', '>', 0)
@@ -1451,19 +1469,31 @@ class LeaveRequestController extends Controller
             ];
         }
 
-        if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'early_from', 'early_to'])) {
+        if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'company_paid', 'company_paid_purpose', 'purpose', 'early_from', 'early_to'])) {
             return [];
         }
 
         $validated = $request->validate([
             'leave_type' => 'sometimes|required|in:annual,casual,sick,early',
             'paid' => 'sometimes|required|boolean',
+            'company_paid' => 'sometimes|required|boolean',
+            'company_paid_purpose' => 'nullable|in:business_trip,marriage,exam,paternity,other',
+            'purpose' => 'nullable|string|max:1000',
             'early_from' => 'nullable|required_if:leave_type,early|date_format:H:i',
             'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i',
         ]);
 
         $leaveType = $validated['leave_type'] ?? $leaveRequest->leave_type;
         $paid = array_key_exists('paid', $validated) ? (bool) $validated['paid'] : (bool) $leaveRequest->paid;
+        $companyPaid = array_key_exists('company_paid', $validated) ? (bool) $validated['company_paid'] : (bool) $leaveRequest->company_paid;
+        if ($companyPaid) {
+            $purposeData = array_merge($validated, [
+                'company_paid_purpose' => $validated['company_paid_purpose'] ?? $leaveRequest->company_paid_purpose,
+                'purpose' => $validated['purpose'] ?? $leaveRequest->purpose,
+            ]);
+            $this->validateCompanyPaidPurpose($purposeData);
+            $paid = true;
+        }
         $days = (float) $leaveRequest->days;
         $changes = [];
 
@@ -1490,7 +1520,7 @@ class LeaveRequestController extends Controller
         }
 
         if (
-            $paid
+            $paid && !$companyPaid
             && $leaveRequest->employee_id
             && $days > 0
             && !$this->hasAvailableLeaveBalance(
@@ -1508,6 +1538,9 @@ class LeaveRequestController extends Controller
         return array_merge($changes, [
             'leave_type' => $leaveType,
             'paid' => $paid,
+            'company_paid' => $companyPaid,
+            'company_paid_purpose' => $companyPaid ? ($validated['company_paid_purpose'] ?? $leaveRequest->company_paid_purpose) : null,
+            'purpose' => $companyPaid ? ($validated['purpose'] ?? $leaveRequest->purpose) : ($validated['purpose'] ?? $leaveRequest->purpose),
             'days' => $days,
         ]);
     }
@@ -1533,12 +1566,21 @@ class LeaveRequestController extends Controller
         $data = $request->validate([
             'leave_type' => 'required|in:annual,casual,sick,early',
             'paid' => 'required|boolean',
+            'company_paid' => 'nullable|boolean',
+            'company_paid_purpose' => 'nullable|in:business_trip,marriage,exam,paternity,other',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'early_from' => 'nullable|required_if:leave_type,early|date_format:H:i',
             'early_to' => 'nullable|required_if:leave_type,early|date_format:H:i',
             'purpose' => 'nullable|string|max:1000',
         ]);
+        $data['company_paid'] = (bool) ($data['company_paid'] ?? false);
+        if ($data['company_paid']) {
+            $this->validateCompanyPaidPurpose($data);
+            $data['paid'] = true;
+        } else {
+            $data['company_paid_purpose'] = null;
+        }
         if ($data['leave_type'] === 'early') {
             $data['days'] = $this->earlyLeaveDays($data['early_from'], $data['early_to']);
             if ($data['days'] === null) {
@@ -1550,7 +1592,7 @@ class LeaveRequestController extends Controller
             $data['early_to'] = null;
         }
 
-        if ($data['paid'] && !$leaveRequest->balance_deducted_at && $leaveRequest->employee_id && !$this->hasAvailableLeaveBalance(
+        if ($data['paid'] && !$data['company_paid'] && !$leaveRequest->balance_deducted_at && $leaveRequest->employee_id && !$this->hasAvailableLeaveBalance(
             (int) $leaveRequest->employee_id,
             $data['leave_type'],
             (float) $data['days'],
@@ -1578,6 +1620,18 @@ class LeaveRequestController extends Controller
             return substr((string) $value, 0, 5);
         }
         return $value;
+    }
+
+    private function validateCompanyPaidPurpose(array $data): void
+    {
+        $kind = $data['company_paid_purpose'] ?? null;
+        $purpose = trim((string) ($data['purpose'] ?? ''));
+        if (!$kind) {
+            throw ValidationException::withMessages(['company_paid_purpose' => 'Choose the company-paid leave purpose.']);
+        }
+        if ($kind === 'other' && $purpose === '') {
+            throw ValidationException::withMessages(['purpose' => 'Enter the reason for Other company-paid leave.']);
+        }
     }
 
     private function earlyLeaveDays(?string $from, ?string $to): ?float

@@ -320,6 +320,10 @@ const formatDocumentBalance = (data = {}) => formatBalance(
 const twoName = (n) => n?.trim().split(/\s+/).slice(0, 2).join(' ') ?? ''
 const lrfTwoNameData = (d = {}) => ({
   ...d,
+  // Company-paid is intentionally rendered using the existing Word choices:
+  // Annual Leave + Paid. The original company_paid flag remains in storage.
+  leave_type: d.company_paid ? 'annual' : d.leave_type,
+  paid: d.company_paid ? true : d.paid,
   employee_name: twoName(d.employee_name),
   alternate_employee_name: twoName(d.alternate_employee_name),
   direct_manager_name: twoName(d.direct_manager_name),
@@ -872,10 +876,17 @@ function printOTR(d) {
 const LRF_EMPTY = {
   employee_id: null, employee_name: '', job_title: '', department: '', department_label: '',
   leave_type: 'annual', early_from: '', early_to: '',
-  paid: true,
+  paid: true, company_paid: false, company_paid_purpose: '',
   alternate_employee_id: null, alternate_employee_name: '',
   request_date: today(), start_date: '', end_date: '', purpose: 'Personal matter',
 }
+const COMPANY_PAID_PURPOSES = [
+  ['business_trip', 'Business Trip', 'مهمة عمل'],
+  ['marriage', 'Marriage', 'زواج'],
+  ['exam', 'Exam', 'امتحان'],
+  ['paternity', 'Paternity', 'أبوة'],
+  ['other', 'Other', 'أخرى'],
+]
 
 // shared cell styles
 const TD_LBL = 'border border-neutral-300 bg-neutral-50 px-3 py-2 w-[220px] align-middle'
@@ -1377,6 +1388,8 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
       alternate_employee_name: prefill.alternate_employee_name ?? '',
       leave_type:          prefill.leave_type ?? 'annual',
       paid:                prefill.paid ?? true,
+      company_paid:        prefill.company_paid ?? false,
+      company_paid_purpose: prefill.company_paid_purpose ?? '',
       start_date:          prefill.start_date ? String(prefill.start_date).slice(0, 10) : '',
       end_date:            prefill.end_date   ? String(prefill.end_date).slice(0, 10)   : '',
       early_from:          prefill.early_from ?? '',
@@ -1391,6 +1404,17 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const setPayment = (companyPaid, paid = true) => setForm(f => ({
+    ...f,
+    paid: companyPaid ? true : paid,
+    company_paid: companyPaid,
+    company_paid_purpose: companyPaid ? f.company_paid_purpose : '',
+    purpose: companyPaid ? '' : 'Personal matter',
+  }))
+  const setCompanyPurpose = (value) => {
+    const match = COMPANY_PAID_PURPOSES.find(([key]) => key === value)
+    setForm(f => ({ ...f, company_paid_purpose: value, purpose: value === 'other' ? '' : (match?.[1] ?? '') }))
+  }
   const days = lrfDays(form)
 
   useEffect(() => {
@@ -1465,6 +1489,14 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     e.preventDefault()
     if (form.leave_type === 'sick' && !medicalAttachment) {
       alert('Please attach the medical insurance image before submitting a sick leave request.')
+      return
+    }
+    if (form.company_paid && !form.company_paid_purpose) {
+      alert('Please choose the company-paid leave purpose.')
+      return
+    }
+    if (form.company_paid && form.company_paid_purpose === 'other' && !form.purpose.trim()) {
+      alert('Please enter the reason for Other company-paid leave.')
       return
     }
     onSubmit({ ...form, medical_attachment: form.leave_type === 'sick' ? medicalAttachment : null, employee_name: twoName(form.employee_name), alternate_employee_name: twoName(form.alternate_employee_name), direct_manager_name: twoName(form.direct_manager_name), early_from: form.leave_type === 'early' ? normalizeTime(form.early_from) : '', early_to: form.leave_type === 'early' ? normalizeTime(form.early_to) : '', days, tracking_no: null, status: 'pending', type: 'lrf', created_at: new Date().toISOString() })
@@ -1551,11 +1583,11 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
           <div className="p-3">
             <div className={LBL}>Payment <span className="text-neutral-400 font-normal" dir="rtl">— مدفوع / غير مدفوع</span></div>
-            <div className="grid grid-cols-2 gap-2">
-              {[[true, 'Paid'], [false, 'Unpaid']].map(([val, label]) => (
-                <button key={String(val)} type="button" onClick={() => set('paid', val)}
+            <div className="grid grid-cols-1 gap-2">
+              {[[false, true, 'Paid'], [false, false, 'Unpaid'], [true, true, 'Company Paid — على حساب الشركة']].map(([companyPaid, val, label]) => (
+                <button key={label} type="button" onClick={() => setPayment(companyPaid, val)}
                   className={`min-h-[44px] flex items-center justify-center gap-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
-                    form.paid === val
+                    form.company_paid === companyPaid && form.paid === val
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
                   }`}>
@@ -1564,6 +1596,15 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               ))}
             </div>
           </div>
+
+          {form.company_paid && <div className="p-3">
+            <div className={LBL}>Company-paid purpose <span className="text-red-600">*</span></div>
+            <select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={INP}>
+              <option value="">Select purpose</option>
+              {COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}
+            </select>
+            {form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${INP} mt-2`} placeholder="Enter the reason" />}
+          </div>}
 
           <div className="p-3 grid grid-cols-1 gap-3">
             <label className="block">
@@ -1671,7 +1712,8 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
               </div>
             </td></tr>
             {form.leave_type === 'sick' && <tr>{labelCell('Medical Attachment:', 'مرفق الإجازة المرضية')}<td className="border border-neutral-900 p-3"><MedicalAttachmentInput file={medicalAttachment} onFile={setMedicalAttachment} /></td></tr>}
-            <tr>{labelCell('Paid/Unpaid:', 'مدفوع الاجر / غير مدفوع الاجر')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr]"><button type="button" onClick={() => set('paid', true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === true} /></button><button type="button" onClick={() => set('paid', true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => set('paid', false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.paid === false} /></button><button type="button" onClick={() => set('paid', false)} className="px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button></div></td></tr>
+            <tr>{labelCell('Payment:', 'مدفوع الاجر / غير مدفوع الاجر / على حساب الشركة')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr_24px_1.4fr]"><button type="button" onClick={() => setPayment(false, true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={!form.company_paid && form.paid === true} /></button><button type="button" onClick={() => setPayment(false, true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => setPayment(false, false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={!form.company_paid && form.paid === false} /></button><button type="button" onClick={() => setPayment(false, false)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button><button type="button" onClick={() => setPayment(true, true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.company_paid} /></button><button type="button" onClick={() => setPayment(true, true)} className="px-3 py-2 text-left text-[12px] font-semibold">Company Paid</button></div></td></tr>
+            {form.company_paid && <tr>{labelCell('Company-paid purpose:', 'الغرض من الإجازة على حساب الشركة')}<td className="border border-neutral-900 px-3 py-2"><select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={FINP}><option value="">Select purpose</option>{COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}</select>{form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${FINP} mt-2`} placeholder="Enter the reason" />}</td></tr>}
             <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2"><span className="text-xs font-semibold italic text-neutral-400">Confidential — available to approvers after submission</span></td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>

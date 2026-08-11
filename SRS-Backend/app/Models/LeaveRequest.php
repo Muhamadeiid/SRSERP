@@ -12,8 +12,8 @@ class LeaveRequest extends Model
         'alternate_employee_id', 'alternate_employee_name',
         'type',
         // LRF
-        'leave_type', 'paid', 'available_balance', 'casual_available_balance',
-        'request_date', 'start_date', 'end_date', 'days', 'purpose',
+        'leave_type', 'paid', 'company_paid', 'available_balance', 'casual_available_balance',
+        'request_date', 'start_date', 'end_date', 'days', 'purpose', 'company_paid_purpose',
         'medical_attachment_path', 'medical_attachment_name', 'medical_attachment_mime',
         'early_from', 'early_to',
         // OTR
@@ -36,6 +36,7 @@ class LeaveRequest extends Model
 
     protected $casts = [
         'paid'                => 'boolean',
+        'company_paid'        => 'boolean',
         'request_date'        => 'date',
         'start_date'          => 'date',
         'end_date'            => 'date',
