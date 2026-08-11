@@ -314,6 +314,27 @@ export async function generateLRF(d, { download = true } = {}) {
     ],
   })
 
+  const companyPaidPurposeLabels = {
+    business_trip: ['Business Trip', 'مهمة عمل'],
+    marriage: ['Marriage', 'زواج'],
+    exam: ['Exam', 'امتحان'],
+    paternity: ['Paternity', 'أبوة'],
+    other: ['Other', 'أخرى'],
+  }
+  const companyPurpose = companyPaidPurposeLabels[d.company_paid_purpose]
+  const purposeParagraphs = d.company_paid && companyPurpose
+    ? [
+        para(`${companyPurpose[0]}${d.company_paid_purpose === 'other' && d.purpose ? `: ${d.purpose}` : ''}`, { size: 20 }),
+        para(`${companyPurpose[1]}${d.company_paid_purpose === 'other' && d.purpose ? `: ${d.purpose}` : ''}`, { size: 18, align: AlignmentType.RIGHT, rtl: true }),
+      ]
+    : [para(d.purpose || '', { size: 20 })]
+  const purposeRow = new TableRow({
+    children: [
+      cell(labelPara('The purpose:', 'الغرض'), { width: LBL_W }),
+      cell(purposeParagraphs, { colspan: 8 }),
+    ],
+  })
+
   // Leave Type row 1: [chk][Annual][chk][Casual][chk][Sick(colspan=3)]
   const leaveTypeRow1 = new TableRow({
     children: [
@@ -434,7 +455,7 @@ export async function generateLRF(d, { download = true } = {}) {
     simpleRow('Annual Leave Request Date:', 'تاريخ طلب الاجازة', fmtDate(d.request_date)),
     simpleRow('Annual Leave start Date:',   'تاريخ بداية الأجازه', fmtDate(d.start_date)),
     simpleRow('Annual Leave End Date:',     'تاريخ انتهاء الأجازه', fmtDate(d.end_date)),
-    simpleRow('The purpose:',               'الغرض', d.purpose),
+    purposeRow,
     ...sigRows('Employee Name / signature:',              'إسم الموظف / توقيعه',           sigNames.employee,  sigImages.employee,  'compact'),
     ...sigRows('Alternate Employee name / signature:',    'إسم الموظف البديل / توقيعه',    sigNames.alternate, sigImages.alternate),
     ...sigRows('Direct manager Name / signature',         'المدير المباشر / التوقيع',       sigNames.direct,    sigImages.direct),

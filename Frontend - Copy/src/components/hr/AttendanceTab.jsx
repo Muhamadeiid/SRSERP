@@ -924,6 +924,12 @@ export default function AttendanceTab() {
             data[key] ?? ATTENDANCE_POLICY_DEFAULTS[key],
           ])),
         })
+        if (data.payroll_period_start && data.payroll_period_end) {
+          setStartDate(data.payroll_period_start)
+          setEndDate(data.payroll_period_end)
+          setExportAllStart(data.payroll_period_start)
+          setExportAllEnd(data.payroll_period_end)
+        }
       })
       .catch(() => setAttendancePolicy(ATTENDANCE_POLICY_DEFAULTS))
   }, [])
@@ -1167,7 +1173,12 @@ export default function AttendanceTab() {
     setView('detail')
   }
 
-  const setThisMonth = () => { setStartDate(monthStart()); setEndDate(monthEnd()) }
+  const setThisMonth = () => {
+    getSettings().then(r => {
+      setStartDate(r.data?.payroll_period_start ?? monthStart())
+      setEndDate(r.data?.payroll_period_end ?? monthEnd())
+    })
+  }
   const setLastMonth = () => {
     const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1)
     const y = d.getFullYear(), m = d.getMonth()+1
@@ -1466,7 +1477,7 @@ export default function AttendanceTab() {
                 className="px-3 py-2 text-sm bg-white border border-neutral-200 rounded-xl outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10" />
             </div>
             <div className="flex items-center gap-1.5 ml-auto">
-              {[['This Month',setThisMonth],['Last Month',setLastMonth],['Last 7 Days',setLast7]].map(([l,fn]) => (
+              {[['Payroll Period',setThisMonth],['Last Month',setLastMonth],['Last 7 Days',setLast7]].map(([l,fn]) => (
                 <button key={l} onClick={fn} disabled={sheetEditing}
                   className="px-2.5 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-500 rounded-lg hover:bg-primary/10 hover:text-primary transition-all">{l}</button>
               ))}

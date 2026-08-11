@@ -3,6 +3,7 @@ import {
   Loader2, RefreshCw, Download, FileSpreadsheet, Calendar, Search, Filter,
 } from 'lucide-react'
 import { API_BASE_URL as BASE } from '../config/api'
+import { getSettings } from '../services/settingsService'
 
 function getToken() {
   return localStorage.getItem('srs_token')
@@ -48,6 +49,17 @@ export default function InternalSalaryPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
+
+  useEffect(() => {
+    getSettings().then(r => {
+      const start = r.data?.payroll_period_start
+      const end = r.data?.payroll_period_end
+      if (start && end) {
+        setStartDate(start)
+        setEndDate(end)
+      }
+    }).catch(() => {})
+  }, [])
 
   const fetch_ = useCallback(async () => {
     setLoading(true)

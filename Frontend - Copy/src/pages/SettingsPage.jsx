@@ -30,6 +30,14 @@ const ATTENDANCE_POLICY_DEFAULTS = {
 const DEFAULT_OTR_RESULT_OPTIONS = ['Task is done', 'Task is still pending']
 const DEFAULT_LEAVE_PURPOSE_OPTIONS = ['Sick | مرضي', 'Personal matter | أمر شخصي']
 
+const currentMonthPeriod = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const lastDay = String(new Date(year, now.getMonth() + 1, 0).getDate()).padStart(2, '0')
+  return { start: `${year}-${month}-01`, end: `${year}-${month}-${lastDay}` }
+}
+
 const optionsSettingText = (value, fallback) => {
   if (!value) return fallback.join('\n')
   try {
@@ -40,6 +48,7 @@ const optionsSettingText = (value, fallback) => {
 }
 
 export default function SettingsPage() {
+  const defaultPayrollPeriod = currentMonthPeriod()
   // ── Org Structure state ───────────────────────────────────────────
   const [managers,       setManagers]       = useState([])
   const [selectedMgr,   setSelectedMgr]    = useState(null)   // full manager object
@@ -71,6 +80,7 @@ export default function SettingsPage() {
   const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
   const [attendancePolicySaved, setAttendancePolicySaved] = useState(false)
   const [attendancePolicySaving, setAttendancePolicySaving] = useState(false)
+  const [payrollPeriod, setPayrollPeriod] = useState(defaultPayrollPeriod)
 
   // ── Load managers + settings on mount ────────────────────────────
   useEffect(() => {
@@ -93,6 +103,10 @@ export default function SettingsPage() {
           key,
           r.data?.[key] ?? ATTENDANCE_POLICY_DEFAULTS[key],
         ])),
+      })
+      setPayrollPeriod({
+        start: r.data?.payroll_period_start ?? defaultPayrollPeriod.start,
+        end: r.data?.payroll_period_end ?? defaultPayrollPeriod.end,
       })
     })
   }, [])
@@ -182,7 +196,11 @@ export default function SettingsPage() {
   const handleSaveAttendancePolicy = async () => {
     setAttendancePolicySaving(true)
     try {
-      await Promise.all(Object.entries(attendancePolicy).map(([key, value]) => saveSetting(key, String(value))))
+      await Promise.all([
+        ...Object.entries(attendancePolicy).map(([key, value]) => saveSetting(key, String(value))),
+        saveSetting('payroll_period_start', payrollPeriod.start),
+        saveSetting('payroll_period_end', payrollPeriod.end),
+      ])
       setAttendancePolicySaved(true)
       setTimeout(() => setAttendancePolicySaved(false), 2500)
     } finally { setAttendancePolicySaving(false) }
@@ -416,6 +434,17 @@ export default function SettingsPage() {
           <p className="text-xs text-neutral-400 ml-2">Shift timing, late rules, weekly off, and Saturday rotation</p>
         </div>
         <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <div>
+              <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Payroll Period Start</label>
+              <input type="date" value={payrollPeriod.start} onChange={e => { setPayrollPeriod(p => ({ ...p, start: e.target.value })); setAttendancePolicySaved(false) }} className="w-full px-3 py-2.5 text-sm border border-blue-200 rounded-xl outline-none focus:border-primary bg-white font-bold" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Payroll Period End</label>
+              <input type="date" min={payrollPeriod.start} value={payrollPeriod.end} onChange={e => { setPayrollPeriod(p => ({ ...p, end: e.target.value })); setAttendancePolicySaved(false) }} className="w-full px-3 py-2.5 text-sm border border-blue-200 rounded-xl outline-none focus:border-primary bg-white font-bold" />
+            </div>
+            <p className="sm:col-span-2 text-xs text-blue-700">Attendance late occurrences and Internal Salary deductions use this shared period by default.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               ['attendance_regular_start_time', 'Regular Start', 'time'],
