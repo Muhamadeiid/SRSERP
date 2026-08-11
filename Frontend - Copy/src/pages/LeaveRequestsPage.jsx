@@ -1597,15 +1597,6 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
             </div>
           </div>
 
-          {form.company_paid && <div className="p-3">
-            <div className={LBL}>Company-paid purpose <span className="text-red-600">*</span></div>
-            <select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={INP}>
-              <option value="">Select purpose</option>
-              {COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}
-            </select>
-            {form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${INP} mt-2`} placeholder="Enter the reason" />}
-          </div>}
-
           <div className="p-3 grid grid-cols-1 gap-3">
             <label className="block">
               <span className={LBL}>Request Date <span className="text-neutral-400 font-normal" dir="rtl">— تاريخ الطلب</span></span>
@@ -1626,21 +1617,31 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
 
           <div className="p-3">
             <div className={LBL}>Purpose <span className="text-neutral-400 font-normal" dir="rtl">— الغرض</span></div>
-            <div className="flex flex-wrap gap-2">
-              {leavePurposeOptions.map(option => {
-                const { value, ar } = splitPurposeOption(option)
-                return (
-                  <button key={value} type="button" onClick={() => set('purpose', value)}
-                    className={`min-h-[40px] px-3 rounded-xl border text-sm font-semibold transition-all ${
-                      form.purpose === value
-                        ? 'bg-primary text-white border-primary shadow-sm'
-                        : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
-                    }`}>
-                    {value}{ar && <span className="ml-1 opacity-80" dir="rtl">{ar}</span>}
-                  </button>
-                )
-              })}
-            </div>
+            {form.company_paid ? (
+              <>
+                <select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={INP}>
+                  <option value="">Select purpose</option>
+                  {COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}
+                </select>
+                {form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${INP} mt-2`} placeholder="Enter the reason" />}
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {leavePurposeOptions.map(option => {
+                  const { value, ar } = splitPurposeOption(option)
+                  return (
+                    <button key={value} type="button" onClick={() => set('purpose', value)}
+                      className={`min-h-[40px] px-3 rounded-xl border text-sm font-semibold transition-all ${
+                        form.purpose === value
+                          ? 'bg-primary text-white border-primary shadow-sm'
+                          : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary/40'
+                      }`}>
+                      {value}{ar && <span className="ml-1 opacity-80" dir="rtl">{ar}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div className="p-3">
@@ -1713,12 +1714,11 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
             </td></tr>
             {form.leave_type === 'sick' && <tr>{labelCell('Medical Attachment:', 'مرفق الإجازة المرضية')}<td className="border border-neutral-900 p-3"><MedicalAttachmentInput file={medicalAttachment} onFile={setMedicalAttachment} /></td></tr>}
             <tr>{labelCell('Payment:', 'مدفوع الاجر / غير مدفوع الاجر / على حساب الشركة')}<td className="border border-neutral-900 p-0"><div className="grid grid-cols-[24px_1fr_24px_1fr_24px_1.4fr]"><button type="button" onClick={() => setPayment(false, true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={!form.company_paid && form.paid === true} /></button><button type="button" onClick={() => setPayment(false, true)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Paid</button><button type="button" onClick={() => setPayment(false, false)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={!form.company_paid && form.paid === false} /></button><button type="button" onClick={() => setPayment(false, false)} className="border-r border-neutral-900 px-3 py-2 text-left text-[12px] font-semibold">Unpaid</button><button type="button" onClick={() => setPayment(true, true)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.company_paid} /></button><button type="button" onClick={() => setPayment(true, true)} className="px-3 py-2 text-left text-[12px] font-semibold">Company Paid</button></div></td></tr>
-            {form.company_paid && <tr>{labelCell('Company-paid purpose:', 'الغرض من الإجازة على حساب الشركة')}<td className="border border-neutral-900 px-3 py-2"><select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={FINP}><option value="">Select purpose</option>{COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}</select>{form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${FINP} mt-2`} placeholder="Enter the reason" />}</td></tr>}
             <tr>{labelCell('Available Balance', 'الرصيد المتاح')}<td className="border border-neutral-900 px-3 py-2"><span className="text-xs font-semibold italic text-neutral-400">Confidential — available to approvers after submission</span></td></tr>
             <tr>{labelCell('Annual Leave Request Date:', 'تاريخ طلب الاجازة')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" value={form.request_date} onChange={v => set('request_date', v)} placeholder="YYYY-MM-DD" /></td></tr>
             <tr>{labelCell('Annual Leave start Date:', 'تاريخ بداية الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.start_date} placeholder="YYYY-MM-DD" onChange={v => set('start_date', v)} /></td></tr>
             <tr>{labelCell('Annual Leave End Date:', 'تاريخ انتهاء الأجازه')}<td className="border border-neutral-900 px-3 py-2"><PickerInput type="date" required value={form.end_date} placeholder="YYYY-MM-DD" onChange={v => set('end_date', v)} /></td></tr>
-            <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2"><div className="flex flex-wrap gap-6">{leavePurposeOptions.map(option => { const { value, ar } = splitPurposeOption(option); return <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span>{ar && <span className="text-neutral-500" dir="rtl">{ar}</span>}</button> })}</div></td></tr>
+            <tr>{labelCell('The purpose:', 'الغرض')}<td className="border border-neutral-900 px-3 py-2">{form.company_paid ? <><select required value={form.company_paid_purpose} onChange={e => setCompanyPurpose(e.target.value)} className={FINP}><option value="">Select purpose</option>{COMPANY_PAID_PURPOSES.map(([value, label, ar]) => <option key={value} value={value}>{label} — {ar}</option>)}</select>{form.company_paid_purpose === 'other' && <input required value={form.purpose} onChange={e => set('purpose', e.target.value)} className={`${FINP} mt-2`} placeholder="Enter the reason" />}</> : <div className="flex flex-wrap gap-6">{leavePurposeOptions.map(option => { const { value, ar } = splitPurposeOption(option); return <button key={value} type="button" onClick={() => set('purpose', value)} className="flex items-center gap-2 text-[12px]"><CheckMark checked={form.purpose === value} /><span>{value}</span>{ar && <span className="text-neutral-500" dir="rtl">{ar}</span>}</button> })}</div>}</td></tr>
             {sigRows('Employee Name / signature:', 'إسم الموظف / توقيعه', form.employee_name)}
             {sigRows('Alternate Employee name / signature:', 'إسم الموظف البديل / توقيعه', '', 'alternate_employee_name')}
             {sigRows('Direct manager Name / signature', 'المدير المباشر / التوقيع', form.direct_manager_name)}
