@@ -300,9 +300,48 @@ const earlyDays = (from, to) => {
   if (mins <= 360) return '0.75'
   return ''
 }
-const lrfDays = (form) => form.leave_type === 'early'
+const isoWeek = date => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
+}
+const isEmployeeWorkingDay = (date, form, policy = {}) => {
+  const day = date.getDay()
+  const department = String(form.department || '').toLowerCase()
+  const intervention = ['intervention', 'cm_intervention'].includes(department)
+  if (intervention) {
+    return form.weekly_off_day === null || form.weekly_off_day === undefined || form.weekly_off_day === ''
+      ? true
+      : day !== Number(form.weekly_off_day)
+  }
+
+  const regularOffDay = Number(policy.attendance_regular_weekly_off_day ?? 5)
+  if (day === regularOffDay) return false
+  if (day === 6 && String(policy.attendance_saturday_rotation_enabled ?? '1') === '1') {
+    const evenWeek = isoWeek(date) % 2 === 0
+    const groupAOffEven = String(policy.attendance_group_a_off_even_week ?? '1') === '1'
+    if (form.saturday_group === 'A') return !(evenWeek === groupAOffEven)
+    if (form.saturday_group === 'B') return evenWeek === groupAOffEven
+    return false
+  }
+  return true
+}
+const workingDays = (start, end, form, policy) => {
+  if (!start || !end) return 0
+  const cursor = new Date(`${start}T00:00:00`)
+  const last = new Date(`${end}T00:00:00`)
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime()) || last < cursor) return 0
+  let count = 0
+  while (cursor <= last) {
+    if (isEmployeeWorkingDay(cursor, form, policy)) count++
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return count
+}
+const lrfDays = (form, policy = {}) => form.leave_type === 'early'
   ? parseFloat(earlyDays(form.early_from, form.early_to) || 0)
-  : diffDays(form.start_date, form.end_date)
+  : workingDays(form.start_date, form.end_date, form, policy)
 const formatBalance = (value) => {
   if (value === null || value === undefined || value === '') return ''
   const n = parseFloat(value)
@@ -876,7 +915,7 @@ function printOTR(d) {
 const LRF_EMPTY = {
   employee_id: null, employee_name: '', job_title: '', department: '', department_label: '',
   leave_type: 'annual', early_from: '', early_to: '',
-  paid: true, company_paid: false, company_paid_purpose: '',
+  paid: true, company_paid: false, company_paid_purpose: '', saturday_group: null, weekly_off_day: null,
   alternate_employee_id: null, alternate_employee_name: '',
   request_date: today(), start_date: '', end_date: '', purpose: 'Personal matter',
 }
@@ -1402,6 +1441,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const [form, setForm] = useState(buildInitial)
   const [medicalAttachment, setMedicalAttachment] = useState(null)
   const [depotManagerName, setDepotManagerName] = useState(DEPOT_MGR)
+  const [workSchedulePolicy, setWorkSchedulePolicy] = useState({})
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -1416,7 +1456,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
     const match = COMPANY_PAID_PURPOSES.find(([key]) => key === value)
     setForm(f => ({ ...f, company_paid_purpose: value, purpose: value === 'other' ? '' : (match?.[1] ?? '') }))
   }
-  const days = lrfDays(form)
+  const days = lrfDays(form, workSchedulePolicy)
 
   useEffect(() => {
     if (form.leave_type !== 'sick') setMedicalAttachment(null)
@@ -1428,6 +1468,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         if (dm?.name) setDepotManagerName(twoName(dm.name))
       })
       .catch(() => {})
+    getSettings().then(r => setWorkSchedulePolicy(r.data ?? {})).catch(() => {})
     if (prefill && onPrefillDone) onPrefillDone()
   }, [])
 
@@ -1445,6 +1486,8 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
       direct_manager_name: selectedManager?.name && selectedManagerRole !== 'depot_manager'
         ? twoName(selectedManager.name)
         : '',
+      saturday_group: emp.saturday_group ?? null,
+      weekly_off_day: emp.weekly_off_day ?? null,
     }))
     if (!emp.id) return
     getEmployeeFormProfile(emp.id).then(res => {
@@ -1455,6 +1498,8 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
         job_title: full?.position ?? f.job_title,
         department: fullDept,
         department_label: fullDept ? (DEPT_LABEL[fullDept] ?? deptLabel(full) ?? fullDept) : f.department_label,
+        saturday_group: full?.saturday_group ?? f.saturday_group,
+        weekly_off_day: full?.weekly_off_day ?? f.weekly_off_day,
         direct_manager_name: (((full?.direct_manager || full?.directManager)?.role || (full?.direct_manager || full?.directManager)?.user_role) !== 'depot_manager' ? twoName((full?.direct_manager || full?.directManager)?.name) : null) ?? f.direct_manager_name,
       }))
     }).catch(() => {})

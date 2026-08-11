@@ -305,6 +305,13 @@ class LeaveRequestController extends Controller
         if ($employee) {
             $this->leaveYears->refreshDue($employee->id);
         }
+        if ($data['type'] === 'lrf' && ($data['leave_type'] ?? null) !== 'early') {
+            $data['days'] = $this->workingLeaveDays(
+                $employee,
+                $data['start_date'],
+                $data['end_date'] ?? $data['start_date']
+            );
+        }
         if ($employee && !$this->directManagerUserId($employee)) {
             // There is nobody who can perform the manager step. Move the
             // request directly to HR without inventing an approver/signature.
@@ -1517,6 +1524,17 @@ class LeaveRequestController extends Controller
         } else {
             $changes['early_from'] = null;
             $changes['early_to'] = null;
+            $employee = $leaveRequest->employee_id ? Employee::find($leaveRequest->employee_id) : null;
+            if ($employee && $leaveRequest->start_date) {
+                $days = $this->workingLeaveDays(
+                    $employee,
+                    $leaveRequest->start_date->toDateString(),
+                    ($leaveRequest->end_date ?? $leaveRequest->start_date)->toDateString()
+                );
+                if ((float) $leaveRequest->days !== $days) {
+                    $changes['days'] = $days;
+                }
+            }
         }
 
         if (
@@ -1587,7 +1605,10 @@ class LeaveRequestController extends Controller
                 throw ValidationException::withMessages(['early_to' => 'Early Leave must be between 1 minute and 6 hours.']);
             }
         } else {
-            $data['days'] = \Carbon\Carbon::parse($data['start_date'])->diffInDays(\Carbon\Carbon::parse($data['end_date'])) + 1;
+            $employee = $leaveRequest->employee_id ? Employee::find($leaveRequest->employee_id) : null;
+            $data['days'] = $employee
+                ? $this->workingLeaveDays($employee, $data['start_date'], $data['end_date'])
+                : \Carbon\Carbon::parse($data['start_date'])->diffInDays(\Carbon\Carbon::parse($data['end_date'])) + 1;
             $data['early_from'] = null;
             $data['early_to'] = null;
         }
@@ -1632,6 +1653,22 @@ class LeaveRequestController extends Controller
         if ($kind === 'other' && $purpose === '') {
             throw ValidationException::withMessages(['purpose' => 'Enter the reason for Other company-paid leave.']);
         }
+    }
+
+    private function workingLeaveDays(Employee $employee, string $startDate, string $endDate): float
+    {
+        $cursor = \Carbon\Carbon::parse($startDate)->startOfDay();
+        $end = \Carbon\Carbon::parse($endDate)->startOfDay();
+        $days = 0;
+
+        while ($cursor->lte($end)) {
+            if ($employee->isWorkingDay($cursor)) {
+                $days++;
+            }
+            $cursor->addDay();
+        }
+
+        return (float) $days;
     }
 
     private function earlyLeaveDays(?string $from, ?string $to): ?float

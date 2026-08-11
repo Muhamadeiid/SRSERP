@@ -63,6 +63,8 @@ class EmployeeController extends Controller
             'position' => $employee->position,
             'department' => $employee->department,
             'department_label' => $employee->department_label,
+            'saturday_group' => $employee->saturday_group,
+            'weekly_off_day' => $employee->weekly_off_day,
             'direct_manager' => $manager ? [
                 'id' => $manager->id,
                 'name' => $manager->name,
