@@ -316,6 +316,7 @@ export async function generateLRF(d, { download = true } = {}) {
 
   const companyPaidPurposeLabels = {
     business_trip: ['Business Trip', 'مهمة عمل'],
+    company_premises: ['Company Premises', 'مقر الشركة'],
     marriage: ['Marriage', 'زواج'],
     exam: ['Exam', 'امتحان'],
     paternity: ['Paternity', 'أبوة'],

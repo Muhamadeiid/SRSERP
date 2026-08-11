@@ -882,6 +882,7 @@ const LRF_EMPTY = {
 }
 const COMPANY_PAID_PURPOSES = [
   ['business_trip', 'Business Trip', 'مهمة عمل'],
+  ['company_premises', 'Company Premises', 'مقر الشركة'],
   ['marriage', 'Marriage', 'زواج'],
   ['exam', 'Exam', 'امتحان'],
   ['paternity', 'Paternity', 'أبوة'],
