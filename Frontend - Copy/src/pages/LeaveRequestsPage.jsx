@@ -2969,6 +2969,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [approvalStage, setApprovalStage] = useState('all')
   const [archiveExpanded, setArchiveExpanded] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState('all')
   const HISTORY_PER_PAGE = 25
 
   const openRequest = useCallback((request, options = {}) => {
@@ -2989,7 +2990,31 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     const mgr = req.employee?.direct_manager || req.employee?.directManager
     return String(mgr?.user_id || '') === String(user?.id || '')
   }
-  const typeFiltered = showOnly ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf') : requests
+  const requestsForType = showOnly
+    ? requests.filter(r => showOnly === 'lrf' ? r.type === 'lrf' : r.type !== 'lrf')
+    : requests
+  const requestDate = request => request.type === 'lrf'
+    ? request.start_date
+    : (request.ot_date || request.created_at)
+  const requestMonth = request => {
+    const value = requestDate(request)
+    if (!value) return ''
+    const match = String(value).match(/^(\d{4})-(\d{2})/)
+    if (match) return `${match[1]}-${match[2]}`
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  }
+  const availableMonths = [...new Set(requestsForType.map(requestMonth).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a))
+  const monthLabel = month => {
+    const [year, monthNumber] = month.split('-').map(Number)
+    return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' })
+      .format(new Date(year, monthNumber - 1, 1))
+  }
+  const typeFiltered = selectedMonth === 'all'
+    ? requestsForType
+    : requestsForType.filter(request => requestMonth(request) === selectedMonth)
   const pending = typeFiltered.filter(r =>
     r.can_approve_manager ||
     r.can_approve_hr ||
@@ -3288,7 +3313,25 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0">
+          <label className="relative">
+            <span className="sr-only">Filter requests by month</span>
+            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <select
+              value={selectedMonth}
+              onChange={event => {
+                setSelectedMonth(event.target.value)
+                setHistoryPage(1)
+              }}
+              className="h-9 min-w-[150px] cursor-pointer appearance-none rounded-lg border border-neutral-200 bg-white pl-9 pr-8 text-xs font-bold text-secondary-700 outline-none transition-colors hover:border-primary/40 focus:border-primary"
+            >
+              <option value="all">All months</option>
+              {availableMonths.map(month => (
+                <option key={month} value={month}>{monthLabel(month)}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          </label>
           {/* Refresh */}
           <button onClick={fetchRequests}
             className="p-2 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-neutral-400 transition-colors">
