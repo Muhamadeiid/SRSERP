@@ -156,7 +156,8 @@ class AttendanceController extends Controller
 
             $leaves = $leaveQuery->get([
                 'id', 'employee_id', 'employee_name', 'leave_type',
-                'start_date', 'end_date', 'days', 'paid', 'tracking_no',
+                'start_date', 'end_date', 'days', 'paid', 'company_paid',
+                'company_paid_purpose', 'purpose', 'tracking_no',
                 'early_from', 'early_to',
             ]);
         }

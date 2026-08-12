@@ -971,7 +971,12 @@ export default function AttendanceTab() {
     ['annual', 'casual', 'sick'].includes(leave.leave_type)
   )
   const fullDayLeaveEmployeeIds = new Set(fullDayOverviewLeaves.map(leave => Number(leave.employee_id)))
+  const companyPaidOverviewLeaves = fullDayOverviewLeaves.filter(leave => Boolean(leave.company_paid))
+  const regularOverviewLeaves = fullDayOverviewLeaves.filter(leave => !leave.company_paid)
+  const companyPaidEmployeeIds = new Set(companyPaidOverviewLeaves.map(leave => Number(leave.employee_id)))
+  const regularLeaveEmployeeIds = new Set(regularOverviewLeaves.map(leave => Number(leave.employee_id)))
   const isOnLeaveOnOverview = employeeId => fullDayLeaveEmployeeIds.has(Number(employeeId))
+  const isCompanyPaidOnOverview = employeeId => companyPaidEmployeeIds.has(Number(employeeId))
   const overtimeEmployeeIds = new Set(overviewOtrs.map(otr => Number(otr.employee_id)))
   const isOverviewLate = rec =>
     !isOnLeaveOnOverview(rec.employee_id)
@@ -992,7 +997,8 @@ export default function AttendanceTab() {
   const ovPresent = overviewRecs.filter(r => isOnSiteOnOverview(r)).length
   const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
   const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
-  const ovOnLeave = fullDayLeaveEmployeeIds.size
+  const ovOnLeave = regularLeaveEmployeeIds.size
+  const ovCompanyPaid = companyPaidEmployeeIds.size
   const ovDayOff  = overviewRecs.filter(r => r.status === 'off' && !isOnLeaveOnOverview(r.employee_id)).length
   const ovOT      = overtimeEmployeeIds.size
 
@@ -1001,7 +1007,8 @@ export default function AttendanceTab() {
       || (overviewMetricFilter === 'present' && isOnSiteOnOverview(rec))
       || (overviewMetricFilter === 'late' && isOverviewLate(rec))
       || (overviewMetricFilter === 'absent' && rec.status === 'absent' && !isOnLeaveOnOverview(rec.employee_id))
-      || (overviewMetricFilter === 'leave' && isOnLeaveOnOverview(rec.employee_id))
+      || (overviewMetricFilter === 'leave' && regularLeaveEmployeeIds.has(Number(rec.employee_id)))
+      || (overviewMetricFilter === 'company_paid' && isCompanyPaidOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'day_off' && rec.status === 'off' && !isOnLeaveOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'overtime' && overtimeEmployeeIds.has(Number(rec.employee_id)))
     if (!matchesMetric) return false
@@ -1283,12 +1290,13 @@ export default function AttendanceTab() {
           )}
 
           {/* ── Overview summary cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3">
             {[
               ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
               ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
               ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
               ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
+              ['company_paid', 'Company Paid / Mission', ovCompanyPaid, 'bg-cyan-50 text-cyan-700 border-cyan-200'],
               ['day_off',  'Day Off',       ovDayOff,     'bg-neutral-100 text-neutral-700 border-neutral-300'],
               ['overtime', 'With Overtime', ovOT,         'bg-blue-50   text-blue-700   border-blue-200'],
             ].map(([key,l,v,cls]) => (
@@ -1329,15 +1337,18 @@ export default function AttendanceTab() {
                       const emp = rec.employee
                       const onLeaveInfo = fullDayOverviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
                       const isOnLeave   = !!onLeaveInfo
+                      const isCompanyPaid = Boolean(onLeaveInfo?.company_paid)
                       const displayedStatus = effectiveOverviewStatus(rec)
-                      const cfg = isOnLeave
+                      const cfg = isCompanyPaid
+                        ? { label: 'Company Paid', cls: 'bg-cyan-100 text-cyan-700 border-cyan-200' }
+                        : isOnLeave
                         ? { label: 'On Leave', cls: 'bg-violet-100 text-violet-700 border-violet-200' }
                         : (STATUS_CFG[displayedStatus] ?? { label: displayedStatus, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' })
                       return (
                         <tr key={rec.id}
                           onClick={() => emp && openDetail(emp)}
                           className={`border-b border-neutral-100 cursor-pointer transition-colors hover:bg-primary/5 group ${
-                            isOnLeave ? 'bg-violet-50/60' : (i%2===0?'bg-white':'bg-neutral-50/60')
+                            isCompanyPaid ? 'bg-cyan-50/60' : isOnLeave ? 'bg-violet-50/60' : (i%2===0?'bg-white':'bg-neutral-50/60')
                           }`}>
                           {/* # */}
                           <td className="px-3 py-2.5 text-center text-neutral-400 font-semibold w-10">{i+1}</td>
