@@ -345,7 +345,7 @@ export default function DashboardPage() {
               subColor="text-sky-600"
               icon={UserCheck}
               iconBg="bg-sky-100 text-sky-600"
-              onClick={() => navigate('/human-resources/calendar')}
+              onClick={() => navigate('/human-resources/attendance')}
             />
             <SectionStat
               label="Pending Leaves"
