@@ -7,7 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 class MaintenanceTaskActivity extends Model
 {
     protected $fillable = [
-        'maintenance_task_id', 'user_id', 'type', 'body', 'from_status', 'to_status',
+        'maintenance_task_id', 'user_id', 'type', 'body', 'work_date',
+        'work_done', 'result', 'next_steps', 'completion_summary',
+        'from_status', 'to_status',
+    ];
+
+    protected $casts = [
+        'work_date' => 'date',
     ];
 
     public function task()

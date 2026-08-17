@@ -9,7 +9,7 @@ import {
 import {
   getJobCardStats, getEquipmentStats, getMaintenanceTasks,
   getMaintenanceTaskOptions, createMaintenanceTask,
-  updateMaintenanceTask, deleteMaintenanceTask,
+  deleteMaintenanceTask,
   getMaintenanceTaskActivities, addMaintenanceTaskActivity,
 } from '../services/maintenanceService'
 
@@ -61,6 +61,20 @@ const EMPTY_TASK = {
   train_number: '', unit_number: '', car_code: '', priority: 'medium', due_date: '',
 }
 
+const todayValue = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+const emptyUpdate = status => ({
+  work_date: todayValue(),
+  work_done: '',
+  result: '',
+  next_steps: '',
+  completion_summary: '',
+  status: status || 'in_progress',
+})
+
 const UNIT_CARS = {
   1: ['MC1', 'T', 'M1'],
   2: ['M2', 'T', 'M1'],
@@ -88,8 +102,7 @@ function PendingTasks({ user }) {
   const [error, setError] = useState('')
   const [expandedTaskId, setExpandedTaskId] = useState(null)
   const [activities, setActivities] = useState({})
-  const [activityDraft, setActivityDraft] = useState('')
-  const [activityStatus, setActivityStatus] = useState('')
+  const [activityDraft, setActivityDraft] = useState(() => emptyUpdate('in_progress'))
   const [activitySaving, setActivitySaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -110,23 +123,13 @@ function PendingTasks({ user }) {
 
   useEffect(() => { load() }, [load])
 
-  const setStatus = async (task, status) => {
-    try {
-      const result = await updateMaintenanceTask(task.id, { status })
-      setTasks(current => current.map(item => item.id === task.id ? result.data : item))
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
   const toggleActivity = async task => {
     if (expandedTaskId === task.id) {
       setExpandedTaskId(null)
       return
     }
     setExpandedTaskId(task.id)
-    setActivityDraft('')
-    setActivityStatus(task.status || 'pending')
+    setActivityDraft(emptyUpdate(task.status === 'done' ? 'done' : task.status || 'in_progress'))
     if (!activities[task.id]) {
       try {
         const result = await getMaintenanceTaskActivities(task.id)
@@ -139,16 +142,19 @@ function PendingTasks({ user }) {
 
   const submitActivity = async (event, task) => {
     event.preventDefault()
-    if (!activityDraft.trim()) return
+    if (!activityDraft.work_done.trim() || !activityDraft.result.trim()) return
+    if (activityDraft.status !== 'done' && !activityDraft.next_steps.trim()) return
+    if (activityDraft.status === 'done' && !activityDraft.completion_summary.trim()) return
     setActivitySaving(true)
+    setError('')
     try {
       const result = await addMaintenanceTaskActivity(task.id, {
-        body: activityDraft.trim(),
-        status: activityStatus || task.status || 'pending',
+        ...activityDraft,
+        work_date: activityDraft.work_date || todayValue(),
       })
       setActivities(current => ({ ...current, [task.id]: result.activities ?? [] }))
       setTasks(current => current.map(item => item.id === task.id ? result.task : item))
-      setActivityDraft('')
+      setActivityDraft(emptyUpdate(result.task?.status === 'done' ? 'done' : result.task?.status || 'in_progress'))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -228,7 +234,7 @@ function PendingTasks({ user }) {
             const isExpanded = expandedTaskId === task.id
             return (
               <div key={task.id}>
-              <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_90px_110px_145px_100px] gap-3 items-center px-5 py-3 ${task.priority === 'critical' ? 'bg-red-50/40' : task.priority === 'high' ? 'bg-orange-50/30' : ''}`}>
+              <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_90px_130px_100px] gap-3 items-center px-5 py-3 ${task.priority === 'critical' ? 'bg-red-50/40' : task.priority === 'high' ? 'bg-orange-50/30' : ''}`}>
                 <div className="min-w-0 flex items-start gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -246,11 +252,6 @@ function PendingTasks({ user }) {
                 <span className={`text-xs ${overdue ? 'font-bold text-red-600' : 'text-neutral-500'}`}>
                   {task.due_date ? `${overdue ? 'Overdue · ' : ''}${new Date(`${task.due_date}T00:00:00`).toLocaleDateString('en-GB')}` : 'No due date'}
                 </span>
-                <select value={taskStatus} onChange={event => setStatus(task, event.target.value)} className="h-8 border border-neutral-200 rounded px-2 text-xs bg-white">
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
                 <div className="flex items-center justify-end gap-1">
                   <button onClick={() => toggleActivity(task)} title="Task activity" className={`p-2 hover:bg-neutral-100 ${isExpanded ? 'text-primary' : 'text-neutral-500'}`}><MessageSquare className="w-4 h-4" /></button>
                   {canCreate && <button onClick={() => remove(task)} title="Delete task" className="p-2 text-neutral-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
@@ -259,31 +260,58 @@ function PendingTasks({ user }) {
               {isExpanded && (
                 <div className="border-t border-neutral-100 bg-neutral-50 px-5 py-4">
                   <div className="max-w-3xl ml-auto">
-                    <div className="flex items-center gap-2 mb-3"><History className="w-4 h-4 text-neutral-400" /><h3 className="text-xs font-bold text-secondary-700">Activity</h3></div>
-                    <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    <div className="flex items-center gap-2 mb-3"><History className="w-4 h-4 text-neutral-400" /><h3 className="text-xs font-bold text-secondary-700">Task Updates</h3></div>
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                       {taskActivities.length === 0 ? <p className="text-xs text-neutral-400 py-3">No updates yet.</p> : taskActivities.map(activity => (
-                        <div key={activity.id} className="flex gap-3">
+                        <div key={activity.id} className="flex gap-3 rounded-md border border-neutral-200 bg-white p-3">
                           <div className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">{activity.user?.name?.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'S'}</div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-[11px] text-neutral-500">
                               <span className="font-bold text-secondary-700">{activity.user?.name || 'System'}</span>
                               {activity.type === 'status_change' && <> changed status from <b>{activity.from_status?.replace('_', ' ')}</b> to <b>{activity.to_status?.replace('_', ' ')}</b></>}
                             </p>
-                            {activity.body && <p className="mt-1 text-xs text-neutral-700 whitespace-pre-wrap break-words">{activity.body}</p>}
+                            {activity.work_date && <p className="mt-0.5 text-[10px] font-bold text-primary">Work date: {new Date(`${String(activity.work_date).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB')}</p>}
+                            {(activity.work_done || (activity.type === 'comment' && activity.body)) && (
+                              <div className="mt-2"><p className="text-[9px] font-bold uppercase text-neutral-400">Work performed</p><p className="text-xs text-neutral-700 whitespace-pre-wrap break-words">{activity.work_done || activity.body}</p></div>
+                            )}
+                            {activity.result && <div className="mt-2"><p className="text-[9px] font-bold uppercase text-neutral-400">Result</p><p className="text-xs text-neutral-700 whitespace-pre-wrap break-words">{activity.result}</p></div>}
+                            {activity.next_steps && <div className="mt-2"><p className="text-[9px] font-bold uppercase text-neutral-400">Next action</p><p className="text-xs text-neutral-700 whitespace-pre-wrap break-words">{activity.next_steps}</p></div>}
+                            {activity.completion_summary && <div className="mt-2 rounded bg-green-50 p-2"><p className="text-[9px] font-bold uppercase text-green-700">Completion summary</p><p className="text-xs text-green-800 whitespace-pre-wrap break-words">{activity.completion_summary}</p></div>}
                             <p className="mt-1 text-[10px] text-neutral-300">{new Date(activity.created_at).toLocaleString('en-GB')}</p>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <form onSubmit={event => submitActivity(event, task)} className="mt-4 border-t border-neutral-200 pt-3">
-                      <textarea value={activityDraft} onChange={event => setActivityDraft(event.target.value)} rows="2" placeholder="Write progress, blocker, or completion note..." className="w-full border border-neutral-200 bg-white rounded px-3 py-2 text-xs resize-none focus:outline-none focus:border-primary" />
-                      <div className="mt-2 flex items-center gap-2">
-                        <select value={activityStatus} onChange={event => setActivityStatus(event.target.value)} className="h-8 border border-neutral-200 bg-white rounded px-2 text-xs">
+                    <form onSubmit={event => submitActivity(event, task)} className="mt-4 border-t border-neutral-200 pt-3 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="text-[10px] font-bold uppercase text-neutral-500">Work date
+                          <input type="date" required value={activityDraft.work_date} onChange={event => setActivityDraft(current => ({ ...current, work_date: event.target.value }))} className="mt-1 h-9 w-full border border-neutral-200 bg-white rounded px-2 text-xs" />
+                        </label>
+                        <label className="text-[10px] font-bold uppercase text-neutral-500">Status after update
+                        <select value={activityDraft.status} onChange={event => setActivityDraft(current => ({ ...current, status: event.target.value }))} className="mt-1 h-9 w-full border border-neutral-200 bg-white rounded px-2 text-xs">
                           <option value="pending">Still Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="done">Done</option>
                         </select>
-                        <button disabled={activitySaving || !activityDraft.trim()} className="ml-auto h-8 inline-flex items-center gap-1.5 bg-primary text-white px-3 rounded text-xs font-bold disabled:opacity-50"><Send className="w-3.5 h-3.5" /> Post update</button>
+                        </label>
+                      </div>
+                      <label className="block text-[10px] font-bold uppercase text-neutral-500">Work performed
+                        <textarea required value={activityDraft.work_done} onChange={event => setActivityDraft(current => ({ ...current, work_done: event.target.value }))} rows="2" placeholder="What was checked, repaired, replaced, or tested?" className="mt-1 w-full border border-neutral-200 bg-white rounded px-3 py-2 text-xs resize-none focus:outline-none focus:border-primary" />
+                      </label>
+                      <label className="block text-[10px] font-bold uppercase text-neutral-500">Result
+                        <textarea required value={activityDraft.result} onChange={event => setActivityDraft(current => ({ ...current, result: event.target.value }))} rows="2" placeholder="What happened after the work was performed?" className="mt-1 w-full border border-neutral-200 bg-white rounded px-3 py-2 text-xs resize-none focus:outline-none focus:border-primary" />
+                      </label>
+                      {activityDraft.status === 'done' ? (
+                        <label className="block text-[10px] font-bold uppercase text-green-700">Completion summary
+                          <textarea required value={activityDraft.completion_summary} onChange={event => setActivityDraft(current => ({ ...current, completion_summary: event.target.value }))} rows="2" placeholder="Final condition, solution, and how the task was closed." className="mt-1 w-full border border-green-300 bg-green-50 rounded px-3 py-2 text-xs resize-none focus:outline-none focus:border-green-500" />
+                        </label>
+                      ) : (
+                        <label className="block text-[10px] font-bold uppercase text-neutral-500">Next action / pending reason
+                          <textarea required value={activityDraft.next_steps} onChange={event => setActivityDraft(current => ({ ...current, next_steps: event.target.value }))} rows="2" placeholder="What remains, who will do it, or why is the task still pending?" className="mt-1 w-full border border-neutral-200 bg-white rounded px-3 py-2 text-xs resize-none focus:outline-none focus:border-primary" />
+                        </label>
+                      )}
+                      <div className="flex justify-end">
+                        <button disabled={activitySaving || !activityDraft.work_done.trim() || !activityDraft.result.trim() || (activityDraft.status === 'done' ? !activityDraft.completion_summary.trim() : !activityDraft.next_steps.trim())} className="h-9 inline-flex items-center gap-1.5 bg-primary text-white px-4 rounded text-xs font-bold disabled:opacity-50"><Send className="w-3.5 h-3.5" /> Save update</button>
                       </div>
                     </form>
                   </div>

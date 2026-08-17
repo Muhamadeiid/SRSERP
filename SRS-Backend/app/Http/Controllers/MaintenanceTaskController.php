@@ -142,6 +142,9 @@ class MaintenanceTaskController extends Controller
 
         $data = $request->validate($rules);
         $oldStatus = $maintenanceTask->status;
+        if (($data['status'] ?? null) === 'done' && $oldStatus !== 'done') {
+            abort(422, 'Complete the task from Task Updates and provide a completion summary.');
+        }
         $viewerIds = $data['viewer_user_ids'] ?? null;
         unset($data['viewer_user_ids']);
         if (isset($data['status'])) {
@@ -191,15 +194,29 @@ class MaintenanceTaskController extends Controller
         abort_unless($this->canAccessTask($user, $maintenanceTask), 403);
 
         $data = $request->validate([
-            'body' => 'required|string|max:3000',
-            'status' => 'nullable|in:pending,in_progress,done',
+            'body' => 'nullable|string|max:3000|required_without:work_done',
+            'work_date' => 'nullable|date|required_with:work_done',
+            'work_done' => 'nullable|string|max:3000|required_without:body',
+            'result' => 'nullable|string|max:3000|required_with:work_done',
+            'next_steps' => 'nullable|string|max:3000',
+            'completion_summary' => 'nullable|string|max:3000|required_if:status,done',
+            'status' => 'required|in:pending,in_progress,done',
         ]);
+
+        if ($data['status'] !== 'done' && empty(trim((string) ($data['next_steps'] ?? '')))) {
+            abort(422, 'The next action is required while the task is still open.');
+        }
 
         $activity = MaintenanceTaskActivity::create([
             'maintenance_task_id' => $maintenanceTask->id,
             'user_id' => $user->id,
             'type' => 'comment',
-            'body' => $data['body'],
+            'body' => $data['body'] ?? $data['work_done'] ?? null,
+            'work_date' => $data['work_date'] ?? now()->toDateString(),
+            'work_done' => $data['work_done'] ?? $data['body'] ?? null,
+            'result' => $data['result'] ?? null,
+            'next_steps' => $data['next_steps'] ?? null,
+            'completion_summary' => $data['completion_summary'] ?? null,
         ]);
 
         if (!empty($data['status']) && $data['status'] !== $maintenanceTask->status) {
