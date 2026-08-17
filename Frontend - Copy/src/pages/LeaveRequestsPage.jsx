@@ -2178,7 +2178,7 @@ function ApprovalProgress({ req }) {
   if (isRejected) {
     bannerTone = 'bg-red-50 border-red-200 text-red-700'
     bannerIcon = <XCircle className="w-4 h-4 shrink-0" />
-    bannerText = 'Rejected'
+    bannerText = req.rejecter?.name ? `Rejected by ${req.rejecter.name}` : 'Rejected'
     bannerSub = req.rejection_reason || ''
   } else if (isCancelled) {
     bannerTone = 'bg-neutral-100 border-neutral-200 text-neutral-600'
@@ -2570,6 +2570,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
             canViewLeaveBalance ? ['Available Balance', `${formatBalanceDisplay(req)} days`] : null,
             isLRF ? ['Purpose', req.purpose] : (req.overtime_results ? ['Overtime Results', req.overtime_results] : null),
             req.rejection_reason  ? ['Rejection Reason',  req.rejection_reason]  : null,
+            req.rejecter?.name ? ['Rejected By', req.rejecter.name] : null,
+            req.rejected_at ? ['Rejected At', fmtShort(req.rejected_at)] : null,
             req.reschedule_reason ? ['Reschedule Reason', req.reschedule_reason] : null,
             ['Submitted', fmtShort(req.created_at)],
           ].filter(Boolean).map(([k, v]) => v ? (
@@ -2949,6 +2951,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [loadingReqs, setLoadingReqs] = useState(true)
   const [saving,      setSaving]      = useState(false)
   const [submitted,   setSubmitted]   = useState(false)
+  const [submitError, setSubmitError] = useState(null)
   const [formKey,     setFormKey]     = useState(0)   // increment to reset form
   const [viewReq,     setViewReq]     = useState(null)
   const [focusApproval, setFocusApproval] = useState(false)
@@ -3079,6 +3082,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${fmtDays(r.days)}d`
               : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${displayOvertimeHours(r.hours)}h`}
           </p>
+          {r.status === 'rejected' && (
+            <p className="mt-1 truncate text-[11px] font-medium text-red-600">
+              Rejected{r.rejecter?.name ? ` by ${r.rejecter.name}` : ''}{r.rejection_reason ? ` · ${r.rejection_reason}` : ''}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -3191,6 +3199,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
   const handleSubmit = async (data) => {
     setSaving(true)
+    setSubmitError(null)
     try {
       await createLeaveRequest(data)
       setSubmitted(true)
@@ -3198,7 +3207,15 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       setTimeout(() => setSubmitted(false), 6000)
       fetchRequests()
     } catch (e) {
-      alert(e.message)
+      const balanceIssue = e.code === 'INSUFFICIENT_LEAVE_BALANCE'
+        || /not have enough|insufficient.*balance|enough available leave balance/i.test(e.message || '')
+      setSubmitError({
+        title: balanceIssue ? 'Insufficient leave balance' : 'Request could not be submitted',
+        message: balanceIssue
+          ? 'This employee does not have enough available balance for the selected leave. Reduce the number of days, choose Unpaid or Company Paid when applicable, or ask HR to review the employee balance.'
+          : (e.message || 'Please review the request details and try again.'),
+        balanceIssue,
+      })
     } finally {
       setSaving(false)
     }
@@ -3247,9 +3264,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
 
   const handleReject = async () => {
-    if (!rejectModal) return
+    if (!rejectModal || rejectReason.trim().length < 5) return
     try {
-      await rejectLeave(rejectModal.id, rejectReason)
+      await rejectLeave(rejectModal.id, rejectReason.trim())
       setRejectModal(null)
       setRejectReason('')
       setViewReq(null)
@@ -3356,6 +3373,18 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       )}
 
       {/* Form */}
+      {submitError && (
+        <div role="alert" className={`rounded-xl border px-4 py-3 ${submitError.balanceIssue ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'}`}>
+          <div className="flex items-start gap-3">
+            <AlertCircle className={`mt-0.5 h-5 w-5 shrink-0 ${submitError.balanceIssue ? 'text-amber-600' : 'text-red-600'}`} />
+            <div className="min-w-0 flex-1">
+              <p className={`text-sm font-bold ${submitError.balanceIssue ? 'text-amber-800' : 'text-red-700'}`}>{submitError.title}</p>
+              <p className={`mt-1 text-xs leading-relaxed ${submitError.balanceIssue ? 'text-amber-700' : 'text-red-600'}`}>{submitError.message}</p>
+            </div>
+            <button type="button" onClick={() => setSubmitError(null)} className="rounded-md p-1 text-neutral-400 hover:bg-white/70" aria-label="Dismiss message"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
       {tab === 'lrf'
         ? <OfficialLRFForm key={`lrf-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'lrf' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
         : <OTRForm key={`otr-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'otr' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
@@ -3761,7 +3790,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <button onClick={() => setRejectModal(null)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400"><X className="w-4 h-4" /></button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Reason (optional)</label>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Rejection reason <span className="text-red-500">*</span></label>
               <textarea
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
@@ -3772,7 +3801,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm font-semibold text-neutral-500 hover:bg-neutral-100 rounded-lg transition-all">Cancel</button>
-              <button onClick={handleReject} className="px-5 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all">Confirm Reject</button>
+              <button onClick={handleReject} disabled={rejectReason.trim().length < 5} className="px-5 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40">Confirm Reject</button>
             </div>
           </div>
         </div>

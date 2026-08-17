@@ -14,8 +14,11 @@ async function request(path, options = {}) {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }))
-    if (err.errors) throw new Error(Object.values(err.errors).flat()[0])
-    throw new Error(err.message ?? 'Request failed')
+    const error = new Error(err.errors ? Object.values(err.errors).flat()[0] : (err.message ?? 'Request failed'))
+    error.status = res.status
+    error.code = err.code
+    error.details = err.errors
+    throw error
   }
   return res.json()
 }

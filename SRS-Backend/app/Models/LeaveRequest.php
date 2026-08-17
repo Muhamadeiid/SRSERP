@@ -20,6 +20,7 @@ class LeaveRequest extends Model
         'ot_date', 'start_time', 'end_time', 'hours', 'explanation', 'overtime_results',
         // Approval
         'status', 'approved_by', 'approved_at', 'balance_deducted_at', 'rejection_reason',
+        'rejected_by', 'rejected_at',
         // Cancellation
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         'requested_cancellation_at', 'requested_cancellation_by',
@@ -45,6 +46,7 @@ class LeaveRequest extends Model
         'hr_approved_at'      => 'datetime',
         'manager_approved_at' => 'datetime',
         'balance_deducted_at' => 'datetime',
+        'rejected_at'         => 'datetime',
         'cancelled_at'        => 'datetime',
         'requested_cancellation_at' => 'datetime',
         'cancellation_rejected_at' => 'datetime',
@@ -60,6 +62,7 @@ class LeaveRequest extends Model
     public function employee()       { return $this->belongsTo(Employee::class); }
     public function alternateEmployee(){ return $this->belongsTo(Employee::class, 'alternate_employee_id')->withTrashed(); }
     public function approver()       { return $this->belongsTo(User::class, 'approved_by'); }
+    public function rejecter()       { return $this->belongsTo(User::class, 'rejected_by'); }
     public function hrApprover()     { return $this->belongsTo(User::class, 'hr_approved_by'); }
     public function canceller()      { return $this->belongsTo(User::class, 'cancelled_by'); }
     public function cancellationRequester(){ return $this->belongsTo(User::class, 'requested_cancellation_by'); }

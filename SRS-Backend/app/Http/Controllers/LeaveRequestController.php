@@ -42,6 +42,7 @@ class LeaveRequestController extends Controller
             // List pages only need identity/approval metadata. Signature images
             // are loaded by show() when a request is opened or printed.
             'approver:id,name,role',
+            'rejecter:id,name,role',
             'managerApprover:id,name,role',
             'hrApprover:id,name,role',
             'cancellationRequester:id,name',
@@ -328,6 +329,7 @@ class LeaveRequestController extends Controller
         ) {
             return response()->json([
                 'success' => false,
+                'code' => 'INSUFFICIENT_LEAVE_BALANCE',
                 'message' => 'The employee does not have enough available leave balance for this request.',
             ], 422);
         }
@@ -410,6 +412,7 @@ class LeaveRequestController extends Controller
 
         $relations = [
             'approver:id,name,e_signature,role',
+            'rejecter:id,name,role',
             'managerApprover:id,name,e_signature,role',
             'hrApprover:id,name,e_signature,role',
             'cancellationRequester:id,name',
@@ -703,20 +706,29 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Request already processed'], 422);
         }
 
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [
+            'reason.required' => 'A rejection reason is required.',
+            'reason.min' => 'Please provide a clear rejection reason of at least 5 characters.',
+        ]);
+
         $leaveRequest->update([
             'tracking_no' => null,
             'status' => 'rejected',
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'rejection_reason' => $request->input('reason'),
+            'rejection_reason' => trim($validated['reason']),
+            'rejected_by' => $user->id,
+            'rejected_at' => now(),
         ]);
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_rejected', "{$typeLabel} Rejected", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was rejected by {$user->name}." . ($request->input('reason') ? ' Reason: ' . $request->input('reason') : ''), ['leave_request_id' => $leaveRequest->id]);
+            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_rejected', "{$typeLabel} Rejected", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was rejected by {$user->name}. Reason: {$validated['reason']}", ['leave_request_id' => $leaveRequest->id]);
         }
 
-        return response()->json(['success' => true, 'data' => $leaveRequest->fresh('approver')]);
+        return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'rejecter'])]);
     }
 
     public function reschedule(Request $request, LeaveRequest $leaveRequest): JsonResponse
