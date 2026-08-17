@@ -22,14 +22,16 @@ export function canAccess(user, roles, departments) {
   return roleOk && deptOk
 }
 
-export default function ProtectedRoute({ children, roles, departments, redirect = '/', adminOnly = false }) {
+export default function ProtectedRoute({ children, roles, departments, redirect = '/', adminOnly = false, allowTeamManager = false }) {
   const { isAuthenticated, user } = useSelector((state) => state.auth)
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   if (adminOnly && user?.role !== 'admin') return <Navigate to={redirect} replace />
 
-  if (!canAccess(user, roles, departments)) return <Navigate to={redirect} replace />
+  if (!canAccess(user, roles, departments) && !(allowTeamManager && user?.is_team_manager)) {
+    return <Navigate to={redirect} replace />
+  }
 
   return children
 }

@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
 import { logout, refreshUser } from './store/slices/authSlice'
+import MaintenanceTaskToasts from './components/notifications/MaintenanceTaskToasts'
 
 const lazyWithRetry = importer => lazy(async () => {
   try {
@@ -122,6 +123,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthSync />
+      <MaintenanceTaskToasts />
       <Suspense fallback={<PageFallback />}>
       <Routes>
         {/* Public */}
@@ -144,7 +146,7 @@ export default function App() {
 
         {/* Maintenance Layout — Admin only (under development) */}
         <Route path="/maintenance" element={
-          <ProtectedRoute roles={['admin', 'depot_manager', 'manager']} redirect="/">
+          <ProtectedRoute roles={['admin', 'depot_manager', 'manager']} allowTeamManager redirect="/">
             <MaintenanceLayout />
           </ProtectedRoute>
         }>

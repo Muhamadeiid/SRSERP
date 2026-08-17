@@ -12,6 +12,7 @@ import { getEmployees, getEmployeeStats } from '../services/employeeService'
 import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
+import { getMaintenanceTasks }          from '../services/maintenanceService'
 
 // ── time formatter ──────────────────────────────────────────────
 const fmtTime = (d) => {
@@ -172,11 +173,11 @@ export default function DashboardPage() {
   const { user } = useSelector(s => s.auth)
 
   const role       = user?.role ?? 'staff'
-  const dept       = user?.department ?? ''
   const isHRFull   = ['admin', 'depot_manager', 'hr'].includes(role)
   const isProcFull = ['admin', 'depot_manager', 'purchasing'].includes(role)
   const canSeeProc = isProcFull || role === 'ehs'
   const isDashFull = ['admin', 'depot_manager'].includes(role)
+  const canSeeMaintenance = ['admin', 'depot_manager', 'manager'].includes(role) || !!user?.is_team_manager
 
   const [loading, setLoading] = useState(true)
   const [empStats,  setEmpStats]  = useState(null)
@@ -185,6 +186,7 @@ export default function DashboardPage() {
   const [prfs,      setPrfs]      = useState([])
   const [notifs,    setNotifs]    = useState([])
   const [todayAttendance, setTodayAttendance] = useState([])
+  const [maintenanceTasks, setMaintenanceTasks] = useState([])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -208,10 +210,13 @@ export default function DashboardPage() {
     if (canSeeProc) {
       tasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
     }
+    if (canSeeMaintenance) {
+      tasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
+    }
     tasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
     await Promise.allSettled(tasks)
     setLoading(false)
-  }, [isHRFull, canSeeProc])
+  }, [isHRFull, canSeeProc, canSeeMaintenance])
 
   useEffect(() => {
     fetchAll()
@@ -287,6 +292,10 @@ export default function DashboardPage() {
   }, [pendingLeaves, pendingPrfs, rejectedPrfs, notifs, isHRFull, canSeeProc])
 
   const L = (v) => loading ? '…' : v
+  const visibleMaintenanceTasks = useMemo(
+    () => maintenanceTasks.filter(task => task.status !== 'done').slice(0, 5),
+    [maintenanceTasks]
+  )
 
   // ── Render ──────────────────────────────────────────────────
   return (
@@ -317,6 +326,61 @@ export default function DashboardPage() {
 
       {/* ══ My Requests — visible to non-HR roles (staff, manager, procurement, ehs) ══ */}
       {!isHRFull && <MyRequestsCard reqs={reqs} loading={loading} onOpen={(id) => navigate(`/human-resources/leave?req=${id}`)} onResubmit={(id) => navigate(`/human-resources/leave?resubmit=${id}`)} onNewRequest={() => navigate('/human-resources/leave')} />}
+
+      {canSeeMaintenance && (
+        <DeptSection
+          title="Maintenance Tasks"
+          subtitle="Tasks assigned to you and active maintenance actions"
+          icon={Wrench}
+          accentColor="border-l-orange-500"
+          headerBg="bg-orange-50/40"
+          iconBg="bg-orange-100 text-orange-600"
+          onView={() => navigate('/maintenance')}
+          viewLabel="View Tasks"
+        >
+          {loading && maintenanceTasks.length === 0 ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-orange-500" /></div>
+          ) : visibleMaintenanceTasks.length === 0 ? (
+            <div className="py-8 text-center">
+              <CheckCircle2 className="mx-auto h-7 w-7 text-green-500" />
+              <p className="mt-2 text-xs font-bold text-secondary-700">No pending maintenance tasks</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-100">
+              {visibleMaintenanceTasks.map(task => {
+                const priorityClass = task.priority === 'critical'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : task.priority === 'high'
+                    ? 'bg-orange-50 text-orange-700 border-orange-200'
+                    : task.priority === 'medium'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-neutral-50 text-neutral-600 border-neutral-200'
+                const train = task.train_number ? `TS${String(task.train_number).padStart(2, '0')}` : 'General task'
+                return (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => navigate(`/maintenance?task=${task.id}`)}
+                    className="flex w-full items-center gap-3 px-1 py-3 text-left hover:bg-neutral-50"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                      <Wrench className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-secondary-700">{task.title}</span>
+                      <span className="mt-1 block text-[10px] text-neutral-400">
+                        {train}{task.due_date ? ` · Due ${new Date(task.due_date).toLocaleDateString('en-GB')}` : ''}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold uppercase ${priorityClass}`}>{task.priority}</span>
+                    <span className="hidden shrink-0 text-[10px] font-semibold capitalize text-neutral-500 sm:block">{String(task.status).replace('_', ' ')}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </DeptSection>
+      )}
 
       {/* ══ HR Section ══════════════════════════════════════════════ */}
       {isHRFull && (
@@ -441,11 +505,8 @@ export default function DashboardPage() {
         </DeptSection>
       )}
 
-      {/* ══ Inventory + Maintenance (Admin / Depot Manager) ═════════ */}
+      {/* ══ Inventory (Admin / Depot Manager) ═══════════════════════ */}
       {isDashFull && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* Inventory */}
           <DeptSection
             title="Inventory Control"
             subtitle="Stock, rotable parts, bad items, weekly imports"
@@ -470,48 +531,6 @@ export default function DashboardPage() {
               </button>
             </div>
           </DeptSection>
-
-          {/* Maintenance */}
-          <DeptSection
-            title="Maintenance"
-            subtitle="Corrective & preventive maintenance workflows"
-            icon={Wrench}
-            accentColor={role === 'admin' ? 'border-l-orange-500' : 'border-l-neutral-300'}
-            headerBg={role === 'admin' ? 'bg-orange-50/40' : 'bg-neutral-50'}
-            iconBg={role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-neutral-100 text-neutral-400'}
-            onView={role === 'admin' ? () => navigate('/maintenance') : undefined}
-            viewLabel="Open Module"
-          >
-            {role === 'admin' ? (
-              <div className="flex items-center gap-3 sm:gap-4 bg-orange-50/60 rounded-xl p-3 sm:p-4">
-                <Wrench className="w-10 h-10 text-orange-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-orange-700">Module Preview (Admin Only)</p>
-                  <p className="text-[10px] text-orange-600 mt-0.5 leading-relaxed">
-                    Corrective + preventive workflows, job cards, and equipment tracking.
-                  </p>
-                </div>
-                <button onClick={() => navigate('/maintenance')}
-                  className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold rounded-lg transition-colors shrink-0">
-                  Open <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 sm:gap-4 bg-neutral-50 rounded-xl p-3 sm:p-4">
-                <Wrench className="w-10 h-10 text-neutral-300 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-neutral-500">Module Coming Soon</p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5 leading-relaxed">
-                    Corrective + preventive workflows, job cards, and equipment tracking.
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-full shrink-0">
-                  Coming Soon
-                </span>
-              </div>
-            )}
-          </DeptSection>
-        </div>
       )}
 
       {/* ══ Leave & OT quick access (non-HR users) ══════════════════ */}

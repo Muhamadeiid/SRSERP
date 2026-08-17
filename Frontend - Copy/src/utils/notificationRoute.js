@@ -1,4 +1,11 @@
 export function notificationRequestTarget(notification) {
+  if (notification?.data?.maintenance_task_id) {
+    return {
+      path: notification.data.path || '/maintenance',
+      query: `task=${notification.data.maintenance_task_id}`,
+    }
+  }
+
   if (notification?.data?.resignation_request_id) {
     return {
       path: '/human-resources/resignations',

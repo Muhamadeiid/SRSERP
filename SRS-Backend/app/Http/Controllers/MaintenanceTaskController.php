@@ -239,13 +239,14 @@ class MaintenanceTaskController extends Controller
 
     private function canViewTasks(User $user): bool
     {
-        return $this->canManageAll($user) || $user->role === 'manager';
+        return $this->canManageAll($user) || $user->role === 'manager' || $user->is_team_manager;
     }
 
     private function canAccessTask(User $user, MaintenanceTask $task): bool
     {
         return $this->canManageAll($user)
-            || ($user->role === 'manager' && $task->viewers()->where('users.id', $user->id)->exists());
+            || (($user->role === 'manager' || $user->is_team_manager)
+                && $task->viewers()->where('users.id', $user->id)->exists());
     }
 
     private function notifyTaskParticipants(MaintenanceTask $task, int $actorId, string $title, string $body): void
