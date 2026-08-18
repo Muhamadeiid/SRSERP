@@ -40,7 +40,37 @@ const cellKey = (employeeId, date) => `${employeeId}:${date}`
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
 const AVATAR_COLORS = ['bg-primary', 'bg-cyan-700', 'bg-emerald-700', 'bg-orange-700', 'bg-violet-700', 'bg-rose-700', 'bg-indigo-700']
 
-const shortTime = value => value ? String(value).slice(0, 5) : '--:--'
+const shortTime = value => {
+  if (!value) return '--:--'
+  const match = String(value).match(/(?:T|\s)?(\d{1,2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+  return match ? `${String(match[1]).padStart(2, '0')}:${match[2]}` : String(value).slice(0, 5)
+}
+
+const timeMinutes = value => {
+  const time = shortTime(value)
+  if (!/^\d{2}:\d{2}$/.test(time)) return null
+  const [hours, minutes] = time.split(':').map(Number)
+  return (hours * 60) + minutes
+}
+
+// A late arrival still belongs to the shift where most of the actual attendance occurred.
+const inferredShift = attendance => {
+  let start = timeMinutes(attendance?.check_in)
+  let end = timeMinutes(attendance?.check_out)
+  if (start == null || end == null) return ''
+  if (end <= start) end += 1440
+
+  const intervals = {
+    morning: [[390, 930]],
+    afternoon: [[900, 1440]],
+    night: [[1380, 1920], [-60, 480]],
+  }
+  const overlap = ([from, to]) => Math.max(0, Math.min(end, to) - Math.max(start, from))
+  const ranked = Object.entries(intervals)
+    .map(([shift, ranges]) => [shift, Math.max(...ranges.map(overlap))])
+    .sort((left, right) => right[1] - left[1])
+  return ranked[0]?.[1] > 0 ? ranked[0][0] : ''
+}
 
 function EditableShift({ value, attendance, onChange }) {
   const shift = SHIFTS[value]
@@ -112,7 +142,8 @@ export default function InterventionShiftsPage() {
 
   const valueFor = (employeeId, date) => {
     const key = cellKey(employeeId, date)
-    return Object.hasOwn(draft, key) ? draft[key] : (plans[key] || '')
+    if (Object.hasOwn(draft, key)) return draft[key]
+    return plans[key] || inferredShift(attendances[key])
   }
 
   const setShift = (employeeId, date, shift) => {
@@ -151,7 +182,7 @@ export default function InterventionShiftsPage() {
       }
     }))
     return result
-  }, [days, employees, leaves, plans, draft])
+  }, [days, employees, leaves, plans, draft, attendances])
 
   const isCurrentWeek = weekStart === saturdayOf()
   const isNextWeek = weekStart === addDays(saturdayOf(), 7)
