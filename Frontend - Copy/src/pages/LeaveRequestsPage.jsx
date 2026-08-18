@@ -447,6 +447,41 @@ function StatusBadge({ status }) {
   )
 }
 
+const REQUEST_GRID = 'grid min-w-[900px] grid-cols-[minmax(190px,2fr)_120px_130px_75px_105px_105px_minmax(150px,auto)] items-center gap-3'
+
+function RequestTableHeader() {
+  return (
+    <div className="overflow-x-auto border-b border-neutral-200 bg-primary/5">
+      <div className={`${REQUEST_GRID} px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
+        <span>Employee / Request</span><span>Status</span><span>Type</span><span>Days / Hrs</span><span>From</span><span>To</span><span className="text-right">Actions</span>
+      </div>
+    </div>
+  )
+}
+
+function RequestSummaryCard({ label, value, total, tone }) {
+  const percent = total ? Math.round((value / total) * 100) : 0
+  const colors = {
+    total: ['text-violet-600', 'stroke-violet-500'],
+    pending: ['text-amber-600', 'stroke-amber-500'],
+    approved: ['text-emerald-600', 'stroke-emerald-500'],
+    rejected: ['text-red-600', 'stroke-red-500'],
+  }[tone]
+  const circumference = 100
+  return (
+    <div className="flex min-h-[88px] items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+      <div className="relative grid h-12 w-12 shrink-0 place-items-center">
+        <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90" aria-hidden="true">
+          <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3" className="stroke-neutral-100" />
+          <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3" strokeDasharray={`${percent} ${circumference - percent}`} strokeLinecap="round" className={colors[1]} />
+        </svg>
+        <span className="absolute text-[10px] font-bold text-secondary-700">{percent}%</span>
+      </div>
+      <div className="min-w-0"><p className="text-xs font-bold text-secondary-700">{label}</p><p className={`mt-1 text-xl font-extrabold ${colors[0]}`}>{value}</p></div>
+    </div>
+  )
+}
+
 // ── employee autocomplete ─────────────────────────────────────
 function EmployeeSearch({ onSelect, initialName = '', onInputChange }) {
   const [q, setQ]           = useState(initialName)
@@ -3047,6 +3082,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const pendingForStage = approvalStage === 'all'
     ? pending
     : pending.filter(request => approvalStageFor(request) === approvalStage)
+  const summaryTotal = typeFiltered.length
+  const summaryPending = typeFiltered.filter(request => ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending', 'amendment_pending'].includes(request.status)).length
+  const summaryApproved = typeFiltered.filter(request => request.status === 'approved').length
+  const summaryRejected = typeFiltered.filter(request => request.status === 'rejected').length
 
   // Keep requests visible to the account that submitted them while another
   // role owns the current approval step.
@@ -3067,8 +3106,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
   // Single row renderer used by both Active and History sections
   const renderRequestRow = (r, { showArchiveAction = false, showRestoreAction = false } = {}) => (
-    <div key={r.id} className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 hover:bg-neutral-50 transition-colors">
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+    <div key={r.id} className="overflow-x-auto border-b border-neutral-100 last:border-0">
+    <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-neutral-50 sm:px-6`}>
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
           {r.type==='lrf' ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
         </div>
@@ -3089,8 +3129,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <StatusBadge status={r.status} />
+      <StatusBadge status={r.status} />
+      <span className="text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
+      <span className="text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
+      <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+      <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
+      <div className="flex items-center justify-end gap-2 shrink-0">
         <button
           onClick={() => openRequest(r)}
           aria-label={`View ${r.tracking_no || r.id}`}
@@ -3133,6 +3177,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           </button>
         )}
       </div>
+    </div>
     </div>
   )
 
@@ -3316,7 +3361,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:space-y-6 sm:p-6">
 
       {/* Page header */}
       <div className="flex items-start justify-between gap-3">
@@ -3390,6 +3435,13 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
         : <OTRForm key={`otr-${formKey}`} onSubmit={handleSubmit} saving={saving} prefill={resubmitFrom?.type === 'otr' ? resubmitFrom : null} onPrefillDone={() => setResubmitFrom(null)} />
       }
 
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Request summary">
+        <RequestSummaryCard label="Total Requests" value={summaryTotal} total={summaryTotal} tone="total" />
+        <RequestSummaryCard label="Pending" value={summaryPending} total={summaryTotal} tone="pending" />
+        <RequestSummaryCard label="Approved" value={summaryApproved} total={summaryTotal} tone="approved" />
+        <RequestSummaryCard label="Rejected" value={summaryRejected} total={summaryTotal} tone="rejected" />
+      </section>
+
       {mySubmittedRequests.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
           <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:px-6 sm:py-4">
@@ -3456,17 +3508,18 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               )
             })}
           </div>
+          <RequestTableHeader />
           <div className="divide-y divide-neutral-50">
             {pendingForStage.map(r => (
-              <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-amber-50/40 transition-colors">
-                <div className="flex items-center gap-3">
+              <div key={r.id} className="overflow-x-auto">
+              <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-amber-50/40 sm:px-6`}>
+                <div className="flex min-w-0 items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
                     {r.type==='lrf' ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-secondary-700">{r.employee_name}</p>
-                      <StatusBadge status={r.status} />
                     </div>
                     <p className="text-xs text-neutral-400">
                       {r.type==='lrf'
@@ -3475,7 +3528,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <StatusBadge status={r.status} />
+                <span className="text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
+                <span className="text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
+                <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+                <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
                   <button onClick={() => openRequest(r)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => setRescheduleModal({ id: r.id })}
                     className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all">Reschedule</button>
@@ -3501,6 +3559,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                       className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Final Approve</button>
                   )}
                 </div>
+              </div>
               </div>
             ))}
             {pendingForStage.length === 0 && (
@@ -3534,6 +3593,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
             <div className="divide-y divide-neutral-50">
+              <RequestTableHeader />
               {active.map(r => renderRequestRow(r, { showArchiveAction: canManagePrintArchive }))}
             </div>
           </div>
@@ -3586,6 +3646,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   </label>
                 </div>
                 <div className="divide-y divide-neutral-50">
+                  <RequestTableHeader />
                   {archived.length > 0
                     ? archived.map(request => renderRequestRow(request, { showRestoreAction: true }))
                     : <p className="px-6 py-8 text-center text-xs text-neutral-400">No archived requests for this month.</p>}
@@ -3724,6 +3785,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               ) : (
                 <>
                   <div className="divide-y divide-neutral-50">
+                    <RequestTableHeader />
                     {pageItems.map(r => renderRequestRow(r))}
                   </div>
 
