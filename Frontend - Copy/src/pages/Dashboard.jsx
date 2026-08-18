@@ -13,6 +13,7 @@ import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
 import { getMaintenanceTasks }          from '../services/maintenanceService'
+import HRDashboardView                  from '../components/dashboard/HRDashboardView'
 
 // ── time formatter ──────────────────────────────────────────────
 const fmtTime = (d) => {
@@ -296,6 +297,22 @@ export default function DashboardPage() {
     () => maintenanceTasks.filter(task => task.status !== 'done').slice(0, 5),
     [maintenanceTasks]
   )
+
+  if (isHRFull) {
+    return (
+      <HRDashboardView
+        user={user}
+        loading={loading}
+        empStats={empStats}
+        employees={employees}
+        requests={reqs}
+        notifications={notifs}
+        todayAttendance={todayAttendance}
+        maintenanceTasks={maintenanceTasks}
+        onRefresh={fetchAll}
+      />
+    )
+  }
 
   // ── Render ──────────────────────────────────────────────────
   return (
