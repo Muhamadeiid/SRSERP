@@ -1782,6 +1782,7 @@ class AttendanceController extends Controller
         }
 
         $empOTRs = $approvedOTRs->where('employee_id', $employee->id);
+        $holidaysSet = array_flip($holidays);
 
         foreach ($empOTRs as $otr) {
             $startM = $timeToMin($otr->start_time);
@@ -1797,10 +1798,10 @@ class AttendanceController extends Controller
                 PHP_ROUND_HALF_UP
             );
 
-            // An approved OTR on the employee's scheduled day off is paid as
-            // double time. Keep normal day/night splits untouched for workdays.
+            // Double pay always requires an approved OTR. Public holidays and
+            // scheduled days off only decide how that approved OTR is classified.
             $otDate = Carbon::parse($otr->ot_date);
-            if (!$employee->isWorkingDay($otDate)) {
+            if (!$employee->isWorkingDay($otDate) || isset($holidaysSet[$otDate->toDateString()])) {
                 $doublePayOT += $approvedHours;
                 continue;
             }
@@ -1824,15 +1825,6 @@ class AttendanceController extends Controller
 
             $totalDayOT += $dayHours;
             $totalNightOT += $nightHours;
-        }
-
-        // Double Pay: hours worked on public holidays
-        $holidaysSet = array_flip($holidays);
-        foreach ($attendances as $att) {
-            $d = is_string($att->date) ? substr($att->date, 0, 10) : ($att->date?->format('Y-m-d') ?? '');
-            if (isset($holidaysSet[$d]) && $att->work_hours > 0) {
-                $doublePayOT += (int) round($att->work_hours);
-            }
         }
 
         // Unpaid leave always deducts the approved day fraction at 8 hours per day.

@@ -2216,7 +2216,7 @@ function PublicHolidaysPanel() {
       <div className="p-5 border-b border-neutral-50">
         <h3 className="text-sm font-bold text-secondary-700">Public Holidays</h3>
         <p className="text-[11px] text-neutral-400 mt-1">
-          Days marked here don't count as absences. Employees who clock in on a holiday get <span className="font-semibold text-rose-500">Double Pay</span>.
+          Days marked here don't count as absences. <span className="font-semibold text-rose-500">Double Pay requires a fully approved OTR</span> for the employee on that date.
         </p>
       </div>
 

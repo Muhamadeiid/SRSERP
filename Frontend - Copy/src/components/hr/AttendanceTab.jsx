@@ -1641,11 +1641,11 @@ export default function AttendanceTab() {
                           const leaveLabel = onLeave
                             ? ({ annual: 'Annual', casual: 'Casual', sick: 'Sick' }[r.leave?.leave_type] || '')
                             : ''
-                          // Approved OTR on a scheduled OFF day is double pay.
-                          // Holiday attendance keeps the existing double-pay display.
-                          const doublePayHrs = isAutomaticDayOff && ot?.total > 0
+                          // Public holidays and scheduled OFF days are double pay
+                          // only when an approved OTR exists for this exact date.
+                          const doublePayHrs = (isAutomaticDayOff || isHoliday) && ot?.total > 0
                             ? ot.total
-                            : (isHoliday && rec?.work_hours > 0 ? Math.round(Number(rec.work_hours)) : 0)
+                            : 0
                           // Early-leave permission note
                           const permWindow = earlyPermissionWindow(r.leave)
                           const noteParts = []
