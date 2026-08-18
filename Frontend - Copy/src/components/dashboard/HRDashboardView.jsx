@@ -161,8 +161,8 @@ export default function HRDashboardView({
     <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-secondary-700">Human Resources Dashboard</h1>
-          <p className="mt-1 text-xs text-neutral-400">Live workforce, attendance, leave and operational activity.</p>
+          <h1 className="text-2xl font-extrabold text-secondary-700">Operations Dashboard</h1>
+          <p className="mt-1 text-xs text-neutral-400">Live overview across departments and company operations.</p>
         </div>
         <button type="button" onClick={() => { onRefresh(); setWeekReload(value => value + 1) }} disabled={loading || weeklyLoading} className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-bold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
