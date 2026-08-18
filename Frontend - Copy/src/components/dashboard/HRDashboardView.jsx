@@ -5,6 +5,7 @@ import {
   Clock3, Loader2, RefreshCw, Search, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
+import { useLookups } from '../../hooks/useLookups'
 
 const dateKey = date => {
   const year = date.getFullYear()
@@ -55,6 +56,7 @@ export default function HRDashboardView({
   maintenanceTasks, onRefresh,
 }) {
   const navigate = useNavigate()
+  const { departments } = useLookups()
   const [weeklyRows, setWeeklyRows] = useState([])
   const [weeklyLoading, setWeeklyLoading] = useState(true)
   const [awardSearch, setAwardSearch] = useState('')
@@ -79,6 +81,12 @@ export default function HRDashboardView({
   const absent = useMemo(() => todayAttendance.filter(isAbsent).length, [todayAttendance])
   const leaveToday = useMemo(() => todayAttendance.filter(isLeave).length, [todayAttendance])
   const percentage = value => total ? Math.round((value / total) * 100) : 0
+  const departmentLabel = key => {
+    if (!key) return '—'
+    const normalized = String(key).trim().toLowerCase()
+    const department = departments.find(item => String(item.key).trim().toLowerCase() === normalized)
+    return department?.label_en || department?.name || String(key).replaceAll('_', ' ')
+  }
 
   const weeklyStats = useMemo(() => weeklyRows.map(({ date, rows }) => ({
     key: dateKey(date),
@@ -108,6 +116,8 @@ export default function HRDashboardView({
       return {
         id: `birthday-${employee.id}`, title: `${employee.name}'s birthday`, kind: 'Birthday',
         dateLabel: todayBirthday ? 'Today' : 'Tomorrow', href: '/human-resources', birthday: true,
+        position: employee.position || employee.job_title || '—',
+        department: departmentLabel(employee.department),
       }
     })
   }, [employees])
@@ -215,7 +225,7 @@ export default function HRDashboardView({
 
         <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-3">
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><CakeSlice className="h-4 w-4 text-pink-600" /><span><h2 className="text-sm font-bold text-secondary-700">Birthdays</h2><p className="text-[9px] text-neutral-400">Today & tomorrow</p></span></span><span className="rounded-full bg-pink-50 px-2 py-1 text-[9px] font-bold text-pink-600">{birthdays.length}</span></div>
-          <div className="space-y-2 p-3">{birthdays.length ? birthdays.map(item => <button key={item.id} onClick={() => navigate(item.href)} className="flex w-full items-center gap-2.5 rounded-md border border-pink-200 bg-pink-50/60 p-3 text-left hover:bg-pink-50"><span className="grid h-8 w-8 place-items-center rounded-full bg-pink-100 text-pink-600"><CakeSlice className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{item.title}</strong><span className="mt-1 block text-[9px] font-bold text-pink-600">{item.dateLabel}</span></span></button>) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}</div>
+          <div className="space-y-2 p-3">{birthdays.length ? birthdays.map(item => <button key={item.id} onClick={() => navigate(item.href)} className="flex w-full items-start gap-2.5 rounded-md border border-pink-200 bg-pink-50/60 p-3 text-left hover:bg-pink-50"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-pink-100 text-pink-600"><CakeSlice className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block text-xs text-secondary-700">{item.title}</strong><span className="mt-1 block truncate text-[9px] text-neutral-500">{item.position}</span><span className="mt-0.5 block truncate text-[9px] text-neutral-400">{item.department}</span><span className="mt-1.5 block text-[9px] font-bold text-pink-600">{item.dateLabel}</span></span></button>) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}</div>
         </div>
 
         <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-4">
@@ -233,7 +243,7 @@ export default function HRDashboardView({
             <table className="w-full min-w-[620px] text-left text-xs">
               <thead><tr className="border-b border-neutral-100 text-[9px] uppercase text-neutral-400"><th className="px-4 py-3">#</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Present Days</th><th className="px-4 py-3">Late Days</th></tr></thead>
               <tbody>{recognition.length ? recognition.map((item, index) => (
-                <tr key={item.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-neutral-400">{String(index + 1).padStart(2, '0')}</td><td className="px-4 py-3"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-secondary-700 text-[8px] font-bold text-white">{initials(item.name)}</span><strong className="text-secondary-700">{item.name}</strong></span></td><td className="px-4 py-3 text-neutral-500">{item.department || '—'}</td><td className="px-4 py-3 font-bold text-emerald-600">{item.present}</td><td className="px-4 py-3 font-bold text-amber-600">{item.late}</td></tr>
+                <tr key={item.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-neutral-400">{String(index + 1).padStart(2, '0')}</td><td className="px-4 py-3"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-secondary-700 text-[8px] font-bold text-white">{initials(item.name)}</span><strong className="text-secondary-700">{item.name}</strong></span></td><td className="px-4 py-3 text-neutral-500">{departmentLabel(item.department)}</td><td className="px-4 py-3 font-bold text-emerald-600">{item.present}</td><td className="px-4 py-3 font-bold text-amber-600">{item.late}</td></tr>
               )) : <tr><td colSpan="5" className="py-12 text-center text-neutral-400">No attendance data for this week</td></tr>}</tbody>
             </table>
           </div>
