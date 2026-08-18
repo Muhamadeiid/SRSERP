@@ -447,7 +447,7 @@ function StatusBadge({ status }) {
   )
 }
 
-const REQUEST_GRID = 'grid min-w-[1200px] grid-cols-[minmax(260px,1fr)_130px_140px_90px_120px_120px_330px] items-center gap-3'
+const REQUEST_GRID = 'grid min-w-[1120px] grid-cols-[minmax(260px,1fr)_130px_140px_90px_120px_120px_250px] items-center gap-3'
 
 function RequestTableHeader() {
   return (
@@ -3533,31 +3533,26 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 <span className="text-center text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
                 <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
                 <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  <button onClick={() => openRequest(r)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
+                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                  <button onClick={() => openRequest(r)} title="View request" aria-label="View request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-primary"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => setRescheduleModal({ id: r.id })}
-                    className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all">Reschedule</button>
+                    title="Reschedule" aria-label="Reschedule request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100"><CalendarClock className="h-4 w-4" /></button>
                   <button onClick={() => setRejectModal({ id: r.id })}
-                    className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-all">Reject</button>
-                  {/* Depot Manager / Super Admin can finalize any outstanding stage. */}
-                  {['pending', 'manager_approved'].includes(r.status) && isDepotAdmin && (
+                    title="Reject" aria-label="Reject request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100"><XCircle className="h-4 w-4" /></button>
+                  {/* Exactly one primary approval action is shown for the current stage. */}
+                  {r.status === 'hr_approved' && isDepotAdmin ? (
                     <button onClick={() => handleApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve & Finalize</button>
-                  )}
-                  {/* Regular manager: pending → Approve (manager step) */}
-                  {r.status === 'pending' && (r.can_approve_manager || isDirectManagerOf(r)) && (
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Final Approve</button>
+                  ) : ['pending', 'manager_approved'].includes(r.status) && isDepotAdmin ? (
+                    <button onClick={() => handleApprove(r.id)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Finalize</button>
+                  ) : r.status === 'pending' && (r.can_approve_manager || isDirectManagerOf(r)) ? (
                     <button onClick={() => handleManagerApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Approve</button>
-                  )}
-                  {/* Depot/admin: manager_approved → Final Approve */}
-                  {(r.can_approve_hr || ((r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover)) && (
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Approve</button>
+                  ) : (r.can_approve_hr || ((r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover)) ? (
                     <button onClick={() => handleHrApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-all">HR Approve</button>
-                  )}
-                  {r.status === 'hr_approved' && isDepotAdmin && (
-                    <button onClick={() => handleApprove(r.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-all">Final Approve</button>
-                  )}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-purple-600 px-3 text-xs font-bold text-white transition-colors hover:bg-purple-700"><CheckCircle className="h-4 w-4" />HR Approve</button>
+                  ) : null}
                 </div>
               </div>
               </div>
