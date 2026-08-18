@@ -63,10 +63,10 @@ export default function HRDashboardView({
   useEffect(() => {
     let active = true
     const today = new Date()
-    const saturday = addDays(today, -((today.getDay() + 1) % 7))
+    const rangeStart = addDays(today, -6)
     setWeeklyLoading(true)
     Promise.all(Array.from({ length: 7 }, (_, index) => {
-      const date = addDays(saturday, index)
+      const date = addDays(rangeStart, index)
       return attendanceService.getAttendance({ date: dateKey(date) })
         .then(response => ({ date, rows: listFrom(response) }))
         .catch(() => ({ date, rows: [] }))
@@ -161,7 +161,7 @@ export default function HRDashboardView({
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
-            <div><h2 className="text-sm font-bold text-secondary-700">Daily Attendance Statistic</h2><p className="text-[10px] text-neutral-400">Current week · Saturday to Friday</p></div>
+            <div><h2 className="text-sm font-bold text-secondary-700">Daily Attendance Statistic</h2><p className="text-[10px] text-neutral-400">Last 7 days · through today</p></div>
             <div className="flex gap-3 text-[10px] font-bold"><span className="text-emerald-600">● Present</span><span className="text-red-500">● Absent</span><span className="text-amber-500">● Leave</span></div>
           </div>
           <div className="h-[300px] px-4 pb-4 pt-6">
