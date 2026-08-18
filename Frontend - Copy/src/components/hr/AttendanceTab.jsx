@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { attendanceService } from '../../services/Attendanceservice'
 import { getEmployees } from '../../services/employeeService'
 import { getLeaveBalance } from '../../services/leaveService'
@@ -866,6 +867,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 
 // ── main component ─────────────────────────────────────────────────────────
 export default function AttendanceTab() {
+  const location = useLocation()
 
   // Lookup-backed labels for departments (falls back to raw key while loading)
   const { departments } = useLookups()
@@ -884,7 +886,10 @@ export default function AttendanceTab() {
   const [overviewBusy,   setOverviewBusy]   = useState(false)
   const [overviewSearch, setOverviewSearch] = useState('')
   const [overviewErr,    setOverviewErr]    = useState(null)
-  const [overviewMetricFilter, setOverviewMetricFilter] = useState('all')
+  const [overviewMetricFilter, setOverviewMetricFilter] = useState(() => {
+    const requested = new URLSearchParams(location.search).get('status')
+    return ['present', 'late', 'absent', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all'
+  })
   const [overviewTotalWorkforce, setOverviewTotalWorkforce] = useState(0)
 
   // ── Detail state ──────────────────────────────────────────────────────────
@@ -912,6 +917,11 @@ export default function AttendanceTab() {
   const [otrs,            setOtrs]            = useState([])     // approved OTRs overlapping range
   const [holidays,        setHolidays]        = useState([])     // public holidays overlapping range
   const [attendancePolicy, setAttendancePolicy] = useState(ATTENDANCE_POLICY_DEFAULTS)
+
+  useEffect(() => {
+    const requested = new URLSearchParams(location.search).get('status')
+    setOverviewMetricFilter(['present', 'late', 'absent', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all')
+  }, [location.search])
 
   useEffect(() => {
     getSettings()
