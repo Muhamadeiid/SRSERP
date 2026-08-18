@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../store/slices/authSlice";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCollapsedProp, isMobile = false } = {}) {
   const [collapsedLocal, setCollapsedLocal] = useState(false);
@@ -121,12 +122,13 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
       >
         {/* ── Logo ── */}
         <div>
-          <div className="flex items-center gap-3 px-4 py-5 border-b border-neutral-100 min-h-[64px] overflow-hidden">
+          <div className={`flex items-center border-b border-neutral-100 min-h-[64px] overflow-hidden ${collapsed ? 'justify-center px-2 py-4' : 'gap-3 px-4 py-5'}`}>
             <button
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={() => navigate('/')}
+              title="Back to Dashboard"
               className="shrink-0 hover:opacity-80 transition-opacity"
             >
-              <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8 w-8 object-cover object-left' : 'h-10 w-auto'} object-contain`} />
+              <img src="/logo.png" alt="Rotem SRS Egypt" className={`object-contain transition-all duration-200 ${collapsed ? 'h-7 w-11' : 'h-10 w-auto'}`} />
             </button>
 
             <div
@@ -210,8 +212,11 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
           </nav>
         </div>
 
-        {/* ── Bottom: Logout ── */}
-        <div className="p-2">
+        {/* ── Bottom controls ── */}
+        <div className="space-y-1 border-t border-neutral-100 p-2">
+          {!isMobile && <button type="button" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} className={`flex w-full items-center rounded-lg py-2.5 text-sm font-semibold text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-secondary ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'}`}>
+            {collapsed ? <ChevronRight className="h-[18px] w-[18px]" /> : <><ChevronLeft className="h-[18px] w-[18px]" /><span>Collapse</span></>}
+          </button>}
           <button
             onClick={handleLogout}
             title={collapsed ? "Logout" : undefined}

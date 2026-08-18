@@ -209,14 +209,14 @@ export default function HRLayout() {
         className={`fixed top-0 left-0 bottom-0 bg-white border-r border-neutral-100 flex flex-col z-50 transition-all duration-200 overflow-hidden ${isMobile && !sidebarVisible ? '-translate-x-full' : 'translate-x-0'}`}
         style={{ width: sidebarW }}
       >
-        {/* Logo / collapse toggle */}
+        {/* Logo */}
         <div className={`flex border-b border-neutral-100 transition-all duration-200 ${collapsed ? 'items-center justify-center px-2 py-4 min-h-[64px]' : 'flex-col items-start gap-1 px-4 py-4 min-h-[82px]'}`}>
           <button
-            onClick={() => collapsed ? setCollapsed(false) : navigate('/')}
-            title={collapsed ? 'Expand' : 'Back to Dashboard'}
+            onClick={() => navigate('/')}
+            title="Back to Dashboard"
             className="max-w-full shrink-0 hover:opacity-80 transition-opacity"
           >
-            <img src="/logo.png" alt="Rotem SRS Egypt" className={`transition-all duration-200 ${collapsed ? 'h-8 max-w-10' : 'h-10 max-w-full'} w-auto object-contain`} />
+            <img src="/logo.png" alt="Rotem SRS Egypt" className={`object-contain transition-all duration-200 ${collapsed ? 'h-7 w-11' : 'h-10 max-w-full w-auto'}`} />
           </button>
           <div className={`flex flex-col leading-tight transition-all duration-200 ${collapsed ? 'hidden w-0 opacity-0' : 'w-full opacity-100'}`}>
             <span className="block max-w-full text-[10px] text-neutral-400 uppercase tracking-widest break-words leading-snug">Human Resources</span>
@@ -306,8 +306,11 @@ export default function HRLayout() {
           })}
         </nav>
 
-        {/* Bottom — logout */}
-        <div className="p-2 border-t border-neutral-100">
+        {/* Bottom controls */}
+        <div className="space-y-1 border-t border-neutral-100 p-2">
+          {!isMobile && <button type="button" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} className={`flex w-full items-center rounded-lg py-2 text-sm text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-secondary ${collapsed ? 'justify-center' : 'gap-2.5 px-3'}`}>
+            {collapsed ? <ChevronRight className="h-[18px] w-[18px]" /> : <><ChevronLeft className="h-[18px] w-[18px]" /><span>Collapse</span></>}
+          </button>}
           <button
             onClick={handleLogout}
             className={`w-full flex items-center py-2 text-neutral-400 hover:text-red-500 text-sm rounded-lg hover:bg-red-50 transition-colors ${collapsed ? 'justify-center' : 'gap-2.5 px-3'}`}
