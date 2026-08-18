@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  AlertCircle, ArrowRight, Award, Bell, CalendarDays, CheckCircle2,
+  AlertCircle, ArrowRight, Award, Bell, CakeSlice, CalendarDays, CheckCircle2,
   Clock3, Loader2, RefreshCw, Search, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
@@ -95,6 +95,21 @@ export default function HRDashboardView({
     .slice(0, 5), [requests])
 
   const notices = useMemo(() => {
+    const now = new Date()
+    const tomorrow = addDays(now, 1)
+    const birthdays = employees.filter(employee => {
+      if (!employee.birth_date) return false
+      const birthDate = new Date(`${String(employee.birth_date).slice(0, 10)}T12:00:00`)
+      return (birthDate.getMonth() === now.getMonth() && birthDate.getDate() === now.getDate())
+        || (birthDate.getMonth() === tomorrow.getMonth() && birthDate.getDate() === tomorrow.getDate())
+    }).map(employee => {
+      const birthDate = new Date(`${String(employee.birth_date).slice(0, 10)}T12:00:00`)
+      const todayBirthday = birthDate.getMonth() === now.getMonth() && birthDate.getDate() === now.getDate()
+      return {
+        id: `birthday-${employee.id}`, title: `${employee.name}'s birthday`, kind: 'Birthday',
+        dateLabel: todayBirthday ? 'Today' : 'Tomorrow', href: '/human-resources', birthday: true,
+      }
+    })
     const notificationItems = notifications.filter(item => !item.read).slice(0, 3).map(item => ({
       id: `notification-${item.id}`, title: item.message || item.title || 'New notification',
       kind: 'Notification', date: item.created_at, href: '/human-resources/leave', priority: true,
@@ -103,8 +118,8 @@ export default function HRDashboardView({
       id: `task-${task.id}`, title: task.title, kind: task.priority || 'Task', date: task.due_date,
       href: `/maintenance?task=${task.id}`, priority: ['high', 'critical'].includes(task.priority),
     }))
-    return [...notificationItems, ...taskItems].slice(0, 5)
-  }, [notifications, maintenanceTasks])
+    return [...birthdays, ...taskItems, ...notificationItems].slice(0, 7)
+  }, [employees, notifications, maintenanceTasks])
 
   const recognition = useMemo(() => {
     const scores = new Map()
@@ -183,12 +198,16 @@ export default function HRDashboardView({
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-4">
-          <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-3"><Bell className="h-4 w-4 text-primary" /><h2 className="text-sm font-bold text-secondary-700">Notices & Tasks</h2></div>
+          <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Bell className="h-4 w-4 text-primary" /><span><h2 className="text-sm font-bold text-secondary-700">Upcoming</h2><p className="text-[9px] text-neutral-400">Tasks, birthdays and notifications</p></span></span><span className="rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold text-primary">{notices.length}</span></div>
           <div className="space-y-2 p-3">
             {notices.length ? notices.map(item => (
-              <button key={item.id} onClick={() => navigate(item.href)} className={`w-full rounded-md border p-3 text-left hover:bg-neutral-50 ${item.priority ? 'border-l-4 border-l-primary' : 'border-neutral-200'}`}>
-                <p className="text-xs font-bold text-secondary-700">{item.title}</p>
-                <div className="mt-2 flex items-center justify-between text-[9px] text-neutral-400"><span className="capitalize">{item.kind}</span><span>{item.date ? new Date(item.date).toLocaleDateString('en-GB') : 'Open'}</span></div>
+              <button key={item.id} onClick={() => navigate(item.href)} className={`w-full rounded-md border p-3 text-left transition hover:bg-neutral-50 ${item.birthday ? 'border-pink-200 bg-pink-50/60' : item.priority ? 'border-l-4 border-l-primary' : 'border-neutral-200'}`}>
+                <div className="flex items-start gap-2.5">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${item.birthday ? 'bg-pink-100 text-pink-600' : item.id.startsWith('task-') ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+                    {item.birthday ? <CakeSlice className="h-4 w-4" /> : item.id.startsWith('task-') ? <Clock3 className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-secondary-700">{item.title}</span><span className="mt-2 flex items-center justify-between text-[9px] text-neutral-400"><span className="capitalize">{item.kind}</span><strong className={item.birthday ? 'text-pink-600' : ''}>{item.dateLabel || (item.date ? new Date(item.date).toLocaleDateString('en-GB') : 'Open')}</strong></span></span>
+                </div>
               </button>
             )) : <div className="py-10 text-center"><CheckCircle2 className="mx-auto h-6 w-6 text-emerald-500" /><p className="mt-2 text-xs text-neutral-400">No active notices</p></div>}
           </div>
