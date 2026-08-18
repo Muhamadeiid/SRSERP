@@ -40,7 +40,9 @@ const cellKey = (employeeId, date) => `${employeeId}:${date}`
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
 const AVATAR_COLORS = ['bg-primary', 'bg-cyan-700', 'bg-emerald-700', 'bg-orange-700', 'bg-violet-700', 'bg-rose-700', 'bg-indigo-700']
 
-function EditableShift({ value, onChange }) {
+const shortTime = value => value ? String(value).slice(0, 5) : '--:--'
+
+function EditableShift({ value, attendance, onChange }) {
   const shift = SHIFTS[value]
   const Icon = shift?.Icon
   return (
@@ -49,11 +51,14 @@ function EditableShift({ value, onChange }) {
         <>
           <p className="flex items-center gap-1.5 text-[11px] font-bold"><Icon className="h-3 w-3" />{shift.label}</p>
           <p className={`mt-1 text-[9px] font-medium ${value === 'night' ? 'text-slate-300' : 'opacity-70'}`}>{shift.time}</p>
+          {attendance && (
+            <p className={`mt-1 border-t pt-1 text-[9px] font-bold ${value === 'night' ? 'border-slate-600 text-cyan-200' : 'border-current/15 text-primary'}`}>
+              {shortTime(attendance.check_in)} - {shortTime(attendance.check_out)}
+            </p>
+          )}
         </>
-      ) : (
-        <p className="pt-2 text-[11px] font-semibold">Not planned</p>
-      )}
-      <ChevronDown className={`absolute bottom-2 right-2 h-3 w-3 ${value === 'night' ? 'text-slate-300' : 'opacity-50'}`} />
+      ) : null}
+      {shift && <ChevronDown className={`absolute bottom-2 right-2 h-3 w-3 ${value === 'night' ? 'text-slate-300' : 'opacity-50'}`} />}
       <select value={value} onChange={event => onChange(event.target.value)} aria-label="Choose shift" className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
         <option value="">Not planned</option>
         {Object.entries(SHIFTS).map(([key, item]) => <option key={key} value={key}>{item.label} · {item.time}</option>)}
@@ -67,6 +72,7 @@ export default function InterventionShiftsPage() {
   const [employees, setEmployees] = useState([])
   const [plans, setPlans] = useState({})
   const [leaves, setLeaves] = useState({})
+  const [attendances, setAttendances] = useState({})
   const [draft, setDraft] = useState({})
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -86,6 +92,7 @@ export default function InterventionShiftsPage() {
       setEmployees(response.employees || [])
       setPlans(Object.fromEntries((response.plans || []).map(plan => [cellKey(plan.employee_id, String(plan.shift_date).slice(0, 10)), plan.shift])))
       setLeaves(Object.fromEntries((response.leave_days || []).map(leave => [cellKey(leave.employee_id, leave.date), leave.leave_type])))
+      setAttendances(Object.fromEntries((response.attendances || []).map(attendance => [cellKey(attendance.employee_id, String(attendance.date).slice(0, 10)), attendance])))
       setDraft({})
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Could not load the Intervention shift plan.')
@@ -260,7 +267,7 @@ export default function InterventionShiftsPage() {
                             <p className="flex items-center gap-1.5 text-[10px] font-bold"><CalendarOff className="h-3 w-3" />Day Off</p>
                             <p className="mt-1 text-[9px] opacity-65">Weekly rest day</p>
                           </div>
-                        ) : <EditableShift value={shift} onChange={value => setShift(employee.id, day, value)} />}
+                        ) : <EditableShift value={shift} attendance={attendances[key]} onChange={value => setShift(employee.id, day, value)} />}
                       </td>
                     )
                   })}

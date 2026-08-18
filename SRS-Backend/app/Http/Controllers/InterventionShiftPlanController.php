@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Models\Attendance;
 use App\Models\InterventionShiftPlan;
 use App\Models\LeaveRequest;
 use Carbon\Carbon;
@@ -27,6 +28,12 @@ class InterventionShiftPlanController extends Controller
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('shift_date', [$start, $end])
             ->get(['id', 'employee_id', 'shift_date', 'shift', 'updated_at']);
+
+        $attendances = Attendance::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$start, $end])
+            ->orderBy('date')
+            ->get(['employee_id', 'date', 'check_in', 'check_out', 'status']);
 
         $leaves = LeaveRequest::query()
             ->where('type', 'lrf')
@@ -57,6 +64,7 @@ class InterventionShiftPlanController extends Controller
             'week_end' => $end->toDateString(),
             'employees' => $employees,
             'plans' => $plans,
+            'attendances' => $attendances,
             'leave_days' => $leaveDays,
             'shifts' => $this->shifts(),
         ]);
