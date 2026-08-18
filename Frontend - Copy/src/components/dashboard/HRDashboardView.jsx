@@ -134,12 +134,18 @@ export default function HRDashboardView({
     .slice(0, 5), [requests])
 
   const recognition = useMemo(() => {
+    const employeeById = new Map(employees.map(employee => [Number(employee.id), employee]))
     const scores = new Map()
     weeklyRows.forEach(({ rows }) => rows.forEach(row => {
       if (!row.employee_id || !isPresent(row)) return
+      const employee = employeeById.get(Number(row.employee_id))
       const current = scores.get(row.employee_id) || {
-        id: row.employee_id, name: row.employee?.name || row.employee_name || 'Employee',
-        department: row.employee?.department || '', present: 0, late: 0,
+        id: row.employee_id,
+        name: employee?.name || row.employee?.name || row.employee_name || 'Employee',
+        position: employee?.position || employee?.job_title || row.employee?.position || '',
+        department: employee?.department || row.employee?.department || '',
+        present: 0,
+        late: 0,
       }
       current.present += 1
       if (String(row.status).toLowerCase() === 'late') current.late += 1
@@ -149,7 +155,7 @@ export default function HRDashboardView({
       .sort((a, b) => (b.present - b.late) - (a.present - a.late))
       .filter(item => item.name.toLowerCase().includes(awardSearch.toLowerCase()))
       .slice(0, 8)
-  }, [weeklyRows, awardSearch])
+  }, [weeklyRows, employees, awardSearch])
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">
@@ -236,15 +242,15 @@ export default function HRDashboardView({
 
       <section className="rounded-md border border-neutral-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
-            <div className="flex items-center gap-2"><Award className="h-4 w-4 text-amber-500" /><div><h2 className="text-sm font-bold text-secondary-700">Attendance Recognition</h2><p className="text-[9px] text-neutral-400">Calculated from this week's attendance</p></div></div>
+            <div className="flex items-center gap-2"><Award className="h-4 w-4 text-amber-500" /><div><h2 className="text-sm font-bold text-secondary-700">Attendance Recognition</h2><p className="text-[9px] text-neutral-400">Live ranking from biometric attendance · last 7 days through today</p></div></div>
             <label className="relative"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" /><input value={awardSearch} onChange={event => setAwardSearch(event.target.value)} placeholder="Search employee..." className="h-8 rounded-md border border-neutral-200 pl-8 pr-3 text-xs outline-none focus:border-primary" /></label>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left text-xs">
-              <thead><tr className="border-b border-neutral-100 text-[9px] uppercase text-neutral-400"><th className="px-4 py-3">#</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Present Days</th><th className="px-4 py-3">Late Days</th></tr></thead>
+              <thead><tr className="border-b border-neutral-100 text-[9px] uppercase text-neutral-400"><th className="px-4 py-3">#</th><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Position</th><th className="px-4 py-3">Department</th><th className="px-4 py-3">Present Days</th><th className="px-4 py-3">Late Days</th></tr></thead>
               <tbody>{recognition.length ? recognition.map((item, index) => (
-                <tr key={item.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-neutral-400">{String(index + 1).padStart(2, '0')}</td><td className="px-4 py-3"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-secondary-700 text-[8px] font-bold text-white">{initials(item.name)}</span><strong className="text-secondary-700">{item.name}</strong></span></td><td className="px-4 py-3 text-neutral-500">{departmentLabel(item.department)}</td><td className="px-4 py-3 font-bold text-emerald-600">{item.present}</td><td className="px-4 py-3 font-bold text-amber-600">{item.late}</td></tr>
-              )) : <tr><td colSpan="5" className="py-12 text-center text-neutral-400">No attendance data for this week</td></tr>}</tbody>
+                <tr key={item.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-neutral-400">{String(index + 1).padStart(2, '0')}</td><td className="px-4 py-3"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-secondary-700 text-[8px] font-bold text-white">{initials(item.name)}</span><strong className="text-secondary-700">{item.name}</strong></span></td><td className="px-4 py-3 text-neutral-500">{item.position || '—'}</td><td className="px-4 py-3 text-neutral-500">{departmentLabel(item.department)}</td><td className="px-4 py-3 font-bold text-emerald-600">{item.present}</td><td className="px-4 py-3 font-bold text-amber-600">{item.late}</td></tr>
+              )) : <tr><td colSpan="6" className="py-12 text-center text-neutral-400">No biometric attendance data in the last 7 days</td></tr>}</tbody>
             </table>
           </div>
       </section>
