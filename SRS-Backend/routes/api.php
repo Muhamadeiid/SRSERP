@@ -28,6 +28,7 @@ use App\Http\Controllers\PublicHolidayController;
 use App\Http\Controllers\MaintenanceTaskController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ResignationRequestController;
+use App\Http\Controllers\InterventionShiftPlanController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ccp/attendance',        [AttendanceController::class, 'ccpDaily']);
     Route::post('/ccp/attendance/manual',[AttendanceController::class, 'ccpManual']);
     Route::post('/ccp/attendance/manual/bulk', [AttendanceController::class, 'ccpBulkManual']);
+    Route::get('/intervention-shifts', [InterventionShiftPlanController::class, 'index']);
+    Route::post('/intervention-shifts/bulk', [InterventionShiftPlanController::class, 'bulkUpdate']);
 
     Route::get('/maintenance-tasks/options', [MaintenanceTaskController::class, 'options']);
     Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);

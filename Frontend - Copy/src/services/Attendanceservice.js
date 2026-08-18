@@ -32,6 +32,14 @@ export const attendanceService = {
     const response = await api.post('/ccp/attendance/manual/bulk', data)
     return response.data
   },
+  getInterventionShifts: async (weekStart) => {
+    const response = await api.get('/intervention-shifts', { params: { week_start: weekStart } })
+    return response.data
+  },
+  saveInterventionShifts: async (data) => {
+    const response = await api.post('/intervention-shifts/bulk', data)
+    return response.data
+  },
   /**
    * Upload biometric file
    */

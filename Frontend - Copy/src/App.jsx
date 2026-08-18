@@ -50,6 +50,7 @@ const ResignationsPage  = lazyWithRetry(() => import('./pages/ResignationsPage')
 const InternalSalaryPage = lazyWithRetry(() => import('./pages/InternalSalaryPage'))
 const CcpAttendancePage = lazyWithRetry(() => import('./pages/CcpAttendancePage'))
 const SaturdayRotationPage = lazyWithRetry(() => import('./pages/SaturdayRotationPage'))
+const InterventionShiftsPage = lazyWithRetry(() => import('./pages/InterventionShiftsPage'))
 const MaintenanceLayout    = lazyWithRetry(() => import('./layout/MaintenanceLayout'))
 const MaintenanceDashboard = lazyWithRetry(() => import('./pages/MaintenanceDashboard'))
 const MaintenanceTab       = lazyWithRetry(() => import('./pages/MaintenanceTab'))
@@ -219,6 +220,11 @@ export default function App() {
           <Route path="saturday-rotation" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <SaturdayRotationPage />
+            </ProtectedRoute>
+          } />
+          <Route path="intervention-shifts" element={
+            <ProtectedRoute roles={[...HR_FULL_ROLES, 'ccp']} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <InterventionShiftsPage />
             </ProtectedRoute>
           } />
           <Route path="certifications" element={
