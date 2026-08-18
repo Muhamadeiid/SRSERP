@@ -3007,7 +3007,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [approvalStage, setApprovalStage] = useState('all')
   const [pendingSearch, setPendingSearch] = useState('')
   const [pendingDepartment, setPendingDepartment] = useState('all')
-  const [pendingSort, setPendingSort] = useState('date_desc')
+  const [pendingSort, setPendingSort] = useState('submitted_desc')
   const [archiveExpanded, setArchiveExpanded] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('all')
@@ -3103,9 +3103,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     .sort((a, b) => {
       if (pendingSort === 'name_asc') return String(a.employee_name || '').localeCompare(String(b.employee_name || ''))
       if (pendingSort === 'name_desc') return String(b.employee_name || '').localeCompare(String(a.employee_name || ''))
-      const aDate = new Date(a.created_at || requestDate(a) || 0).getTime()
-      const bDate = new Date(b.created_at || requestDate(b) || 0).getTime()
-      return pendingSort === 'date_asc' ? aDate - bDate : bDate - aDate
+      const useStartDate = pendingSort.startsWith('start_')
+      const aDate = new Date(useStartDate ? requestDate(a) : (a.created_at || 0)).getTime()
+      const bDate = new Date(useStartDate ? requestDate(b) : (b.created_at || 0)).getTime()
+      return pendingSort.endsWith('_asc') ? aDate - bDate : bDate - aDate
     })
   const summaryTotal = typeFiltered.length
   const summaryPending = typeFiltered.filter(request => ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending', 'amendment_pending'].includes(request.status)).length
@@ -3548,8 +3549,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <select value={pendingSort} onChange={event => setPendingSort(event.target.value)}
                 className="h-9 w-full cursor-pointer appearance-none rounded-lg border border-neutral-200 bg-white pl-9 pr-8 text-xs font-semibold text-secondary-700 outline-none transition-colors focus:border-amber-400">
-                <option value="date_desc">Newest first</option>
-                <option value="date_asc">Oldest first</option>
+                <option value="submitted_desc">Submitted - newest</option>
+                <option value="submitted_asc">Submitted - oldest</option>
+                <option value="start_desc">Leave start - newest</option>
+                <option value="start_asc">Leave start - oldest</option>
                 <option value="name_asc">Name A-Z</option>
                 <option value="name_desc">Name Z-A</option>
               </select>
@@ -3578,7 +3581,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   </div>
                 </div>
                 <span className="justify-self-center"><StatusBadge status={r.status} /></span>
-                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                <div className="grid grid-cols-[32px_32px_32px_132px] items-center justify-center gap-1.5 whitespace-nowrap">
                   <button onClick={() => openRequest(r)} title="View request" aria-label="View request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-primary"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => setRescheduleModal({ id: r.id })}
                     title="Reschedule" aria-label="Reschedule request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100"><CalendarClock className="h-4 w-4" /></button>
@@ -3587,16 +3590,16 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   {/* Exactly one primary approval action is shown for the current stage. */}
                   {r.status === 'hr_approved' && isDepotAdmin ? (
                     <button onClick={() => handleApprove(r.id)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Final Approve</button>
+                      className="inline-flex h-8 w-[132px] items-center justify-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Final Approve</button>
                   ) : ['pending', 'manager_approved'].includes(r.status) && isDepotAdmin ? (
                     <button onClick={() => handleApprove(r.id)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Finalize</button>
+                      className="inline-flex h-8 w-[132px] items-center justify-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Finalize</button>
                   ) : r.status === 'pending' && (r.can_approve_manager || isDirectManagerOf(r)) ? (
                     <button onClick={() => handleManagerApprove(r.id)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Approve</button>
+                      className="inline-flex h-8 w-[132px] items-center justify-center gap-1.5 rounded-md bg-green-600 px-3 text-xs font-bold text-white transition-colors hover:bg-green-700"><CheckCircle className="h-4 w-4" />Approve</button>
                   ) : (r.can_approve_hr || ((r.status === 'manager_approved' || (r.status === 'pending' && requestHasNoDirectManager(r))) && isHrApprover)) ? (
                     <button onClick={() => handleHrApprove(r.id)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-purple-600 px-3 text-xs font-bold text-white transition-colors hover:bg-purple-700"><CheckCircle className="h-4 w-4" />HR Approve</button>
+                      className="inline-flex h-8 w-[132px] items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 text-xs font-bold text-white transition-colors hover:bg-purple-700"><CheckCircle className="h-4 w-4" />HR Approve</button>
                   ) : null}
                 </div>
               </div>
