@@ -447,7 +447,7 @@ function StatusBadge({ status }) {
   )
 }
 
-const REQUEST_GRID = 'grid min-w-[1200px] grid-cols-[minmax(520px,1fr)_180px_330px] items-center gap-4'
+const REQUEST_GRID = 'grid w-full min-w-[820px] grid-cols-[minmax(360px,1fr)_160px_300px] items-center gap-4'
 
 function RequestTableHeader() {
   return (
