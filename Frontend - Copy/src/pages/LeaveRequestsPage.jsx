@@ -447,13 +447,13 @@ function StatusBadge({ status }) {
   )
 }
 
-const REQUEST_GRID = 'grid min-w-[900px] grid-cols-[minmax(190px,2fr)_120px_130px_75px_105px_105px_minmax(150px,auto)] items-center gap-3'
+const REQUEST_GRID = 'grid min-w-[1200px] grid-cols-[minmax(260px,1fr)_130px_140px_90px_120px_120px_330px] items-center gap-3'
 
 function RequestTableHeader() {
   return (
     <div className="overflow-x-auto border-b border-neutral-200 bg-primary/5">
-      <div className={`${REQUEST_GRID} px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
-        <span>Employee / Request</span><span>Status</span><span>Type</span><span>Days / Hrs</span><span>From</span><span>To</span><span className="text-right">Actions</span>
+      <div className={`${REQUEST_GRID} px-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
+        <span className="text-left">Employee / Request</span><span>Status</span><span>Type</span><span>Days / Hrs</span><span>From</span><span>To</span><span>Actions</span>
       </div>
     </div>
   )
@@ -3129,12 +3129,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           )}
         </div>
       </div>
-      <StatusBadge status={r.status} />
-      <span className="text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
-      <span className="text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
-      <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
-      <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
-      <div className="flex items-center justify-end gap-2 shrink-0">
+      <span className="justify-self-center"><StatusBadge status={r.status} /></span>
+      <span className="text-center text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
+      <span className="text-center text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
+      <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+      <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
+      <div className="flex items-center justify-center gap-2 shrink-0">
         <button
           onClick={() => openRequest(r)}
           aria-label={`View ${r.tracking_no || r.id}`}
@@ -3528,12 +3528,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     </p>
                   </div>
                 </div>
-                <StatusBadge status={r.status} />
-                <span className="text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
-                <span className="text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
-                <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
-                <span className="text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <span className="justify-self-center"><StatusBadge status={r.status} /></span>
+                <span className="text-center text-xs capitalize text-neutral-600">{r.type === 'lrf' ? `${String(r.leave_type || 'leave').replaceAll('_', ' ')} Leave` : 'Overtime'}</span>
+                <span className="text-center text-xs font-bold text-secondary-700">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
+                <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+                <span className="text-center text-xs text-neutral-500">{fmtShort(r.type === 'lrf' ? r.end_date : r.ot_date)}</span>
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
                   <button onClick={() => openRequest(r)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 transition-colors"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => setRescheduleModal({ id: r.id })}
                     className="px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-all">Reschedule</button>
