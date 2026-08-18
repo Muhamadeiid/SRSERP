@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore,
-  UploadCloud, Trash2, Paperclip, FileText, ChevronDown
+  UploadCloud, Trash2, Paperclip, FileText, ChevronDown, ArrowUpDown
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
@@ -2970,6 +2970,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [historyPeriod, setHistoryPeriod] = useState('current_month')   // current_month | last_30 | last_90 | last_year | all
   const [historyPage,   setHistoryPage]   = useState(1)
   const [approvalStage, setApprovalStage] = useState('all')
+  const [pendingSearch, setPendingSearch] = useState('')
+  const [pendingDepartment, setPendingDepartment] = useState('all')
+  const [pendingSort, setPendingSort] = useState('date_desc')
   const [archiveExpanded, setArchiveExpanded] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('all')
@@ -3047,6 +3050,28 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const pendingForStage = approvalStage === 'all'
     ? pending
     : pending.filter(request => approvalStageFor(request) === approvalStage)
+  const requestDepartment = request => {
+    const raw = request.department_label
+      || request.department
+      || request.employee?.department_label
+      || request.employee?.department_name
+      || request.employee?.department
+      || ''
+    return DEPT_LABEL[raw] || raw
+  }
+  const pendingDepartments = [...new Set(pending.map(requestDepartment).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+  const visiblePendingRequests = pendingForStage
+    .filter(request => !pendingSearch.trim()
+      || String(request.employee_name || '').toLowerCase().includes(pendingSearch.trim().toLowerCase()))
+    .filter(request => pendingDepartment === 'all' || requestDepartment(request) === pendingDepartment)
+    .sort((a, b) => {
+      if (pendingSort === 'name_asc') return String(a.employee_name || '').localeCompare(String(b.employee_name || ''))
+      if (pendingSort === 'name_desc') return String(b.employee_name || '').localeCompare(String(a.employee_name || ''))
+      const aDate = new Date(a.created_at || requestDate(a) || 0).getTime()
+      const bDate = new Date(b.created_at || requestDate(b) || 0).getTime()
+      return pendingSort === 'date_asc' ? aDate - bDate : bDate - aDate
+    })
 
   // Keep requests visible to the account that submitted them while another
   // role owns the current approval step.
@@ -3456,8 +3481,46 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               )
             })}
           </div>
+          <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 bg-neutral-50/60 px-6 py-3">
+            <label className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <input
+                value={pendingSearch}
+                onChange={event => setPendingSearch(event.target.value)}
+                placeholder="Search employee name..."
+                className="h-9 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-xs text-secondary-700 outline-none transition-colors focus:border-amber-400"
+              />
+            </label>
+            <label className="relative min-w-[170px]">
+              <select
+                value={pendingDepartment}
+                onChange={event => setPendingDepartment(event.target.value)}
+                className="h-9 w-full cursor-pointer appearance-none rounded-lg border border-neutral-200 bg-white px-3 pr-8 text-xs font-semibold text-secondary-700 outline-none transition-colors focus:border-amber-400"
+              >
+                <option value="all">All Departments</option>
+                {pendingDepartments.map(department => (
+                  <option key={department} value={department}>{department}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            </label>
+            <label className="relative min-w-[160px]">
+              <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <select
+                value={pendingSort}
+                onChange={event => setPendingSort(event.target.value)}
+                className="h-9 w-full cursor-pointer appearance-none rounded-lg border border-neutral-200 bg-white pl-9 pr-8 text-xs font-semibold text-secondary-700 outline-none transition-colors focus:border-amber-400"
+              >
+                <option value="date_desc">Newest first</option>
+                <option value="date_asc">Oldest first</option>
+                <option value="name_asc">Name A-Z</option>
+                <option value="name_desc">Name Z-A</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            </label>
+          </div>
           <div className="divide-y divide-neutral-50">
-            {pendingForStage.map(r => (
+            {visiblePendingRequests.map(r => (
               <div key={r.id} className="flex items-center justify-between px-6 py-4 hover:bg-amber-50/40 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
@@ -3472,6 +3535,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                       {r.type==='lrf'
                         ? `${r.leave_type} leave · ${fmtDays(r.days)} days (${fmtShort(r.start_date)}→${fmtShort(r.end_date)})`
                         : `Overtime · ${displayOvertimeHours(r.hours)}h · ${fmtShort(r.ot_date)}`}
+                      {requestDepartment(r) && <span className="ml-2 font-medium text-neutral-500">· {requestDepartment(r)}</span>}
                     </p>
                   </div>
                 </div>
@@ -3503,9 +3567,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 </div>
               </div>
             ))}
-            {pendingForStage.length === 0 && (
+            {visiblePendingRequests.length === 0 && (
               <div className="px-6 py-8 text-center text-sm font-semibold text-neutral-400">
-                No requests are waiting at this stage.
+                No requests match the selected filters.
               </div>
             )}
           </div>
