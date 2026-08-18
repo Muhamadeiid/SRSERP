@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
@@ -7,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, LogOut, Bell, Plus, Download, Menu,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
+import ProfileAvatar from '../components/profile/ProfileAvatar'
 
 const NAV_ITEMS = [
   { label: 'Material Ledger', path: '/inventory',         icon: Package,       end: true },
@@ -14,9 +14,6 @@ const NAV_ITEMS = [
   { label: 'Bad Items',       path: '/inventory/bad',     icon: AlertTriangle         },
   { label: 'Reports',         path: '/inventory/reports', icon: BarChart3             },
 ]
-
-const initials = (name) =>
-  name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
 export default function InventoryLayout() {
   const { collapsed, setCollapsed, isMobile } = useSidebar()
@@ -168,9 +165,7 @@ export default function InventoryLayout() {
                 <p className="text-sm font-bold text-secondary-700 leading-none">{user?.name}</p>
                 <p className="text-[11px] text-neutral-400 mt-0.5">{user?.role}</p>
               </div>
-              <div className="w-[34px] h-[34px] rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
-                {initials(user?.name)}
-              </div>
+              <ProfileAvatar />
             </div>
           </div>
         </header>

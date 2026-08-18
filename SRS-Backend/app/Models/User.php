@@ -11,12 +11,15 @@ class User extends Authenticatable
     use HasApiTokens, Notifiable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'department', 'is_active', 'is_team_manager', 'e_signature', 'manager_id',
+        'name', 'email', 'password', 'role', 'department', 'is_active', 'is_team_manager',
+        'e_signature', 'profile_photo_path', 'manager_id',
     ];
 
     protected $hidden = [
-        'password', 'remember_token',
+        'password', 'remember_token', 'profile_photo_path',
     ];
+
+    protected $appends = ['has_profile_photo'];
 
     protected $casts = [
         'is_active'       => 'boolean',
@@ -48,6 +51,11 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function getHasProfilePhotoAttribute(): bool
+    {
+        return !empty($this->profile_photo_path);
     }
 
     /**

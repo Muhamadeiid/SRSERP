@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
 import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
+import ProfileAvatar from '../components/profile/ProfileAvatar'
 
 const NAV_ITEMS = [
   { label: 'Dashboard',    path: '/maintenance',          icon: BarChart3,     end: true },
@@ -19,9 +20,6 @@ const NAV_ITEMS = [
   { label: 'Withdrawals',  path: '/maintenance/withdrawals',  icon: ArrowLeftRight          },
   { label: 'Equipment',    path: '/maintenance/equipment', icon: Cog                      },
 ]
-
-const initials = (name) =>
-  name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
 const fmtTime = value => value
   ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -236,9 +234,7 @@ export default function MaintenanceLayout() {
                 <p className="text-sm font-bold text-secondary-700 leading-tight break-words">{user?.name ?? 'User'}</p>
                 <p className="text-[11px] text-neutral-400 mt-0.5 capitalize break-words">{user?.role?.replace('_', ' ') ?? ''}</p>
               </div>
-              <div className="w-[34px] h-[34px] rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
-                {initials(user?.name)}
-              </div>
+              <ProfileAvatar />
             </div>
           </div>
         </header>

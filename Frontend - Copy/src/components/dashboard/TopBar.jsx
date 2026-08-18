@@ -11,6 +11,7 @@ import {
   disablePushNotifications,
 } from '../../services/pushService'
 import { useNavigate } from 'react-router-dom'
+import ProfileAvatar from '../profile/ProfileAvatar'
 
 const fmtTime = (d) => {
   if (!d) return ''
@@ -243,9 +244,7 @@ export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuCli
             <p className="text-sm font-bold text-secondary-700 leading-none">{user?.name ?? 'User'}</p>
             <p className="text-[11px] text-neutral-400 mt-0.5">{user?.role ?? ''}</p>
           </div>
-          <div className="w-[34px] h-[34px] rounded-full bg-amber-400 flex items-center justify-center text-white text-sm font-extrabold">
-            {user?.name?.charAt(0).toUpperCase() ?? 'U'}
-          </div>
+          <ProfileAvatar />
         </div>
       </div>
     </header>

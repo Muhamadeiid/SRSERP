@@ -10,6 +10,7 @@ import {
 } from '../../services/pushService'
 import { notificationRequestTarget } from '../../utils/notificationRoute'
 import { useNavigate } from 'react-router-dom'
+import ProfileAvatar from '../profile/ProfileAvatar'
 
 const fmtTime = (d) => {
   if (!d) return ''
@@ -118,8 +119,6 @@ export default function HRTopBar() {
     const target = notificationRequestTarget(n)
     if (target) navigate(`${target.path}?${target.query}`)
   }
-
-  const initials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'U'
 
   return (
     <header className="fixed top-0 left-[230px] right-0 h-[60px] bg-white border-b border-neutral-100 flex items-center px-7 gap-4 z-40">
@@ -230,9 +229,7 @@ export default function HRTopBar() {
             <p className="text-sm font-bold text-secondary-700 leading-none">{user?.name ?? 'User'}</p>
             <p className="text-[11px] text-neutral-400 mt-0.5">{user?.role}</p>
           </div>
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
-            {initials(user?.name)}
-          </div>
+          <ProfileAvatar size="sm" />
         </div>
       </div>
     </header>
