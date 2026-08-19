@@ -316,16 +316,16 @@ export default function DashboardPage() {
 
   // ── Render ──────────────────────────────────────────────────
   return (
-    <div className="p-4 sm:p-6 lg:p-7 space-y-5">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-[28px] font-extrabold text-secondary-700 leading-tight">
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''} 👋
+          <h1 className="text-2xl font-extrabold leading-tight text-secondary-700 sm:text-[28px]">
+            Operations Dashboard
           </h1>
           <p className="text-sm text-neutral-400 mt-1">
-            Operations overview — live data across HR, Procurement &amp; Inventory.
+            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. Live information for the modules available to your account.
           </p>
         </div>
         <div className="flex items-center gap-2">
