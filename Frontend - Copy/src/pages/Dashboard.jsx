@@ -298,7 +298,7 @@ export default function DashboardPage() {
     [maintenanceTasks]
   )
 
-  if (isHRFull) {
+  if (isHRFull || canSeeMaintenance) {
     return (
       <HRDashboardView
         user={user}
@@ -310,6 +310,7 @@ export default function DashboardPage() {
         todayAttendance={todayAttendance}
         maintenanceTasks={maintenanceTasks}
         onRefresh={fetchAll}
+        fullHrAccess={isHRFull}
       />
     )
   }
