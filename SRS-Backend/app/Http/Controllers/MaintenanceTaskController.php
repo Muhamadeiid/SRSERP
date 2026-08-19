@@ -25,7 +25,7 @@ class MaintenanceTaskController extends Controller
         abort_unless($this->canViewTasks($user), 403);
         $query = MaintenanceTask::with([
             'assignee:id,name,department',
-            'creator:id,name',
+            'creator:id,name,profile_photo_path',
             'viewers',
             'equipment:id,code,name,type,car_type,train_number,unit_index,parent_id',
             'equipment.parent:id,code,name,train_number',
@@ -114,7 +114,7 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $task->load(['viewers', 'creator:id,name']),
+            'data' => $task->load(['viewers', 'creator:id,name,profile_photo_path']),
         ], 201);
     }
 
@@ -167,7 +167,7 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $maintenanceTask->load(['viewers', 'creator:id,name']),
+            'data' => $maintenanceTask->load(['viewers', 'creator:id,name,profile_photo_path']),
         ]);
     }
 
@@ -184,7 +184,7 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $maintenanceTask->activities()->with('user:id,name')->get(),
+            'data' => $maintenanceTask->activities()->with('user:id,name,profile_photo_path')->get(),
         ]);
     }
 
@@ -243,9 +243,9 @@ class MaintenanceTaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $activity->load('user:id,name'),
-            'task' => $maintenanceTask->fresh()->load(['viewers', 'creator:id,name']),
-            'activities' => $maintenanceTask->activities()->with('user:id,name')->get(),
+            'data' => $activity->load('user:id,name,profile_photo_path'),
+            'task' => $maintenanceTask->fresh()->load(['viewers', 'creator:id,name,profile_photo_path']),
+            'activities' => $maintenanceTask->activities()->with('user:id,name,profile_photo_path')->get(),
         ], 201);
     }
 

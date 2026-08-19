@@ -5,6 +5,7 @@ import api from '../../services/axios'
 import SignaturePad from '../../components/hr/SignaturePad'
 import { saveUserSignature } from '../../services/leaveService'
 import { useLookups } from '../../hooks/useLookups'
+import UserAvatar from '../../components/profile/UserAvatar'
 
 // ── Constants (kept as fallback / for permission gating; actual dropdown values come from lookups) ─
 const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'admin', manager_id: '', is_team_manager: false }
@@ -222,9 +223,7 @@ export default function Users() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="relative shrink-0">
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#1e2d5a] to-[#3a4f8f] flex items-center justify-center text-white text-sm font-bold">
-                              {u.name?.charAt(0).toUpperCase()}
-                            </div>
+                            <UserAvatar user={u} name={u.name} size="lg" />
                             <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u.is_active ? 'bg-emerald-400' : 'bg-[#d1d5de]'}`} />
                           </div>
                           <div>

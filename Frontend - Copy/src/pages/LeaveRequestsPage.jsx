@@ -17,6 +17,7 @@ import {
   updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
 import { getSettings } from '../services/settingsService'
+import UserAvatar from '../components/profile/UserAvatar'
 
 // ── constants ─────────────────────────────────────────────────
 const HR_OFFICER = 'Hazem Khaled'
@@ -2952,10 +2953,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           </div>
         </div>
 
-        <div className="px-6 pb-4 text-center text-[10px] text-neutral-400">
-          Created by <span className="font-semibold text-neutral-500">{req.user?.name || 'Unknown account'}</span>
-          {' · '}
-          {fmtDateTime(req.created_at)}
+        <div className="flex items-center justify-center gap-2 px-6 pb-4 text-[10px] text-neutral-400">
+          <UserAvatar user={req.user} name={req.user?.name || 'Unknown account'} size="sm" />
+          <span>Created by <span className="font-semibold text-neutral-500">{req.user?.name || 'Unknown account'}</span>{' · '}{fmtDateTime(req.created_at)}</span>
         </div>
 
         </div>

@@ -12,6 +12,7 @@ import {
   deleteMaintenanceTask,
   getMaintenanceTaskActivities, addMaintenanceTaskActivity,
 } from '../services/maintenanceService'
+import UserAvatar from '../components/profile/UserAvatar'
 
 const TABS = [
   {
@@ -264,7 +265,7 @@ function PendingTasks({ user }) {
                     <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                       {taskActivities.length === 0 ? <p className="text-xs text-neutral-400 py-3">No updates yet.</p> : taskActivities.map(activity => (
                         <div key={activity.id} className="flex gap-3 rounded-md border border-neutral-200 bg-white p-3">
-                          <div className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">{activity.user?.name?.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'S'}</div>
+                          <UserAvatar user={activity.user} name={activity.user?.name || 'System'} />
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] text-neutral-500">
                               <span className="font-bold text-secondary-700">{activity.user?.name || 'System'}</span>

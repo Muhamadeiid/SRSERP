@@ -42,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me',      [AuthController::class, 'me']);
     Route::post('/auth/profile-photo',   [AuthController::class, 'saveProfilePhoto']);
     Route::get('/auth/profile-photo',    [AuthController::class, 'profilePhoto']);
+    Route::get('/users/{user}/profile-photo', [AuthController::class, 'userProfilePhoto']);
     Route::delete('/auth/profile-photo', [AuthController::class, 'deleteProfilePhoto']);
 
     // Lookups — active items only (read-only for all authenticated users)

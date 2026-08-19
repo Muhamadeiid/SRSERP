@@ -104,6 +104,17 @@ class AuthController extends Controller
         ]);
     }
 
+    public function userProfilePhoto(User $user): BinaryFileResponse
+    {
+        $path = $user->profile_photo_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), [
+            'Cache-Control' => 'private, max-age=300',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function deleteProfilePhoto(Request $request)
     {
         $user = $request->user();

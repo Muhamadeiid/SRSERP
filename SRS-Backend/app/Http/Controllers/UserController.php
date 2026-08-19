@@ -12,7 +12,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::with('manager:id,name')->get();
+        $users = User::with('manager:id,name,profile_photo_path')->get();
 
         // Attach the linked employee record (name, position) for each user
         $empByUserId = Employee::active()->whereIn('user_id', $users->pluck('id'))
@@ -56,7 +56,7 @@ class UserController extends Controller
             \App\Services\ManagerHierarchyService::syncFromUser($user);
         }
 
-        return response()->json($user->load('manager:id,name'), 201);
+        return response()->json($user->load('manager:id,name,profile_photo_path'), 201);
     }
 
     public function update(Request $request, User $user)
@@ -94,7 +94,7 @@ class UserController extends Controller
             \App\Services\ManagerHierarchyService::syncFromUser($user->fresh());
         }
 
-        return response()->json($user->load('manager:id,name'));
+        return response()->json($user->load('manager:id,name,profile_photo_path'));
     }
 
     /**
@@ -104,7 +104,7 @@ class UserController extends Controller
     public function subordinates(Request $request)
     {
         $subs = User::where('manager_id', $request->user()->id)
-            ->with('manager:id,name')
+            ->with('manager:id,name,profile_photo_path')
             ->get();
 
         return response()->json($subs);
