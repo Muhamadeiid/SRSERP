@@ -3135,9 +3135,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     <div key={r.id} className="overflow-x-auto border-b border-neutral-100 last:border-0">
     <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-neutral-50 sm:px-6`}>
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
-          {r.type==='lrf' ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-        </div>
+        {r.user?.id
+          ? <UserAvatar user={r.user} name={r.user.name} />
+          : <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${r.type === 'lrf' ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'}`}>{r.type === 'lrf' ? <Calendar className="h-4 w-4" /> : <Clock className="h-4 w-4" />}</div>}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-secondary-700 truncate">
             {r.type==='lrf' ? `${(r.leave_type||'').replace('_',' ')} Leave` : 'Overtime Request'}
@@ -3474,7 +3474,8 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           <div className="divide-y divide-neutral-100">
             {mySubmittedRequests.map(request => (
               <div key={request.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-                <div className="min-w-0">
+                <UserAvatar user={request.user} name={request.user?.name || request.employee_name} />
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-bold text-secondary-700">{request.employee_name}</p>
                     <StatusBadge status={request.status} />
@@ -3565,9 +3566,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <div key={r.id} className="overflow-x-auto">
               <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-amber-50/40 sm:px-6`}>
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${r.type==='lrf'?'bg-blue-50 text-blue-500':'bg-orange-50 text-orange-500'}`}>
-                    {r.type==='lrf' ? <Calendar className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                  </div>
+                  {r.user?.id
+                    ? <UserAvatar user={r.user} name={r.user.name} />
+                    : <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${r.type === 'lrf' ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'}`}>{r.type === 'lrf' ? <Calendar className="h-4 w-4" /> : <Clock className="h-4 w-4" />}</div>}
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-secondary-700">{r.employee_name}</p>

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
 import { useLookups } from '../../hooks/useLookups'
+import UserAvatar from '../profile/UserAvatar'
 
 const dateKey = date => {
   const year = date.getFullYear()
@@ -205,7 +206,7 @@ export default function HRDashboardView({
           <div className="divide-y divide-neutral-100">
             {leaveApplications.length ? leaveApplications.map(request => (
               <button key={request.id} onClick={() => navigate(`/human-resources/leave?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[9px] font-bold text-white">{initials(request.employee_name)}</span>
+                <UserAvatar user={request.user} name={request.user?.name || request.employee_name} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-secondary-700">{request.employee_name}</span><span className="mt-0.5 block text-[10px] capitalize text-neutral-400">{String(request.leave_type || 'leave').replaceAll('_', ' ')}</span></span>
                 <StatusBadge status={request.status} />
               </button>
@@ -236,7 +237,7 @@ export default function HRDashboardView({
 
         <div className={`rounded-md border border-neutral-200 bg-white shadow-sm ${fullHrAccess ? 'xl:col-span-4' : 'xl:col-span-6'}`}>
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-sky-600" /><h2 className="text-sm font-bold text-secondary-700">Overtime Requests</h2></span><button onClick={() => navigate('/human-resources/overtime')} className="text-[10px] font-bold text-primary">See all</button></div>
-          <div className="divide-y divide-neutral-100">{overtimeApplications.length ? overtimeApplications.map(request => <button key={request.id} onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-600 text-[9px] font-bold text-white">{initials(request.employee_name)}</span><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong><span className="mt-0.5 block text-[10px] text-neutral-400">{String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h</span></span><StatusBadge status={request.status} /></button>) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}</div>
+          <div className="divide-y divide-neutral-100">{overtimeApplications.length ? overtimeApplications.map(request => <button key={request.id} onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"><UserAvatar user={request.user} name={request.user?.name || request.employee_name} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong><span className="mt-0.5 block text-[10px] text-neutral-400">{String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h</span></span><StatusBadge status={request.status} /></button>) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}</div>
         </div>
       </section>
 
