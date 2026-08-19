@@ -98,6 +98,10 @@ export function searchEmployees(search) {
   return cachedRequest(`/employees/autocomplete?search=${encodeURIComponent(search)}`, 10000)
 }
 
+export function getUpcomingBirthdays() {
+  return cachedRequest('/employees/upcoming-birthdays', 60000)
+}
+
 export function getEmployeeStats(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined))

@@ -5,15 +5,16 @@ import { useSelector } from 'react-redux'
 import {
   Users, Calendar, Clock, ShoppingCart, AlertTriangle,
   CheckCircle2, ArrowRight, RefreshCw, Bell, FileText,
-  Loader2, Package2, Wrench, UserCheck,
+  Loader2, Package2, Wrench, UserCheck, CakeSlice,
 } from 'lucide-react'
 
-import { getEmployees, getEmployeeStats } from '../services/employeeService'
+import { getEmployees, getEmployeeStats, getUpcomingBirthdays } from '../services/employeeService'
 import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
 import { getMaintenanceTasks }          from '../services/maintenanceService'
 import HRDashboardView                  from '../components/dashboard/HRDashboardView'
+import UserAvatar                       from '../components/profile/UserAvatar'
 
 // ── time formatter ──────────────────────────────────────────────
 const fmtTime = (d) => {
@@ -188,6 +189,7 @@ export default function DashboardPage() {
   const [notifs,    setNotifs]    = useState([])
   const [todayAttendance, setTodayAttendance] = useState([])
   const [maintenanceTasks, setMaintenanceTasks] = useState([])
+  const [birthdays, setBirthdays] = useState([])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -215,6 +217,7 @@ export default function DashboardPage() {
       tasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
     }
     tasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
+    tasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
     await Promise.allSettled(tasks)
     setLoading(false)
   }, [isHRFull, canSeeProc, canSeeMaintenance])
@@ -311,6 +314,7 @@ export default function DashboardPage() {
         maintenanceTasks={maintenanceTasks}
         onRefresh={fetchAll}
         fullHrAccess={isHRFull}
+        birthdayEmployees={birthdays}
       />
     )
   }
@@ -344,6 +348,10 @@ export default function DashboardPage() {
 
       {/* ══ My Requests — visible to non-HR roles (staff, manager, procurement, ehs) ══ */}
       {!isHRFull && <MyRequestsCard reqs={reqs} loading={loading} onOpen={(id) => navigate(`/human-resources/leave?req=${id}`)} onResubmit={(id) => navigate(`/human-resources/leave?resubmit=${id}`)} onNewRequest={() => navigate('/human-resources/leave')} />}
+
+      <DeptSection title="Birthdays" subtitle="Today & tomorrow" icon={CakeSlice} accentColor="border-l-pink-500" headerBg="bg-pink-50/40" iconBg="bg-pink-100 text-pink-600">
+        {birthdays.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{birthdays.map(item => <div key={item.id} className="flex items-center gap-3 rounded-md border border-pink-100 bg-pink-50/50 p-3"><UserAvatar user={item.user} name={item.name} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{item.name}</strong><span className="mt-0.5 block truncate text-[10px] text-neutral-500">{item.position || '—'} · {String(item.department || '—').replaceAll('_', ' ')}</span></span><span className="text-[10px] font-bold text-pink-600">{item.date_label}</span></div>)}</div> : <p className="py-4 text-center text-xs text-neutral-400">No birthdays today or tomorrow</p>}
+      </DeptSection>
 
       {canSeeMaintenance && (
         <DeptSection

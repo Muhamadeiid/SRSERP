@@ -54,7 +54,7 @@ function StatusBadge({ status }) {
 
 export default function HRDashboardView({
   user, loading, empStats, employees, requests, notifications, todayAttendance,
-  maintenanceTasks, onRefresh, fullHrAccess = false,
+  maintenanceTasks, onRefresh, fullHrAccess = false, birthdayEmployees = [],
 }) {
   const navigate = useNavigate()
   const { departments } = useLookups()
@@ -103,25 +103,14 @@ export default function HRDashboardView({
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 5), [requests])
 
-  const birthdays = useMemo(() => {
-    const now = new Date()
-    const tomorrow = addDays(now, 1)
-    return employees.filter(employee => {
-      if (!employee.birth_date) return false
-      const birthDate = new Date(`${String(employee.birth_date).slice(0, 10)}T12:00:00`)
-      return (birthDate.getMonth() === now.getMonth() && birthDate.getDate() === now.getDate())
-        || (birthDate.getMonth() === tomorrow.getMonth() && birthDate.getDate() === tomorrow.getDate())
-    }).map(employee => {
-      const birthDate = new Date(`${String(employee.birth_date).slice(0, 10)}T12:00:00`)
-      const todayBirthday = birthDate.getMonth() === now.getMonth() && birthDate.getDate() === now.getDate()
-      return {
-        id: `birthday-${employee.id}`, title: `${employee.name}'s birthday`, kind: 'Birthday',
-        dateLabel: todayBirthday ? 'Today' : 'Tomorrow', href: '/human-resources', birthday: true,
-        position: employee.position || employee.job_title || '—',
-        department: departmentLabel(employee.department),
-      }
-    })
-  }, [employees])
+  const birthdays = useMemo(() => birthdayEmployees.map(employee => ({
+    ...employee,
+    id: `birthday-${employee.id}`,
+    title: `${employee.name}'s birthday`,
+    dateLabel: employee.date_label,
+    position: employee.position || '—',
+    department: departmentLabel(employee.department),
+  })), [birthdayEmployees, departments])
 
   const visibleTasks = useMemo(() => maintenanceTasks.filter(task => task.status !== 'done').slice(0, 5).map(task => ({
       id: `task-${task.id}`, title: task.title, kind: task.priority || 'Task', date: task.due_date,
@@ -216,7 +205,7 @@ export default function HRDashboardView({
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className={`rounded-md border border-neutral-200 bg-white shadow-sm ${fullHrAccess ? 'xl:col-span-5' : 'xl:col-span-6'}`}>
+        <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-5">
           <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-amber-600" /><span><h2 className="text-sm font-bold text-secondary-700">Maintenance Tasks</h2><p className="text-[9px] text-neutral-400">Only tasks visible to your account</p></span></span><span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-700">{visibleTasks.length}</span></div>
           <div className="space-y-2 p-3">
             {visibleTasks.length ? visibleTasks.map(item => (
@@ -230,12 +219,12 @@ export default function HRDashboardView({
           </div>
         </div>
 
-        {fullHrAccess && <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-3">
+        <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-3">
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><CakeSlice className="h-4 w-4 text-pink-600" /><span><h2 className="text-sm font-bold text-secondary-700">Birthdays</h2><p className="text-[9px] text-neutral-400">Today & tomorrow</p></span></span><span className="rounded-full bg-pink-50 px-2 py-1 text-[9px] font-bold text-pink-600">{birthdays.length}</span></div>
-          <div className="space-y-2 p-3">{birthdays.length ? birthdays.map(item => <button key={item.id} onClick={() => navigate(item.href)} className="flex w-full items-start gap-2.5 rounded-md border border-pink-200 bg-pink-50/60 p-3 text-left hover:bg-pink-50"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-pink-100 text-pink-600"><CakeSlice className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block text-xs text-secondary-700">{item.title}</strong><span className="mt-1 block truncate text-[9px] text-neutral-500">{item.position}</span><span className="mt-0.5 block truncate text-[9px] text-neutral-400">{item.department}</span><span className="mt-1.5 block text-[9px] font-bold text-pink-600">{item.dateLabel}</span></span></button>) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}</div>
-        </div>}
+          <div className="space-y-2 p-3">{birthdays.length ? birthdays.map(item => <div key={item.id} className="flex w-full items-start gap-2.5 rounded-md border border-pink-200 bg-pink-50/60 p-3"><UserAvatar user={item.user} name={item.name} /><span className="min-w-0 flex-1"><strong className="block text-xs text-secondary-700">{item.title}</strong><span className="mt-1 block truncate text-[9px] text-neutral-500">{item.position}</span><span className="mt-0.5 block truncate text-[9px] text-neutral-400">{item.department}</span><span className="mt-1.5 block text-[9px] font-bold text-pink-600">{item.dateLabel}</span></span></div>) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}</div>
+        </div>
 
-        <div className={`rounded-md border border-neutral-200 bg-white shadow-sm ${fullHrAccess ? 'xl:col-span-4' : 'xl:col-span-6'}`}>
+        <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-4">
           <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-sky-600" /><h2 className="text-sm font-bold text-secondary-700">Overtime Requests</h2></span><button onClick={() => navigate('/human-resources/overtime')} className="text-[10px] font-bold text-primary">See all</button></div>
           <div className="divide-y divide-neutral-100">{overtimeApplications.length ? overtimeApplications.map(request => <button key={request.id} onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"><UserAvatar user={request.user} name={request.user?.name || request.employee_name} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong><span className="mt-0.5 block text-[10px] text-neutral-400">{String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h</span></span><StatusBadge status={request.status} /></button>) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}</div>
         </div>

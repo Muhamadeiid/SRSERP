@@ -17,6 +17,42 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
 {
+    // Minimal birthday feed for authenticated dashboards; no full birth date is exposed.
+    public function upcomingBirthdays(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $tomorrow = $today->copy()->addDay();
+
+        $employees = Employee::active()
+            ->whereNotNull('birth_date')
+            ->where(function ($query) use ($today, $tomorrow) {
+                $query->where(function ($day) use ($today) {
+                    $day->whereMonth('birth_date', $today->month)->whereDay('birth_date', $today->day);
+                })->orWhere(function ($day) use ($tomorrow) {
+                    $day->whereMonth('birth_date', $tomorrow->month)->whereDay('birth_date', $tomorrow->day);
+                });
+            })
+            ->select('id', 'name', 'position', 'department', 'birth_date', 'user_id')
+            ->with('user:id,name,profile_photo_path')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Employee $employee) use ($today) {
+                $isToday = $employee->birth_date->month === $today->month
+                    && $employee->birth_date->day === $today->day;
+
+                return [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'position' => $employee->position,
+                    'department' => $employee->department,
+                    'date_label' => $isToday ? 'Today' : 'Tomorrow',
+                    'user' => $employee->user,
+                ];
+            });
+
+        return response()->json($employees);
+    }
+
     // ── GET /api/employees/autocomplete — open to all roles (leave request search)
     public function autocomplete(Request $request): JsonResponse
     {
