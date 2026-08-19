@@ -452,7 +452,7 @@ const REQUEST_GRID = 'grid w-full min-w-[820px] grid-cols-[minmax(360px,1fr)_160
 
 function RequestTableHeader() {
   return (
-    <div className="overflow-x-auto border-b border-neutral-200 bg-primary/5">
+    <div className="border-b border-neutral-200 bg-primary/5">
       <div className={`${REQUEST_GRID} px-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
         <span className="text-left">Employee / Request</span><span>Status</span><span>Actions</span>
       </div>
@@ -3132,7 +3132,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   // direct_manager_id now references employees.id → employee.directManager.user_id must match
   // Single row renderer used by both Active and History sections
   const renderRequestRow = (r, { showArchiveAction = false, showRestoreAction = false } = {}) => (
-    <div key={r.id} className="overflow-x-auto border-b border-neutral-100 last:border-0">
+    <div key={r.id} className="border-b border-neutral-100 last:border-0">
     <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-neutral-50 sm:px-6`}>
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {r.user?.id
@@ -3560,10 +3560,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             </label>
           </div>
+          <div className="overflow-x-auto">
           <RequestTableHeader />
           <div className="divide-y divide-neutral-50">
             {visiblePendingRequests.map(r => (
-              <div key={r.id} className="overflow-x-auto">
+              <div key={r.id}>
               <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-amber-50/40 sm:px-6`}>
                 <div className="flex min-w-0 items-center gap-3">
                   {r.user?.id
@@ -3612,6 +3613,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               </div>
             )}
           </div>
+          </div>
         </div>
       )}
 
@@ -3636,7 +3638,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               </div>
               <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
-            <div className="divide-y divide-neutral-50">
+            <div className="divide-y divide-neutral-50 overflow-x-auto">
               <RequestTableHeader />
               {active.map(r => renderRequestRow(r, { showArchiveAction: canManagePrintArchive }))}
             </div>
@@ -3689,7 +3691,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
                   </label>
                 </div>
-                <div className="divide-y divide-neutral-50">
+                <div className="divide-y divide-neutral-50 overflow-x-auto">
                   <RequestTableHeader />
                   {archived.length > 0
                     ? archived.map(request => renderRequestRow(request, { showRestoreAction: true }))
@@ -3828,7 +3830,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 </div>
               ) : (
                 <>
-                  <div className="divide-y divide-neutral-50">
+                  <div className="divide-y divide-neutral-50 overflow-x-auto">
                     <RequestTableHeader />
                     {pageItems.map(r => renderRequestRow(r))}
                   </div>
