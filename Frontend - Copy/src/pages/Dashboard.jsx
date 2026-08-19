@@ -174,12 +174,16 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useSelector(s => s.auth)
 
-  const role       = user?.role ?? 'staff'
+  const role       = String(user?.role ?? 'staff').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const isTeamManager = user?.is_team_manager === true
+    || user?.is_team_manager === 1
+    || user?.is_team_manager === '1'
+  const isManager = role === 'manager' || role.endsWith('_manager') || isTeamManager
   const isHRFull   = ['admin', 'depot_manager', 'hr'].includes(role)
   const isProcFull = ['admin', 'depot_manager', 'purchasing'].includes(role)
   const canSeeProc = isProcFull || role === 'ehs'
   const isDashFull = ['admin', 'depot_manager'].includes(role)
-  const canSeeMaintenance = ['admin', 'depot_manager', 'manager'].includes(role) || !!user?.is_team_manager
+  const canSeeMaintenance = ['admin', 'depot_manager'].includes(role) || isManager
 
   const [loading, setLoading] = useState(true)
   const [empStats,  setEmpStats]  = useState(null)
