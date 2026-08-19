@@ -996,17 +996,24 @@ export default function AttendanceTab() {
   const effectiveOverviewStatus = rec => {
     if (isOverviewLate(rec)) return 'late'
     if (isInterventionEmployee(rec.employee) && rec.status === 'late') return 'present'
+    if (rec.status === 'absent' && (rec.check_in || rec.check_out)) return 'present'
     return rec.status
   }
 
+  const isAbsentOnOverview = rec =>
+    !isOnLeaveOnOverview(rec.employee_id)
+    && rec.status === 'absent'
+    && !rec.check_in
+    && !rec.check_out
+
   const isOnSiteOnOverview = rec =>
     !isOnLeaveOnOverview(rec.employee_id)
-    && Boolean(rec.check_in)
+    && Boolean(rec.check_in || rec.check_out)
     && !['absent', 'off'].includes(effectiveOverviewStatus(rec))
 
   const ovPresent = overviewRecs.filter(r => isOnSiteOnOverview(r)).length
   const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
-  const ovAbsent  = overviewRecs.filter(r => r.status === 'absent' && !isOnLeaveOnOverview(r.employee_id)).length
+  const ovAbsent  = overviewRecs.filter(isAbsentOnOverview).length
   const ovOnLeave = regularLeaveEmployeeIds.size
   const ovCompanyPaid = companyPaidEmployeeIds.size
   const ovDayOff  = overviewRecs.filter(r => r.status === 'off' && !isOnLeaveOnOverview(r.employee_id)).length
@@ -1016,7 +1023,7 @@ export default function AttendanceTab() {
     const matchesMetric = overviewMetricFilter === 'all'
       || (overviewMetricFilter === 'present' && isOnSiteOnOverview(rec))
       || (overviewMetricFilter === 'late' && isOverviewLate(rec))
-      || (overviewMetricFilter === 'absent' && rec.status === 'absent' && !isOnLeaveOnOverview(rec.employee_id))
+      || (overviewMetricFilter === 'absent' && isAbsentOnOverview(rec))
       || (overviewMetricFilter === 'leave' && regularLeaveEmployeeIds.has(Number(rec.employee_id)))
       || (overviewMetricFilter === 'company_paid' && isCompanyPaidOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'day_off' && rec.status === 'off' && !isOnLeaveOnOverview(rec.employee_id))
