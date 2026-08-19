@@ -305,7 +305,9 @@ export default function DashboardPage() {
     [maintenanceTasks]
   )
 
-  if (isHRFull || canSeeMaintenance) {
+  // Every authenticated account uses the shared dashboard shell. Each API
+  // still scopes its records to the current user's role and permissions.
+  if (user) {
     return (
       <HRDashboardView
         user={user}
