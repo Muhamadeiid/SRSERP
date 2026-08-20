@@ -54,7 +54,7 @@ export default function CalendarDashboardWidget() {
     <section className="rounded-md border border-neutral-200 bg-white shadow-sm">
       <header className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
         <span className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /><span><h2 className="text-sm font-bold text-secondary-700">Calendar</h2><p className="text-[9px] text-neutral-400">Events visible to your account</p></span></span>
-        <button type="button" onClick={() => navigate('/human-resources/calendar')} className="text-[10px] font-bold text-primary">Open calendar</button>
+        <button type="button" onClick={() => navigate('/human-resources/work-calendar')} className="text-[10px] font-bold text-primary">Open calendar</button>
       </header>
       <div className="grid gap-3 p-3 md:grid-cols-[240px_minmax(0,1fr)]">
         <MiniCalendar
@@ -68,7 +68,7 @@ export default function CalendarDashboardWidget() {
         <div className="min-h-[230px] rounded-md border border-neutral-200">
           <div className="border-b border-neutral-100 px-3 py-2"><strong className="text-xs text-secondary-700">{selectedEvents.length ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }) : 'Upcoming events'}</strong></div>
           {loading ? <div className="grid min-h-44 place-items-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div> : shownEvents.length ? <div className="divide-y divide-neutral-100">{shownEvents.map(event => (
-            <button type="button" key={event.occurrenceKey || `${event.id}-${event.date}`} onClick={() => navigate(`/human-resources/calendar?date=${event.date}&event=${event.id}`)} className="flex w-full items-start gap-2.5 px-3 py-3 text-left hover:bg-neutral-50">
+            <button type="button" key={event.occurrenceKey || `${event.id}-${event.date}`} onClick={() => navigate(`/human-resources/work-calendar?date=${event.date}&event=${event.id}`)} className="flex w-full items-start gap-2.5 px-3 py-3 text-left hover:bg-neutral-50">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_DOTS[event.type] || 'bg-neutral-400'}`} />
               <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{event.title}</strong><span className="mt-0.5 block text-[9px] capitalize text-neutral-400">{event.date} · {event.time || 'All day'} · {event.type}</span></span>
             </button>

@@ -58,7 +58,13 @@ const NAV_GROUPS = [
       { label: 'Intervention Shifts', path: '/human-resources/intervention-shifts', icon: CalendarDays, roles: ['admin','depot_manager','hr','ccp'] },
       { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,    hrOnly: true },
       { label: 'Internal Salary',   path: '/human-resources/internal-salary',   icon: FileSpreadsheet, hrOnly: true },
-      { label: 'Calendar',          path: '/human-resources/calendar',           icon: Calendar },
+      { label: 'Attendance Calendar', path: '/human-resources/calendar', icon: Calendar, hrOnly: true },
+    ],
+  },
+  {
+    key: 'work-calendar', label: 'Work Calendar', icon: CalendarDays, solo: true,
+    items: [
+      { label: 'Work Calendar', path: '/human-resources/work-calendar', icon: CalendarDays },
     ],
   },
   {
@@ -92,6 +98,7 @@ const ROUTE_PREFETCHERS = {
   '/human-resources/intervention-shifts': () => import('../pages/InterventionShiftsPage'),
   '/human-resources/internal-salary': () => import('../pages/InternalSalaryPage'),
   '/human-resources/calendar': () => import('../pages/CalendarPage'),
+  '/human-resources/work-calendar': () => import('../pages/WorkCalendarPage'),
   '/human-resources/certifications': () => import('../components/hr/CertificationsTab'),
   '/human-resources/disciplinary': () => import('../components/hr/DisciplinaryTab'),
   '/human-resources/assets': () => import('../components/hr/AssetsTab'),

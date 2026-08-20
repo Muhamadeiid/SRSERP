@@ -24,7 +24,8 @@ const ALL_NAV = [
   { label: 'Disciplinary',   path: '/human-resources/disciplinary',       icon: AlertTriangle, end: false },
   { label: 'Assets',         path: '/human-resources/assets',             icon: Package,       end: false },
   { label: 'Org Chart',      path: '/human-resources/org-chart',          icon: GitBranch,     end: false },
-  { label: 'Calendar',       path: '/human-resources/calendar',           icon: Calendar,      end: false },
+  { label: 'Attendance Calendar', path: '/human-resources/calendar',      icon: Calendar,      end: false, hrOnly: true },
+  { label: 'Work Calendar',  path: '/human-resources/work-calendar',      icon: Calendar,      end: false },
   { label: 'Settings',       path: '/human-resources/settings',           icon: Settings,      end: false },
 ]
 

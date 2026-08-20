@@ -32,6 +32,7 @@ const ProductsPage      = lazyWithRetry(() => import('./pages/Products'))
 const Users             = lazyWithRetry(() => import('./pages/Users/Index'))
 const LeaveRequestsPage = lazyWithRetry(() => import('./pages/LeaveRequestsPage'))
 const CalendarPage      = lazyWithRetry(() => import('./pages/CalendarPage'))
+const WorkCalendarPage  = lazyWithRetry(() => import('./pages/WorkCalendarPage'))
 const HRLayout          = lazyWithRetry(() => import('./layout/HRLayout'))
 const InventoryLayout   = lazyWithRetry(() => import('./layout/InventoryLayout'))
 const MainLayout        = lazyWithRetry(() => import('./layout/MainLayout'))
@@ -186,7 +187,7 @@ export default function App() {
             </ProtectedRoute>
           } />
 
-          {/* Leave Requests & Calendar — all authenticated users */}
+          {/* Requests and the personal work calendar — all authenticated users */}
           <Route path="leave"        element={<LeaveRequestsPage showOnly="lrf" />} />
           <Route path="overtime"     element={<LeaveRequestsPage key="otr" initialTab="otr" showOnly="otr" />} />
           <Route path="leave-master" element={
@@ -199,7 +200,13 @@ export default function App() {
               <WeeklyLeaveReportPage />
             </ProtectedRoute>
           } />
-          <Route path="calendar"     element={<CalendarPage />} />
+          {/* The attendance/leave calendar remains restricted to HR leadership. */}
+          <Route path="calendar" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/work-calendar">
+              <CalendarPage />
+            </ProtectedRoute>
+          } />
+          <Route path="work-calendar" element={<WorkCalendarPage />} />
           <Route path="resignations" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <ResignationsPage />
