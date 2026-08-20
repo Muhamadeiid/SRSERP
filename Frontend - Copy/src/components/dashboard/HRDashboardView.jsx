@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  AlertCircle, ArrowRight, Award, Bell, CakeSlice, CalendarDays, CheckCircle2,
+  AlertCircle, ArrowRight, Award, CakeSlice, CalendarDays, CheckCircle2,
   Clock3, Loader2, RefreshCw, Search, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
 import { useLookups } from '../../hooks/useLookups'
 import UserAvatar from '../profile/UserAvatar'
+import CalendarDashboardWidget from './CalendarDashboardWidget'
 
 const dateKey = date => {
   const year = date.getFullYear()
@@ -21,7 +22,7 @@ const isLeave = row => ['on_leave', 'leave', 'annual', 'casual', 'sick', 'compan
 const isAbsent = row => String(row?.status || '').toLowerCase() === 'absent'
 const isPresent = row => Boolean(row?.check_in || row?.check_out) && !isLeave(row)
 
-function KpiCard({ title, value, sub, tone, icon: Icon, onClick, loading }) {
+function KpiCard({ title, value, sub, tone, icon, onClick, loading }) {
   const palette = {
     green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
     blue: 'bg-sky-50 text-sky-700 border-sky-100',
@@ -31,7 +32,7 @@ function KpiCard({ title, value, sub, tone, icon: Icon, onClick, loading }) {
   return (
     <button type="button" onClick={onClick} className="min-h-[150px] rounded-md border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-primary/30 hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
-        <span className={`grid h-9 w-9 place-items-center rounded-md border ${palette}`}><Icon className="h-4 w-4" /></span>
+        <span className={`grid h-9 w-9 place-items-center rounded-md border ${palette}`}>{createElement(icon, { className: 'h-4 w-4' })}</span>
         <ArrowRight className="h-4 w-4 text-neutral-300" />
       </div>
       <p className="mt-4 text-[11px] font-bold uppercase text-neutral-400">{title}</p>
@@ -53,7 +54,7 @@ function StatusBadge({ status }) {
 }
 
 export default function HRDashboardView({
-  user, loading, empStats, employees, requests, notifications, todayAttendance,
+  user, loading, empStats, employees, requests, notifications: _notifications, todayAttendance,
   maintenanceTasks, onRefresh, fullHrAccess = false, birthdayEmployees = [],
 }) {
   const navigate = useNavigate()
@@ -82,12 +83,12 @@ export default function HRDashboardView({
   const absent = useMemo(() => todayAttendance.filter(isAbsent).length, [todayAttendance])
   const leaveToday = useMemo(() => todayAttendance.filter(isLeave).length, [todayAttendance])
   const percentage = value => total ? Math.round((value / total) * 100) : 0
-  const departmentLabel = key => {
+  const departmentLabel = useCallback(key => {
     if (!key) return '—'
     const normalized = String(key).trim().toLowerCase()
     const department = departments.find(item => String(item.key).trim().toLowerCase() === normalized)
     return department?.label_en || department?.name || String(key).replaceAll('_', ' ')
-  }
+  }, [departments])
 
   const weeklyStats = useMemo(() => weeklyRows.map(({ date, rows }) => ({
     key: dateKey(date),
@@ -110,7 +111,7 @@ export default function HRDashboardView({
     dateLabel: employee.date_label,
     position: employee.position || '—',
     department: departmentLabel(employee.department),
-  })), [birthdayEmployees, departments])
+  })), [birthdayEmployees, departmentLabel])
 
   const visibleTasks = useMemo(() => maintenanceTasks.filter(task => task.status !== 'done').slice(0, 5).map(task => ({
       id: `task-${task.id}`, title: task.title, kind: task.priority || 'Task', date: task.due_date,
@@ -229,6 +230,8 @@ export default function HRDashboardView({
           <div className="divide-y divide-neutral-100">{overtimeApplications.length ? overtimeApplications.map(request => <button key={request.id} onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"><UserAvatar user={request.user} name={request.user?.name || request.employee_name} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong><span className="mt-0.5 block text-[10px] text-neutral-400">{String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h</span></span><StatusBadge status={request.status} /></button>) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}</div>
         </div>
       </section>
+
+      <CalendarDashboardWidget />
 
       {fullHrAccess && <section className="rounded-md border border-neutral-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">

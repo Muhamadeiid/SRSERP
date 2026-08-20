@@ -58,7 +58,7 @@ const NAV_GROUPS = [
       { label: 'Intervention Shifts', path: '/human-resources/intervention-shifts', icon: CalendarDays, roles: ['admin','depot_manager','hr','ccp'] },
       { label: 'Saturday Rotation',  path: '/human-resources/saturday-rotation', icon: CalendarDays,    hrOnly: true },
       { label: 'Internal Salary',   path: '/human-resources/internal-salary',   icon: FileSpreadsheet, hrOnly: true },
-      { label: 'Calendar',          path: '/human-resources/calendar',           icon: Calendar,        roles: ['admin','depot_manager','manager','hr'] },
+      { label: 'Calendar',          path: '/human-resources/calendar',           icon: Calendar },
     ],
   },
   {

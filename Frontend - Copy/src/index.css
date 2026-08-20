@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --cal-meeting: #3b5de7;
+  --cal-meeting-tint: #eaeeff;
+  --cal-task: #d97706;
+  --cal-task-tint: #fef3e4;
+  --cal-interview: #7c3aed;
+  --cal-interview-tint: #f3ecff;
+  --cal-leave: #0f766e;
+  --cal-leave-tint: #e7f2f0;
+  --cal-overdue: #b42318;
+  --cal-weekend-bg: #f5f6f7;
+  --cal-today-bg: #fff7e6;
+}
+
+.cal-weekend-cell {
+  background-color: var(--cal-weekend-bg);
+}
+
+.cal-leave-day {
+  background-image: repeating-linear-gradient(-45deg, rgba(15, 118, 110, .07) 0, rgba(15, 118, 110, .07) 5px, transparent 5px, transparent 10px);
+}
+
 @layer base {
   html,
   body,

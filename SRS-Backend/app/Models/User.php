@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -44,6 +46,17 @@ class User extends Authenticatable
     public function assignedEmployees(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\App\Models\Employee::class, 'user_manager_id');
+    }
+
+    public function createdCalendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class, 'created_by');
+    }
+
+    public function calendarEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(CalendarEvent::class, 'calendar_event_participants', 'user_id', 'event_id')
+            ->withPivot('role');
     }
 
     // ── Helpers ──────────────────────────────────────────────

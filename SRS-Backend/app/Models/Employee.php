@@ -349,6 +349,11 @@ class Employee extends Model
         return $this->belongsTo(\App\Models\User::class, 'user_id');
     }
 
+    public function leaveBalance(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\LeaveBalance::class);
+    }
+
     /** The manager user account assigned to this employee from User Management / OrgChart */
     public function userManager(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

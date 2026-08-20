@@ -29,6 +29,7 @@ use App\Http\Controllers\MaintenanceTaskController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ResignationRequestController;
 use App\Http\Controllers\InterventionShiftPlanController;
+use App\Http\Controllers\CalendarEventController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -36,6 +37,14 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 
 // ── Authenticated (all roles) ─────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/calendar/events', [CalendarEventController::class, 'index']);
+    Route::get('/calendar/users', [CalendarEventController::class, 'users']);
+    Route::post('/calendar/events', [CalendarEventController::class, 'store']);
+    Route::patch('/calendar/events/{calendarEvent}', [CalendarEventController::class, 'update']);
+    Route::patch('/calendar/events/{calendarEvent}/done', [CalendarEventController::class, 'toggleDone']);
+    Route::delete('/calendar/events/{calendarEvent}', [CalendarEventController::class, 'destroy']);
+    Route::get('/calendar/stats', [CalendarEventController::class, 'stats']);
 
     // Auth & profile
     Route::post('/auth/logout', [AuthController::class, 'logout']);
