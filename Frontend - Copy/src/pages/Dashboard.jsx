@@ -466,7 +466,7 @@ export default function DashboardPage() {
             {[
               { label: 'Employee List',  href: '/human-resources' },
               { label: 'Leave Requests', href: '/human-resources/leave' },
-              { label: 'Work Calendar',  href: '/human-resources/work-calendar' },
+              { label: 'Work Calendar',  href: '/work-calendar' },
             ].map(l => (
               <button key={l.href} onClick={() => navigate(l.href)}
                 className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-semibold rounded-lg transition-colors">

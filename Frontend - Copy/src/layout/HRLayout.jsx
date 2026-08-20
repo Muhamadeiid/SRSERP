@@ -62,12 +62,6 @@ const NAV_GROUPS = [
     ],
   },
   {
-    key: 'work-calendar', label: 'Work Calendar', icon: CalendarDays, solo: true,
-    items: [
-      { label: 'Work Calendar', path: '/human-resources/work-calendar', icon: CalendarDays },
-    ],
-  },
-  {
     key: 'operations', label: 'Operations', icon: Briefcase, hrOnly: true,
     items: [
       { label: 'Certifications',     path: '/human-resources/certifications', icon: ShieldCheck,  hrOnly: true },
@@ -98,7 +92,6 @@ const ROUTE_PREFETCHERS = {
   '/human-resources/intervention-shifts': () => import('../pages/InterventionShiftsPage'),
   '/human-resources/internal-salary': () => import('../pages/InternalSalaryPage'),
   '/human-resources/calendar': () => import('../pages/CalendarPage'),
-  '/human-resources/work-calendar': () => import('../pages/WorkCalendarPage'),
   '/human-resources/certifications': () => import('../components/hr/CertificationsTab'),
   '/human-resources/disciplinary': () => import('../components/hr/DisciplinaryTab'),
   '/human-resources/assets': () => import('../components/hr/AssetsTab'),

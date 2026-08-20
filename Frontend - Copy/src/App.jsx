@@ -138,6 +138,7 @@ export default function App() {
           </ProtectedRoute>
         }>
           <Route path="/"            element={<DashboardPage />} />
+          <Route path="/work-calendar" element={<WorkCalendarPage />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
           <Route path="/users"       element={
             <ProtectedRoute roles={['admin']} redirect="/">
@@ -187,7 +188,7 @@ export default function App() {
             </ProtectedRoute>
           } />
 
-          {/* Requests and the personal work calendar — all authenticated users */}
+          {/* Requests — all authenticated users */}
           <Route path="leave"        element={<LeaveRequestsPage showOnly="lrf" />} />
           <Route path="overtime"     element={<LeaveRequestsPage key="otr" initialTab="otr" showOnly="otr" />} />
           <Route path="leave-master" element={
@@ -202,11 +203,10 @@ export default function App() {
           } />
           {/* The attendance/leave calendar remains restricted to HR leadership. */}
           <Route path="calendar" element={
-            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/work-calendar">
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/work-calendar">
               <CalendarPage />
             </ProtectedRoute>
           } />
-          <Route path="work-calendar" element={<WorkCalendarPage />} />
           <Route path="resignations" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <ResignationsPage />
