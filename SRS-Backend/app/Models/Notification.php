@@ -34,7 +34,7 @@ class Notification extends Model
             $notification->link ??= $notification->data['path'] ?? null;
             if (! $notification->link && isset($notification->data['leave_request_id'])) {
                 $isOvertime = $notification->category === 'ot';
-                $notification->link = ($isOvertime ? '/human-resources/overtime?request=' : '/human-resources/leave-requests?request=')
+                $notification->link = ($isOvertime ? '/human-resources/overtime?req=' : '/human-resources/leave?req=')
                     . $notification->data['leave_request_id'];
             }
 
@@ -105,6 +105,7 @@ class Notification extends Model
     // preferences — safety alerts must always land.
     public static function notifyRole(string $role, string $type, string $title, string $body, array $data = [], bool $push = false, array $options = []): void
     {
+        $data = static::withNavigationPath($type, $data);
         $users = User::where('role', $role)->where('is_active', true)->get();
         if ($users->isEmpty()) return;
 
@@ -127,7 +128,7 @@ class Notification extends Model
                 'data'    => $data,
             ], static::notificationOptions($options)));
             if ($notification->wasRecentlyCreated && $push && ($isCritical || ! $preferences || ! $preferences->isDndActive())) {
-                PushSender::sendToUser($user->id, $title, $body, $data + ['type' => $type]);
+                PushSender::sendToUserAfterResponse($user->id, $title, $body, $data + ['type' => $type]);
             }
         }
     }
@@ -136,6 +137,7 @@ class Notification extends Model
     // Critical notifications bypass user in-app and DND preferences.
     public static function notifyUser(int $userId, string $type, string $title, string $body, array $data = [], bool $push = false, array $options = []): void
     {
+        $data = static::withNavigationPath($type, $data);
         $category = $options['category'] ?? static::categoryForType($type);
         $priority = $options['priority'] ?? 'info';
         $isCritical = $priority === 'crit' || $category === 'crit';
@@ -154,7 +156,7 @@ class Notification extends Model
         $notification = static::persist($attributes);
 
         if ($notification->wasRecentlyCreated && $push && ($isCritical || ! $preferences || ! $preferences->isDndActive())) {
-            PushSender::sendToUser($userId, $title, $body, $data + ['type' => $type]);
+            PushSender::sendToUserAfterResponse($userId, $title, $body, $data + ['type' => $type]);
         }
     }
 
@@ -164,6 +166,28 @@ class Notification extends Model
             'category', 'priority', 'description', 'sender_user_id', 'sender_icon',
             'link', 'meta', 'actions', 'dedupe_key',
         ]));
+    }
+
+    private static function withNavigationPath(string $type, array $data): array
+    {
+        if (! empty($data['path'])) return $data;
+
+        if (! empty($data['leave_request_id'])) {
+            $requestType = strtolower((string) ($data['request_type'] ?? $type));
+            $isOvertime = str_contains($requestType, 'otr') || str_contains($requestType, 'overtime');
+            $data['path'] = ($isOvertime ? '/human-resources/overtime?req=' : '/human-resources/leave?req=')
+                . $data['leave_request_id'];
+        } elseif (! empty($data['maintenance_task_id'])) {
+            $data['path'] = '/maintenance?task=' . $data['maintenance_task_id'];
+        } elseif (! empty($data['calendar_event_id'])) {
+            $data['path'] = '/work-calendar?event=' . $data['calendar_event_id'];
+        } elseif (! empty($data['resignation_request_id'])) {
+            $data['path'] = '/human-resources/resignations?ticket=' . $data['resignation_request_id'];
+        } elseif (! empty($data['prf_id'])) {
+            $data['path'] = '/procurement/' . $data['prf_id'];
+        }
+
+        return $data;
     }
 
     private static function persist(array $attributes): self

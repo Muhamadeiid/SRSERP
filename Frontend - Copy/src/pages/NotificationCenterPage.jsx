@@ -103,7 +103,7 @@ export default function NotificationCenterPage() {
 
   const openItem = async item => {
     if (isUnread(item)) await markNotificationRead(item.id).catch(() => {})
-    const target = item.link ? { path: item.link, query: '' } : notificationRequestTarget(item)
+    const target = notificationRequestTarget(item)
     if (target) navigate(`${target.path}${target.query ? `?${target.query}` : ''}`)
   }
 

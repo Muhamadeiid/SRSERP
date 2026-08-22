@@ -9,6 +9,16 @@ use Minishlink\WebPush\WebPush;
 
 class PushSender
 {
+    public static function sendToUserAfterResponse(int $userId, string $title, string $body, array $data = []): void
+    {
+        if (app()->runningInConsole()) {
+            static::sendToUser($userId, $title, $body, $data);
+            return;
+        }
+
+        app()->terminating(fn () => static::sendToUser($userId, $title, $body, $data));
+    }
+
     // Deliver a web-push notification to every subscription registered for $userId.
     // Expired or invalidated subscriptions are removed automatically.
     public static function sendToUser(int $userId, string $title, string $body, array $data = []): void
@@ -31,7 +41,7 @@ class PushSender
                     'publicKey'  => $public,
                     'privateKey' => $private,
                 ],
-            ], ['TTL' => config('webpush.ttl')]);
+            ], ['TTL' => config('webpush.ttl')], config('webpush.timeout', 3));
         } catch (\Throwable $e) {
             Log::warning('PushSender init failed: ' . $e->getMessage());
             return;

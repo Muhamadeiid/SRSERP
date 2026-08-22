@@ -1295,14 +1295,42 @@ class LeaveRequestController extends Controller
             ->pluck('id')
             ->all();
 
-        foreach ($ids as $id) {
-            LeaveRequest::whereKey($id)->update(['tracking_no' => '__TRACKING_RENUMBER__' . $id]);
+        // Move every number to a collision-free temporary value first, then
+        // assign the final sequence in bulk. This avoids two queries per row.
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $case = 'CASE id ';
+            $bindings = [];
+
+            foreach ($chunk as $id) {
+                $case .= 'WHEN ? THEN ? ';
+                $bindings[] = $id;
+                $bindings[] = '__TRACKING_RENUMBER__' . $id;
+            }
+
+            $case .= 'END';
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            DB::update(
+                "UPDATE leave_requests SET tracking_no = {$case} WHERE id IN ({$placeholders})",
+                [...$bindings, ...$chunk]
+            );
         }
 
-        foreach (array_values($ids) as $index => $id) {
-            LeaveRequest::whereKey($id)->update([
-                'tracking_no' => $prefix . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT),
-            ]);
+        foreach (array_chunk(array_values($ids), 500, true) as $chunk) {
+            $case = 'CASE id ';
+            $bindings = [];
+
+            foreach ($chunk as $index => $id) {
+                $case .= 'WHEN ? THEN ? ';
+                $bindings[] = $id;
+                $bindings[] = $prefix . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
+            }
+
+            $case .= 'END';
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            DB::update(
+                "UPDATE leave_requests SET tracking_no = {$case} WHERE id IN ({$placeholders})",
+                [...$bindings, ...array_values($chunk)]
+            );
         }
     }
 

@@ -1,23 +1,45 @@
 export function notificationRequestTarget(notification) {
-  if (notification?.data?.maintenance_task_id) {
+  const data = notification?.data ?? {}
+
+  if (data.maintenance_task_id) {
     return {
-      path: notification.data.path || '/maintenance',
-      query: `task=${notification.data.maintenance_task_id}`,
+      path: '/maintenance',
+      query: `task=${data.maintenance_task_id}`,
     }
   }
 
-  if (notification?.data?.resignation_request_id) {
+  if (data.calendar_event_id) {
+    return {
+      path: '/work-calendar',
+      query: `event=${data.calendar_event_id}`,
+    }
+  }
+
+  if (data.resignation_request_id) {
     return {
       path: '/human-resources/resignations',
-      query: `ticket=${notification.data.resignation_request_id}`,
+      query: `ticket=${data.resignation_request_id}`,
     }
   }
 
-  const requestId = notification?.data?.leave_request_id
-  if (!requestId) return null
+  if (data.prf_id) {
+    return { path: `/procurement/${data.prf_id}`, query: '' }
+  }
+
+  const requestId = data.leave_request_id
+  if (!requestId) {
+    const rawLink = notification?.link || data.path
+    if (!rawLink) return null
+    const normalized = String(rawLink)
+      .replace(/^\/human-resources\/leave-requests(?=\?|$)/, '/human-resources/leave')
+      .replace(/^\/calendar(?=\?|$)/, '/work-calendar')
+      .replace(/([?&])request=/, '$1req=')
+    const [path, query = ''] = normalized.split('?')
+    return { path, query }
+  }
 
   const eventName = String(notification?.event || notification?.type || '').toLowerCase()
-  const explicitType = String(notification?.data?.request_type || '').toLowerCase()
+  const explicitType = String(data.request_type || '').toLowerCase()
   const searchableText = [
     eventName,
     notification?.title,

@@ -13,4 +13,8 @@ return [
 
     // Time in seconds a push notification is allowed to wait on the push service before delivery.
     'ttl'         => (int) env('VAPID_TTL', 60 * 60 * 24),
+
+    // Push delivery happens after the HTTP response. Keep failures short so a
+    // slow external push service cannot hold the local PHP server for long.
+    'timeout'     => (int) env('VAPID_TIMEOUT', 3),
 ];

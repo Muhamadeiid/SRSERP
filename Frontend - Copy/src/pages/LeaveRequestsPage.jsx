@@ -3222,6 +3222,15 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
   useEffect(() => { fetchRequests() }, [fetchRequests])
 
+  const applyActionResult = useCallback((response) => {
+    const updated = response?.data
+    if (!updated?.id) return false
+    setRequests(current => current.map(request =>
+      String(request.id) === String(updated.id) ? { ...request, ...updated } : request
+    ))
+    return true
+  }, [])
+
   // Auto-open request modal (?req=<id>) OR prefill form for resubmit (?resubmit=<id>)
   // when notification deep-links point here.
   useEffect(() => {
@@ -3290,25 +3299,25 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
   const handleManagerApprove = async (id, changes = {}) => {
     try {
-      await managerApproveLeave(id, changes)
+      const response = await managerApproveLeave(id, changes)
+      applyActionResult(response)
       setViewReq(null)
-      fetchRequests()
     } catch (e) { alert(e.message) }
   }
 
   const handleHrApprove = async (id, changes = {}) => {
     try {
-      await hrApproveLeave(id, changes)
+      const response = await hrApproveLeave(id, changes)
+      applyActionResult(response)
       setViewReq(null)
-      fetchRequests()
     } catch (e) { alert(e.message) }
   }
 
   const handleApprove = async (id, changes = {}) => {
     try {
-      await approveLeave(id, changes)
+      const response = await approveLeave(id, changes)
+      applyActionResult(response)
       setViewReq(null)
-      fetchRequests()
     } catch (e) { alert(e.message) }
   }
 
@@ -3333,11 +3342,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const handleReject = async () => {
     if (!rejectModal || rejectReason.trim().length < 5) return
     try {
-      await rejectLeave(rejectModal.id, rejectReason.trim())
+      const response = await rejectLeave(rejectModal.id, rejectReason.trim())
+      applyActionResult(response)
       setRejectModal(null)
       setRejectReason('')
       setViewReq(null)
-      fetchRequests()
     } catch (e) { alert(e.message) }
   }
 
