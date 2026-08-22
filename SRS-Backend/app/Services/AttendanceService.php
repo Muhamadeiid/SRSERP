@@ -529,7 +529,7 @@ class AttendanceService
         // Attendance tables only display a small employee summary. Avoid loading
         // the full HR record (documents, contacts and signature image) per row.
         $query = Attendance::with([
-            'employee:id,name,arabic_name,ibs_code,punch_code,position,department,work_location,category,saturday_group,weekly_off_day,hiring_date',
+            'employee:id,name,arabic_name,ibs_code,punch_code,position,department,work_location,category,saturday_group,weekly_off_day,weekly_off_day_history,hiring_date',
             'creator:id,name',
         ]);
 

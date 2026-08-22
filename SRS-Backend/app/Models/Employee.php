@@ -60,6 +60,7 @@ class Employee extends Model
         'saturday_plan_code',
         'saturday_group',   // 'A' or 'B' — for regular employees, which Saturday they're off
         'weekly_off_day',   // 0-6 — for intervention employees, their weekly day off
+        'weekly_off_day_history',
     ];
 
     protected $appends = ['department_label', 'docs_completed', 'docs_percent', 'project_code'];
@@ -90,7 +91,35 @@ class Employee extends Model
         'military_serving_years'      => 'integer',
         'no_warning_letters'          => 'integer',
         'weekly_off_day'              => 'integer',
+        'weekly_off_day_history'      => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (Employee $employee) {
+            if (! $employee->isDirty('weekly_off_day')) return;
+
+            $history = collect($employee->weekly_off_day_history ?? []);
+            if ($history->isEmpty()) {
+                $history->push([
+                    'effective_from' => '1900-01-01',
+                    'weekly_off_day' => $employee->getOriginal('weekly_off_day'),
+                ]);
+            }
+
+            $effectiveFrom = now()->toDateString();
+            $history = $history
+                ->reject(fn ($entry) => ($entry['effective_from'] ?? null) === $effectiveFrom)
+                ->push([
+                    'effective_from' => $effectiveFrom,
+                    'weekly_off_day' => $employee->weekly_off_day,
+                ])
+                ->sortBy('effective_from')
+                ->values();
+
+            $employee->weekly_off_day_history = $history->all();
+        });
+    }
 
     // ── Scopes ──────────────────────────────────────────────
     public function scopeByDepartment($q, $dept)   { return $q->where('department', $dept); }
@@ -309,8 +338,9 @@ class Employee extends Model
         $policy = \App\Services\AttendancePolicy::all();
 
         if ($this->isIntervention()) {
-            if ($this->weekly_off_day === null) return true;
-            return $dow !== (int) $this->weekly_off_day;
+            $weeklyOffDay = $this->weeklyOffDayOn($date);
+            if ($weeklyOffDay === null) return true;
+            return $dow !== $weeklyOffDay;
         }
 
         // Regular employees
@@ -327,6 +357,19 @@ class Employee extends Model
         }
 
         return true; // Sun–Thu always working for regular
+    }
+
+    public function weeklyOffDayOn(\Carbon\Carbon $date): ?int
+    {
+        $entry = collect($this->weekly_off_day_history ?? [])
+            ->filter(fn ($item) => !empty($item['effective_from']) && $item['effective_from'] <= $date->toDateString())
+            ->sortByDesc('effective_from')
+            ->first();
+
+        $value = is_array($entry) && array_key_exists('weekly_off_day', $entry)
+            ? $entry['weekly_off_day']
+            : $this->weekly_off_day;
+        return $value === null || $value === '' ? null : (int) $value;
     }
 
     // ── Relationships ────────────────────────────────────────

@@ -37,6 +37,15 @@ const addDays = (value, amount) => {
 
 const formatDay = value => new Date(`${value}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })
 const cellKey = (employeeId, date) => `${employeeId}:${date}`
+const weeklyOffDayOn = (employee, date) => {
+  const history = Array.isArray(employee?.weekly_off_day_history)
+    ? employee.weekly_off_day_history
+      .filter(entry => entry?.effective_from && entry.effective_from <= date)
+      .sort((a, b) => b.effective_from.localeCompare(a.effective_from))
+    : []
+  const value = history.length ? history[0].weekly_off_day : employee?.weekly_off_day
+  return value === null || value === undefined || value === '' ? null : Number(value)
+}
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
 const AVATAR_COLORS = ['bg-primary', 'bg-cyan-700', 'bg-emerald-700', 'bg-orange-700', 'bg-violet-700', 'bg-rose-700', 'bg-indigo-700']
 
@@ -175,7 +184,7 @@ export default function InterventionShiftsPage() {
     employees.forEach(employee => days.forEach(day => {
       const leave = leaves[cellKey(employee.id, day)]
       if (leave) result[day].leave++
-      else if (Number(employee.weekly_off_day) === new Date(`${day}T12:00:00`).getDay()) result[day].off++
+      else if (weeklyOffDayOn(employee, day) === new Date(`${day}T12:00:00`).getDay()) result[day].off++
       else {
         const shift = valueFor(employee.id, day)
         if (shift) result[day][shift]++
@@ -283,7 +292,7 @@ export default function InterventionShiftsPage() {
                   {days.map(day => {
                     const key = cellKey(employee.id, day)
                     const leaveType = leaves[key]
-                    const isOff = Number(employee.weekly_off_day) === new Date(`${day}T12:00:00`).getDay()
+                    const isOff = weeklyOffDayOn(employee, day) === new Date(`${day}T12:00:00`).getDay()
                     const shift = valueFor(employee.id, day)
                     const isToday = day === today
                     return (

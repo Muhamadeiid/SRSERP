@@ -4,6 +4,15 @@ import { attendanceService } from '../services/Attendanceservice'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const timeValue = value => value ? String(value).slice(0, 5) : ''
+const weeklyOffDayOn = (employee, date) => {
+  const history = Array.isArray(employee?.weekly_off_day_history)
+    ? employee.weekly_off_day_history
+      .filter(entry => entry?.effective_from && entry.effective_from <= date)
+      .sort((a, b) => b.effective_from.localeCompare(a.effective_from))
+    : []
+  const value = history.length ? history[0].weekly_off_day : employee?.weekly_off_day
+  return value === null || value === undefined || value === '' ? null : Number(value)
+}
 
 export default function CcpAttendancePage() {
   const [date, setDate] = useState(today())
@@ -28,9 +37,7 @@ export default function CcpAttendancePage() {
       setDirtyIds([])
       setDrafts(Object.fromEntries(rows.map(employee => {
         const record = employee.attendance
-        const isWeeklyOff = employee.weekly_off_day !== null
-          && employee.weekly_off_day !== undefined
-          && Number(employee.weekly_off_day) === selectedDay
+        const isWeeklyOff = weeklyOffDayOn(employee, date) === selectedDay
         return [employee.id, {
           check_in: timeValue(record?.check_in),
           check_out: timeValue(record?.check_out),

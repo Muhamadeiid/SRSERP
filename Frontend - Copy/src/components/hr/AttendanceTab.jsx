@@ -82,6 +82,16 @@ const hasWeeklyOffDay = (employee) =>
 const weeklyOffLabel = (employee) => hasWeeklyOffDay(employee)
   ? DAYS[Number(employee.weekly_off_day)]
   : 'Not set'
+const weeklyOffDayOn = (employee, dateObj) => {
+  const dateKey = `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}`
+  const history = Array.isArray(employee?.weekly_off_day_history)
+    ? employee.weekly_off_day_history
+      .filter(entry => entry?.effective_from && entry.effective_from <= dateKey)
+      .sort((a, b) => b.effective_from.localeCompare(a.effective_from))
+    : []
+  const value = history.length ? history[0].weekly_off_day : employee?.weekly_off_day
+  return value === null || value === undefined || value === '' ? null : Number(value)
+}
 
 // OT is only counted when there's an approved OTR on that date.
 // Ignores attendance clock-out — a manager-approved OTR is required.
@@ -181,8 +191,9 @@ function isWorkingDay(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
   const isIntervention = isInterventionEmployee(employee)
 
   if (isIntervention) {
-    if (!hasWeeklyOffDay(employee)) return true
-    return dow !== Number(employee.weekly_off_day)
+    const weeklyOffDay = weeklyOffDayOn(employee, dateObj)
+    if (weeklyOffDay === null) return true
+    return dow !== weeklyOffDay
   }
 
   // Regular employees
@@ -205,10 +216,11 @@ function isWorkingDay(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
   return true // Sun–Thu always work
 }
 
-function dayOffLabel(employee, dow, policy = ATTENDANCE_POLICY_DEFAULTS) {
+function dayOffLabel(employee, dateObj, policy = ATTENDANCE_POLICY_DEFAULTS) {
   if (!employee) return 'Day Off'
+  const dow = dateObj.getDay()
   const isIntervention = isInterventionEmployee(employee)
-  if (isIntervention && hasWeeklyOffDay(employee) && dow === Number(employee.weekly_off_day)) return `${DAYS[dow]} Off`
+  if (isIntervention && dow === weeklyOffDayOn(employee, dateObj)) return `${DAYS[dow]} Off`
   if (!isIntervention && dow === policyNumber(policy, 'attendance_regular_weekly_off_day')) return `${DAYS[dow]} Off`
   if (!isIntervention && dow === 6) return 'Weekend'
   return 'Day Off'
@@ -246,7 +258,7 @@ function buildRows(startDate, endDate, records, employee, leaves = [], otrs = []
     rows.push({
       day: d, dayName: DAYS[dow], dateStr,
       isWeekend: isDayOff,        // reuse isWeekend flag for any day-off
-      dayOffLabel: dayOffLabel(employee, dow, policy),
+      dayOffLabel: dayOffLabel(employee, new Date(cur), policy),
       record,
       leave:   leaveOnDate(leaves, employee?.id, dateStr),
       otr:     otrOnDate(otrs, employee?.id, dateStr),

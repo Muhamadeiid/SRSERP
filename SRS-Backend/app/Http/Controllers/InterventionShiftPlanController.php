@@ -21,7 +21,7 @@ class InterventionShiftPlanController extends Controller
 
         $employees = $this->interventionEmployees()
             ->orderBy('name')
-            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'position', 'department', 'work_location', 'weekly_off_day']);
+            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'position', 'department', 'work_location', 'weekly_off_day', 'weekly_off_day_history']);
 
         $employeeIds = $employees->pluck('id');
         $plans = InterventionShiftPlan::query()

@@ -233,7 +233,7 @@ class AttendanceController extends Controller
                 }
 
                 $activeEmployees = $employeeQuery
-                    ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'category', 'saturday_group', 'weekly_off_day']);
+                    ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'category', 'saturday_group', 'weekly_off_day', 'weekly_off_day_history']);
 
                 // Leave rows are for the overview only. They make the On Leave
                 // card filterable without creating attendance database records.
@@ -361,7 +361,7 @@ class AttendanceController extends Controller
         });
 
         $employees = Employee::active()->get([
-            'id', 'hiring_date', 'saturday_group', 'weekly_off_day',
+            'id', 'hiring_date', 'saturday_group', 'weekly_off_day', 'weekly_off_day_history',
         ]);
         $leaves = LeaveRequest::query()
             ->where('type', 'lrf')
@@ -590,7 +590,7 @@ class AttendanceController extends Controller
 
         $employees = $this->ccpEmployees()
             ->orderBy('name')
-            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'weekly_off_day']);
+            ->get(['id', 'name', 'arabic_name', 'ibs_code', 'punch_code', 'position', 'department', 'work_location', 'weekly_off_day', 'weekly_off_day_history']);
 
         $records = \App\Models\Attendance::whereDate('date', $date)
             ->whereIn('employee_id', $employees->pluck('id'))
