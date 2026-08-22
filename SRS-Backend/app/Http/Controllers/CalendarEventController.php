@@ -217,8 +217,13 @@ class CalendarEventController extends Controller
                 $label,
                 $body,
                 ['calendar_event_id' => $event->id, 'participant_role' => $role, 'path' => '/calendar'],
-                $type === 'task',
-                $this->notificationOptions($event, $actor, $type)
+                in_array($type, ['task', 'interview'], true),
+                $this->notificationOptions(
+                    $event,
+                    $actor,
+                    $type,
+                    in_array($type, ['task', 'interview'], true) ? 'warn' : 'info'
+                )
             );
         }
     }

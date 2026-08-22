@@ -713,6 +713,7 @@ class LeaveRequestController extends Controller
             'reason.min' => 'Please provide a clear rejection reason of at least 5 characters.',
         ]);
 
+        $trackingNo = $leaveRequest->tracking_no;
         $leaveRequest->update([
             'tracking_no' => null,
             'status' => 'rejected',
@@ -725,7 +726,15 @@ class LeaveRequestController extends Controller
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_rejected', "{$typeLabel} Rejected", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was rejected by {$user->name}. Reason: {$validated['reason']}", ['leave_request_id' => $leaveRequest->id]);
+            Notification::notifyUser(
+                $leaveRequest->user_id,
+                $leaveRequest->type . '_rejected',
+                "{$typeLabel} Rejected",
+                "Your {$typeLabel} ({$trackingNo}) was rejected by {$user->name}. Reason: {$validated['reason']}",
+                ['leave_request_id' => $leaveRequest->id],
+                true,
+                ['priority' => 'warn']
+            );
         }
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver', 'rejecter'])]);
@@ -742,6 +751,7 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Cannot reschedule this request'], 422);
         }
 
+        $trackingNo = $leaveRequest->tracking_no;
         $leaveRequest->update([
             'tracking_no' => null,
             'status' => 'rescheduled',
@@ -754,7 +764,15 @@ class LeaveRequestController extends Controller
         $reason = $request->input('reason') ? ' - ' . $request->input('reason') : '';
         $event = $leaveRequest->type === 'lrf' ? 'lrf_rescheduled' : 'otr_rescheduled';
         if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $event, "{$typeLabel} - Reschedule Required", "Your {$typeLabel} ({$leaveRequest->tracking_no}) needs to be rescheduled by {$user->name}{$reason}. Please submit a new request.", ['leave_request_id' => $leaveRequest->id]);
+            Notification::notifyUser(
+                $leaveRequest->user_id,
+                $event,
+                "{$typeLabel} - Reschedule Required",
+                "Your {$typeLabel} ({$trackingNo}) needs to be rescheduled by {$user->name}{$reason}. Please submit a new request.",
+                ['leave_request_id' => $leaveRequest->id],
+                true,
+                ['priority' => 'warn']
+            );
         }
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh()]);

@@ -12,7 +12,7 @@ import {
 import { notificationRequestTarget } from '../utils/notificationRoute'
 
 const FILTERS = [
-  ['all', 'All'], ['unread', 'Unread'], ['crit', 'Critical'], ['task', 'Tasks'],
+  ['all', 'All'], ['unread', 'Unread'], ['assigned', 'Assigned'], ['crit', 'Critical'], ['task', 'Tasks'],
   ['meeting', 'Meetings'], ['hr', 'HR'], ['leave', 'Leave'], ['ot', 'Overtime'],
   ['report', 'Reports'], ['sys', 'System'],
 ]
@@ -174,7 +174,7 @@ export default function NotificationCenterPage() {
               const actions = Array.isArray(item.actions) ? item.actions : []
               const sender = item.sender ? { ...item.sender, has_profile_photo: Boolean(item.sender.profile_photo_path) } : null
               return (
-                <article className={`notification-center-item ${isUnread(item) ? 'is-unread' : ''}`} key={item.id}>
+                <article className={`notification-center-item ${isUnread(item) ? 'is-unread' : ''} ${item.priority === 'warn' || item.priority === 'crit' ? 'is-important' : ''}`} key={item.id}>
                   <button className="notification-center-item__main" type="button" onClick={() => openItem(item)}>
                     {sender ? <UserAvatar user={sender} size="md" /> : <span className={`notification-item__icon ${config.cls}`}><Icon /></span>}
                     <span className="notification-center-item__copy"><strong>{item.title}</strong><span>{item.description || item.body}</span><small><em className={config.cls}>{config.label}</em>{formattedTime(item.created_at)}</small></span>

@@ -168,7 +168,7 @@ export default function NotificationPanel({ onClose }) {
               const actions = Array.isArray(item.actions) ? item.actions : []
               const sender = item.sender ? { ...item.sender, has_profile_photo: Boolean(item.sender.profile_photo_path) } : null
               return (
-                <article key={item.id} className={`notification-item ${isUnread(item) ? 'notification-item--unread' : ''}`}>
+                <article key={item.id} className={`notification-item ${isUnread(item) ? 'notification-item--unread' : ''} ${item.priority === 'warn' || item.priority === 'crit' ? 'notification-item--important' : ''}`}>
                   <button type="button" className="notification-item__main" onClick={() => goToItem(item)}>
                     {sender
                       ? <UserAvatar user={sender} size="md" />

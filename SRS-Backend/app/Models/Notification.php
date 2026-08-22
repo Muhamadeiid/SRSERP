@@ -29,7 +29,7 @@ class Notification extends Model
     {
         static::creating(function (Notification $notification) {
             $notification->category ??= static::categoryForType($notification->type);
-            $notification->priority ??= 'info';
+            $notification->priority ??= static::priorityForType($notification->type);
             $notification->description ??= $notification->body;
             $notification->link ??= $notification->data['path'] ?? null;
             if (! $notification->link && isset($notification->data['leave_request_id'])) {
@@ -49,8 +49,8 @@ class Notification extends Model
         $type = strtolower((string) $type);
 
         return match (true) {
-            str_contains($type, 'leave'), str_contains($type, 'lrf'), str_contains($type, 'amendment'), str_contains($type, 'cancellation') => 'leave',
             str_contains($type, 'overtime'), str_contains($type, 'otr') => 'ot',
+            str_contains($type, 'leave'), str_contains($type, 'lrf') => 'leave',
             str_contains($type, 'task'), str_contains($type, 'maintenance') => 'task',
             str_contains($type, 'meeting') => 'meeting',
             str_contains($type, 'resignation'), str_contains($type, 'interview'), str_contains($type, 'employee') => 'hr',
@@ -58,6 +58,19 @@ class Notification extends Model
             str_contains($type, 'incident'), str_contains($type, 'critical'), str_contains($type, 'fault') => 'crit',
             default => 'sys',
         };
+    }
+
+    public static function priorityForType(?string $type): string
+    {
+        $type = strtolower((string) $type);
+
+        $isNewAssignment = str_contains($type, 'assigned')
+            || str_contains($type, 'calendar_task_created')
+            || str_contains($type, 'calendar_interview_created');
+
+        return str_contains($type, 'reject') || str_contains($type, 'reschedul') || $isNewAssignment
+            ? 'warn'
+            : 'info';
     }
 
     public function user() { return $this->belongsTo(User::class); }

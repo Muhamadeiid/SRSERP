@@ -32,7 +32,28 @@ class NotificationController extends Controller
         if ($tab === 'unread') {
             $query->unread();
         } elseif ($tab === 'assigned') {
-            $query->whereIn('category', ['task', 'hr']);
+            $query->where(function ($assigned) {
+                $assigned->where('category', 'task')
+                    ->orWhere('type', 'like', '%assigned%')
+                    ->orWhere('type', 'like', 'calendar_task_%')
+                    ->orWhere('type', 'like', 'maintenance_task_%');
+            });
+        } elseif ($tab === 'leave') {
+            $query->where(function ($requestQuery) {
+                $requestQuery->where(function ($storedCategory) {
+                    $storedCategory->where('category', 'leave')
+                        ->where('type', 'not like', '%otr%')
+                        ->where('type', 'not like', '%overtime%');
+                })
+                    ->orWhere('type', 'like', '%lrf%')
+                    ->orWhere('type', 'like', '%leave%');
+            });
+        } elseif ($tab === 'ot') {
+            $query->where(function ($requestQuery) {
+                $requestQuery->where('category', 'ot')
+                    ->orWhere('type', 'like', '%otr%')
+                    ->orWhere('type', 'like', '%overtime%');
+            });
         } elseif (in_array($tab, Notification::CATEGORIES, true)) {
             $query->where('category', $tab);
         }
@@ -58,6 +79,7 @@ class NotificationController extends Controller
         $hasMore = $notifications->count() > $limit;
         $items = $notifications->take($limit)->values();
         $this->appendLeaveRequestTypes($items);
+        $this->normalizeRequestNotifications($items);
 
         $unreadCount = (clone $base)->unread()->count();
         $criticalCount = (clone $base)->unread()->where('priority', 'crit')->count();
@@ -214,6 +236,31 @@ class NotificationController extends Controller
             if ($requestId && ! isset($data['request_type']) && isset($requestTypes[$requestId])) {
                 $data['request_type'] = $requestTypes[$requestId];
                 $notification->setAttribute('data', $data);
+            }
+        });
+    }
+
+    private function normalizeRequestNotifications($notifications): void
+    {
+        $notifications->each(function (Notification $notification) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            $requestType = strtolower((string) ($data['request_type'] ?? ''));
+            $category = in_array($requestType, ['lrf', 'otr'], true)
+                ? ($requestType === 'otr' ? 'ot' : 'leave')
+                : Notification::categoryForType($notification->type);
+
+            if (in_array($category, ['leave', 'ot'], true)) {
+                $notification->setAttribute('category', $category);
+                if (isset($data['leave_request_id'])) {
+                    $path = $category === 'ot'
+                        ? '/human-resources/overtime?request='
+                        : '/human-resources/leave-requests?request=';
+                    $notification->setAttribute('link', $path.$data['leave_request_id']);
+                }
+            }
+
+            if (Notification::priorityForType($notification->type) === 'warn') {
+                $notification->setAttribute('priority', 'warn');
             }
         });
     }
