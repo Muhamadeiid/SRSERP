@@ -86,7 +86,7 @@ export default function HRDashboardView({
     return () => { active = false }
   }, [weekReload])
 
-  const total = empStats?.total_employees ?? employees.length
+  const total = empStats?.total_employees ?? empStats?.total ?? employees.length
   const present = useMemo(() => todayAttendance.filter(isPresent).length, [todayAttendance])
   const absent = useMemo(() => todayAttendance.filter(isAbsent).length, [todayAttendance])
   const leaveToday = useMemo(() => todayAttendance.filter(isLeave).length, [todayAttendance])
