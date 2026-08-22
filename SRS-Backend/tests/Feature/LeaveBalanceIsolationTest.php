@@ -72,4 +72,39 @@ class LeaveBalanceIsolationTest extends TestCase
             'casual_remaining' => 5,
         ]);
     }
+
+    public function test_leave_balance_only_accepts_quarter_day_increments(): void
+    {
+        $hr = User::create([
+            'name' => 'HR Quarter Validator',
+            'email' => 'balance-quarter@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'hr',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Quarter Balance Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+
+        $this->actingAs($hr)
+            ->putJson("/api/employees/{$employee->id}/leave-balance", [
+                'annual' => 15,
+                'annual_remaining' => 1.18,
+                'casual' => 7,
+                'casual_remaining' => 4,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('annual_remaining');
+
+        $this->actingAs($hr)
+            ->putJson("/api/employees/{$employee->id}/leave-balance", [
+                'annual' => 15,
+                'annual_remaining' => 1.25,
+                'casual' => 7,
+                'casual_remaining' => 4,
+            ])
+            ->assertOk();
+    }
 }

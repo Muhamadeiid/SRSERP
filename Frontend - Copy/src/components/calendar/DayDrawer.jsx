@@ -1,4 +1,5 @@
-import { CalendarDays, CheckCircle2, Clock3, Pencil, Plus, Repeat2, Trash2, Users, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock3, ExternalLink, Pencil, Plus, Repeat2, Trash2, Users, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 const TYPE_STYLES = {
   meeting: 'bg-[var(--cal-meeting-tint)] text-[var(--cal-meeting)]',
@@ -10,6 +11,7 @@ const TYPE_STYLES = {
 const formatDay = date => new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
 export default function DayDrawer({ date, events, selectedEventId, currentUser, onClose, onAdd, onEdit, onDelete, onToggleDone }) {
+  const navigate = useNavigate()
   if (!date) return null
 
   return (
@@ -25,8 +27,9 @@ export default function DayDrawer({ date, events, selectedEventId, currentUser, 
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {events.length === 0 && <div className="grid min-h-52 place-items-center text-center"><div><CalendarDays className="mx-auto mb-2 h-8 w-8 text-neutral-300" /><p className="text-sm font-bold text-neutral-500">Nothing planned for this day</p></div></div>}
           {events.map(event => {
-            const canEdit = event.by?.id === currentUser?.id || currentUser?.role === 'admin'
-            const canDelete = event.by?.id === currentUser?.id
+            const isMaintenanceTask = event.source === 'maintenance_task'
+            const canEdit = !isMaintenanceTask && (event.by?.id === currentUser?.id || currentUser?.role === 'admin')
+            const canDelete = !isMaintenanceTask && event.by?.id === currentUser?.id
             return (
               <article key={event.occurrenceKey || event.id} className={`rounded-lg border bg-white p-4 ${selectedEventId === event.id ? 'border-primary ring-2 ring-primary/10' : 'border-neutral-200'}`}>
                 <div className="flex items-start gap-3">
@@ -42,7 +45,8 @@ export default function DayDrawer({ date, events, selectedEventId, currentUser, 
                 </div>
 
                 <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-neutral-100 pt-3">
-                  {event.type === 'task' && <button type="button" onClick={() => onToggleDone(event)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-200 px-2.5 text-xs font-bold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />{event.isDone ? 'Reopen' : 'Mark done'}</button>}
+                  {isMaintenanceTask && <button type="button" onClick={() => navigate(event.href)} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-bold text-white"><ExternalLink className="h-3.5 w-3.5" />Open task</button>}
+                  {event.type === 'task' && !isMaintenanceTask && <button type="button" onClick={() => onToggleDone(event)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-200 px-2.5 text-xs font-bold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />{event.isDone ? 'Reopen' : 'Mark done'}</button>}
                   {canEdit && <button type="button" onClick={() => onEdit(event)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 text-xs font-bold text-neutral-600"><Pencil className="h-3.5 w-3.5" />Edit</button>}
                   {canDelete && <button type="button" onClick={() => onDelete(event)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-red-200 px-2.5 text-xs font-bold text-red-600"><Trash2 className="h-3.5 w-3.5" />Delete</button>}
                 </div>

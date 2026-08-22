@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CalendarEvent;
 use App\Models\Employee;
+use App\Models\MaintenanceTask;
 use App\Models\Notification;
 use App\Models\PublicHoliday;
 use App\Models\User;
@@ -73,6 +74,12 @@ class CalendarEventController extends Controller
             ->get();
 
         $occurrences = $events->flatMap(fn (CalendarEvent $event) => $this->occurrences($event, $from, $to));
+        $maintenanceTasks = $this->visibleMaintenanceTasks($request->user(), $from, $to)
+            ->map(fn (MaintenanceTask $task) => $this->maintenanceTaskResource($task));
+        $occurrences = $occurrences
+            ->concat($maintenanceTasks)
+            ->sortBy(fn (array $event) => $event['date'] . ' ' . ($event['time'] ?? '23:59'))
+            ->values();
 
         return response()->json([
             'success' => true,
@@ -295,6 +302,53 @@ class CalendarEventController extends Controller
             $query->where('created_by', $userId)
                 ->orWhereHas('participants', fn ($participants) => $participants->where('users.id', $userId));
         });
+    }
+
+    private function visibleMaintenanceTasks(User $user, Carbon $from, Carbon $to): Collection
+    {
+        $query = MaintenanceTask::query()
+            ->whereNotNull('due_date')
+            ->whereBetween('due_date', [$from->toDateString(), $to->toDateString()])
+            ->with(['creator:id,name,role', 'viewers:id,name,role']);
+
+        if (!in_array($user->role, ['admin', 'depot_manager'], true)) {
+            $query->whereHas('viewers', fn ($viewers) => $viewers->where('users.id', $user->id));
+        }
+
+        return $query->orderBy('due_date')->get();
+    }
+
+    private function maintenanceTaskResource(MaintenanceTask $task): array
+    {
+        return [
+            'id' => 'maintenance-' . $task->id,
+            'occurrenceKey' => 'maintenance:' . $task->id,
+            'source' => 'maintenance_task',
+            'sourceId' => $task->id,
+            'href' => '/maintenance?task=' . $task->id,
+            'type' => 'task',
+            'title' => $task->title,
+            'date' => $task->due_date->toDateString(),
+            'startsOn' => $task->due_date->toDateString(),
+            'time' => null,
+            'dur' => null,
+            'isAllDay' => true,
+            'leaveEnd' => null,
+            'by' => $task->creator ? [
+                'id' => $task->creator->id,
+                'name' => $task->creator->name,
+                'role' => $task->creator->role,
+            ] : null,
+            'participants' => $task->viewers->map(fn (User $viewer) => [
+                'id' => $viewer->id,
+                'name' => $viewer->name,
+                'role' => $viewer->role,
+            ])->values(),
+            'note' => $task->description,
+            'isDone' => $task->status === 'done',
+            'priority' => $task->priority,
+            'recurrence' => ['type' => 'none', 'interval' => 1, 'weekdays' => [], 'until' => null],
+        ];
     }
 
     private function calendarMeta(User $user, Carbon $from, Carbon $to): array

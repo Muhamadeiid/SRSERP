@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CalendarEvent;
+use App\Models\MaintenanceTask;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -95,6 +96,40 @@ class CalendarEventApiTest extends TestCase
         Sanctum::actingAs($outsider);
         $this->deleteJson("/api/calendar/events/{$eventId}")->assertForbidden();
         $this->assertDatabaseHas('calendar_events', ['id' => $eventId, 'is_done' => true]);
+    }
+
+    public function test_visible_maintenance_task_due_dates_are_included_in_work_calendar(): void
+    {
+        $creator = $this->user('admin');
+        $viewer = $this->user('manager');
+        $outsider = $this->user('manager');
+        $task = MaintenanceTask::create([
+            'title' => 'Inspect traction motor bearing',
+            'target_department' => 'cm',
+            'priority' => 'high',
+            'status' => 'pending',
+            'due_date' => '2026-08-22',
+            'created_by' => $creator->id,
+        ]);
+        $task->viewers()->sync([$viewer->id]);
+
+        Sanctum::actingAs($viewer);
+        $viewerEvents = collect($this->getJson('/api/calendar/events?from=2026-08-01&to=2026-08-31')
+            ->assertOk()
+            ->json('data'));
+        $this->assertTrue($viewerEvents->contains(fn ($event) =>
+            $event['source'] === 'maintenance_task'
+            && $event['sourceId'] === $task->id
+            && $event['date'] === '2026-08-22'
+        ));
+
+        Sanctum::actingAs($outsider);
+        $outsiderEvents = collect($this->getJson('/api/calendar/events?from=2026-08-01&to=2026-08-31')
+            ->assertOk()
+            ->json('data'));
+        $this->assertFalse($outsiderEvents->contains(fn ($event) =>
+            ($event['source'] ?? null) === 'maintenance_task' && ($event['sourceId'] ?? null) === $task->id
+        ));
     }
 
     private function eventPayload(string $type, array $participants = []): array

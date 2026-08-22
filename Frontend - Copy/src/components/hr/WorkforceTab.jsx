@@ -157,6 +157,15 @@ function EmployeeDrawer({ emp, onClose, idx, onEdit }) {
   }, [emp?.id]);
 
   const saveBalance = async () => {
+    const quarterFields = ['annual_remaining', 'casual', 'casual_remaining'];
+    const invalidQuarter = quarterFields.find(key => {
+      const value = Number(balForm[key]);
+      return Number.isFinite(value) && Math.abs(value * 4 - Math.round(value * 4)) > 0.000001;
+    });
+    if (invalidQuarter) {
+      alert('Leave balances must use whole or quarter days only (for example 12, 11.75, 11.5 or 11.25).');
+      return;
+    }
     setBalSaving(true);
     try {
       const r = await updateLeaveBalance(emp.id, balForm);

@@ -129,11 +129,11 @@ class LeaveBalanceController extends Controller
 
         $v = $request->validate([
             'annual' => 'nullable|numeric|in:15,21,30',
-            'casual' => 'nullable|numeric|min:0|max:365',
+            'casual' => 'nullable|numeric|min:0|max:365|multiple_of:0.25',
             'sick'   => 'nullable|numeric|min:0|max:365',
             'early'  => 'nullable|numeric|min:0|max:365',
-            'annual_remaining' => 'nullable|numeric|min:0|max:365',
-            'casual_remaining' => 'nullable|numeric|min:0|max:365',
+            'annual_remaining' => 'nullable|numeric|min:0|max:365|multiple_of:0.25',
+            'casual_remaining' => 'nullable|numeric|min:0|max:365|multiple_of:0.25',
         ]);
 
         $balance = DB::transaction(function () use ($employee, $v) {
