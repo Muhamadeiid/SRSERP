@@ -190,6 +190,14 @@ Start-Process -FilePath $php `
     -WindowStyle Hidden
 Start-Sleep 3
 
+Log "Starting Laravel scheduler..."
+Start-Process -FilePath $php `
+    -ArgumentList "artisan","schedule:work" `
+    -WorkingDirectory $backend `
+    -RedirectStandardOutput "$env:USERPROFILE\Desktop\laravel-scheduler-out.log" `
+    -RedirectStandardError "$env:USERPROFILE\Desktop\laravel-scheduler-err.log" `
+    -WindowStyle Hidden
+
 # Sanity check
 try {
     $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8000' -UseBasicParsing -TimeoutSec 10

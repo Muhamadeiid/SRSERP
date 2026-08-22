@@ -30,6 +30,7 @@ use App\Http\Controllers\PushController;
 use App\Http\Controllers\ResignationRequestController;
 use App\Http\Controllers\InterventionShiftPlanController;
 use App\Http\Controllers\CalendarEventController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -90,9 +91,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/leave-requests/{leaveRequest}/tracking-no',      [LeaveRequestController::class, 'updateTrackingNo']);
 
     // ── Notifications — every authenticated user ──────────────────────────────
-    Route::get('/notifications',           [LeaveRequestController::class, 'notifications']);
-    Route::post('/notifications/read-all', [LeaveRequestController::class, 'markAllRead']);
-    Route::post('/notifications/{id}/read',[LeaveRequestController::class, 'markRead']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']); // legacy client
+    Route::patch('/notifications/{notification}/action', [NotificationController::class, 'action']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
+    Route::get('/notifications/preferences', [NotificationController::class, 'preferences']);
+    Route::put('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
 
     // Resignation tickets: HR creates; Depot Manager/Admin performs the decision.
     Route::get('/resignation-requests', [ResignationRequestController::class, 'index']);

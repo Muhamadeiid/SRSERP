@@ -5,6 +5,7 @@ import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
 import { logout, refreshUser } from './store/slices/authSlice'
 import MaintenanceTaskToasts from './components/notifications/MaintenanceTaskToasts'
+import { startNotificationSubscription, stopNotificationSubscription } from './services/notificationService'
 
 const lazyWithRetry = importer => lazy(async () => {
   try {
@@ -66,6 +67,8 @@ const DisciplinaryTab   = lazyWithRetry(() => import('./components/hr/Disciplina
 const AssetsTab         = lazyWithRetry(() => import('./components/hr/AssetsTab'))
 const OrgChartTab       = lazyWithRetry(() => import('./components/hr/OrgChartTab'))
 const SettingsPage      = lazyWithRetry(() => import('./pages/SettingsPage'))
+const NotificationPreferencesPage = lazyWithRetry(() => import('./pages/NotificationPreferencesPage'))
+const NotificationCenterPage = lazyWithRetry(() => import('./pages/NotificationCenterPage'))
 
 // ── Access rules ──────────────────────────────────────────────────────────────
 // HR Full: Admin, Depot Manager, or the dedicated HR role
@@ -109,13 +112,22 @@ const AuthSync = () => {
   const token = useSelector(state => state.auth.token)
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      // Tear down any lingering notification poll so the next user starts clean.
+      stopNotificationSubscription()
+      return
+    }
 
     getMe()
       .then(user => dispatch(refreshUser(user)))
       .catch(error => {
         if (error?.response?.status === 401) dispatch(logout())
       })
+
+    // Start fresh for this session; startNotificationSubscription tears down any
+    // stale state first so a user switch does not replay the previous user's ids.
+    startNotificationSubscription()
+    return () => stopNotificationSubscription()
   }, [dispatch, token])
 
   return null
@@ -139,6 +151,8 @@ export default function App() {
         }>
           <Route path="/"            element={<DashboardPage />} />
           <Route path="/work-calendar" element={<WorkCalendarPage />} />
+          <Route path="/notification-settings" element={<NotificationPreferencesPage />} />
+          <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
           <Route path="/users"       element={
             <ProtectedRoute roles={['admin']} redirect="/">
@@ -160,6 +174,10 @@ export default function App() {
           <Route path="fleet-checks" element={<FleetChecksPage />} />
           <Route path="withdrawals"  element={<WithdrawalsPage />} />
           <Route path="equipment"   element={<ComingSoon title="Equipment Register" />} />
+          {/* Notification pages nested per-layout so the module shell stays around
+              the notification center. See notificationLinks() below. */}
+          <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route path="notification-settings" element={<NotificationPreferencesPage />} />
         </Route>
 
         {/* Inventory Layout (Admin & Depot Manager only) */}
@@ -172,6 +190,8 @@ export default function App() {
           <Route path="rotable" element={<ComingSoon title="Rotable Parts" />} />
           <Route path="bad"     element={<ComingSoon title="Bad Items"     />} />
           <Route path="reports" element={<ComingSoon title="Reports"       />} />
+          <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route path="notification-settings" element={<NotificationPreferencesPage />} />
         </Route>
 
         {/* HR Layout — any authenticated user can enter.
@@ -259,6 +279,8 @@ export default function App() {
               <SettingsPage />
             </ProtectedRoute>
           } />
+          <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route path="notification-settings" element={<NotificationPreferencesPage />} />
         </Route>
 
         {/* Procurement — any authenticated user can reach New PRF and PRF detail.
@@ -298,6 +320,8 @@ export default function App() {
               <IgiDetail />
             </ProtectedRoute>
           } />
+          <Route path="notifications" element={<NotificationCenterPage />} />
+          <Route path="notification-settings" element={<NotificationPreferencesPage />} />
           {/* PRF detail and new PRF — all authenticated users (EHS, managers, staff, etc.) */}
           <Route path="new" element={<PrfNewPage />} />
           <Route path=":id" element={<PrfDetail  />} />

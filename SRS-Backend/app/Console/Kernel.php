@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('leave:process-deductions')->dailyAt('00:10');
+        $schedule->command('notifications:dispatch-reminders')->everyMinute()->withoutOverlapping();
     }
 
     /**

@@ -108,7 +108,8 @@ class MaintenanceTaskController extends Controller
                 'New maintenance task',
                 $task->title . ($position ? " - {$position}" : ''),
                 ['maintenance_task_id' => $task->id, 'path' => '/maintenance'],
-                true
+                true,
+                $this->taskNotificationOptions($request->user(), $task, $task->priority === 'critical' ? 'crit' : 'warn')
             );
         }
 
@@ -280,8 +281,25 @@ class MaintenanceTaskController extends Controller
                 $title,
                 $body,
                 ['maintenance_task_id' => $task->id, 'path' => '/maintenance']
+                , false,
+                $this->taskNotificationOptions(User::find($actorId), $task)
             );
         }
+    }
+
+    private function taskNotificationOptions(?User $actor, MaintenanceTask $task, string $priority = 'info'): array
+    {
+        return [
+            'category' => 'task',
+            'priority' => $priority,
+            'sender_user_id' => $actor?->id,
+            'link' => '/maintenance?task=' . $task->id,
+            'meta' => array_values(array_filter([
+                $task->train_number ? ['kind' => 'code', 'value' => $this->trainPosition($task)] : null,
+                $task->due_date ? ['kind' => 'tag', 'value' => 'Due ' . $task->due_date->format('d M Y')] : null,
+            ])),
+            'actions' => [['label' => 'Open task', 'style' => 'primary', 'action' => 'open', 'payload' => []]],
+        ];
     }
 
     private function trainPosition(MaintenanceTask $task): string

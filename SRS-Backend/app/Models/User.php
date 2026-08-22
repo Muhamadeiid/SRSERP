@@ -18,7 +18,7 @@ class User extends Authenticatable
     ];
 
     protected $hidden = [
-        'password', 'remember_token', 'profile_photo_path',
+        'password', 'remember_token',
     ];
 
     protected $appends = ['has_profile_photo'];
@@ -57,6 +57,16 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(CalendarEvent::class, 'calendar_event_participants', 'user_id', 'event_id')
             ->withPivot('role');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function notificationPreference(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(NotificationPreference::class);
     }
 
     // ── Helpers ──────────────────────────────────────────────

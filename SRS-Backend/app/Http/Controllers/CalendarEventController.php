@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CalendarEvent;
 use App\Models\Employee;
+use App\Models\Notification;
 use App\Models\PublicHoliday;
 use App\Models\User;
 use Carbon\Carbon;
@@ -94,9 +95,12 @@ class CalendarEventController extends Controller
             return $event;
         });
 
+        $event->load(['creator:id,name,role', 'participants:id,name,role']);
+        $this->notifyEventCreated($event, $request->user());
+
         return response()->json([
             'success' => true,
-            'data' => $this->resource($event->load(['creator:id,name,role', 'participants:id,name,role'])),
+            'data' => $this->resource($event),
         ], 201);
     }
 
@@ -110,6 +114,7 @@ class CalendarEventController extends Controller
         ]), $data);
         $this->authorizePayload($request->user(), $merged);
 
+        $before = $calendarEvent->only(['title', 'event_date', 'event_time', 'duration_min']);
         DB::transaction(function () use ($request, $calendarEvent, $data) {
             $participantsProvided = array_key_exists('participants', $data);
             $participants = $data['participants'] ?? [];
@@ -118,9 +123,12 @@ class CalendarEventController extends Controller
             if ($participantsProvided) $this->syncParticipants($calendarEvent, $request->user(), $participants);
         });
 
+        $calendarEvent->refresh()->load(['creator:id,name,role', 'participants:id,name,role']);
+        $this->notifyEventUpdated($calendarEvent, $request->user(), $before);
+
         return response()->json([
             'success' => true,
-            'data' => $this->resource($calendarEvent->fresh()->load(['creator:id,name,role', 'participants:id,name,role'])),
+            'data' => $this->resource($calendarEvent),
         ]);
     }
 
@@ -135,14 +143,117 @@ class CalendarEventController extends Controller
         abort_unless($calendarEvent->created_by === $request->user()->id || $isAssignee, 403);
         $calendarEvent->update(['is_done' => $data['done']]);
 
+        if ($data['done'] && $calendarEvent->created_by !== $request->user()->id) {
+            Notification::notifyUser(
+                $calendarEvent->created_by,
+                'calendar_task_completed',
+                'Task completed',
+                "{$request->user()->name} completed {$calendarEvent->title}.",
+                ['calendar_event_id' => $calendarEvent->id, 'path' => '/calendar'],
+                false,
+                $this->notificationOptions($calendarEvent, $request->user(), 'task')
+            );
+        }
+
         return response()->json(['success' => true, 'data' => $this->resource($calendarEvent->fresh()->load(['creator:id,name,role', 'participants:id,name,role']))]);
     }
 
     public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
         abort_unless($calendarEvent->created_by === $request->user()->id, 403);
+        $calendarEvent->load('participants:id,name,role');
+        $recipients = $calendarEvent->participants->pluck('id')->reject(fn ($id) => (int) $id === $request->user()->id);
+        $type = $calendarEvent->type;
+        $title = $calendarEvent->title;
         $calendarEvent->delete();
+        if (in_array($type, ['meeting', 'interview'], true)) {
+            foreach ($recipients as $recipientId) {
+                Notification::notifyUser(
+                    (int) $recipientId,
+                    "calendar_{$type}_cancelled",
+                    ucfirst($type) . ' cancelled',
+                    "{$title} was cancelled by {$request->user()->name}.",
+                    ['path' => '/calendar'],
+                    false,
+                    [
+                        'category' => $type === 'meeting' ? 'meeting' : 'hr',
+                        'priority' => 'warn',
+                        'sender_user_id' => $request->user()->id,
+                        'link' => '/calendar',
+                    ]
+                );
+            }
+        }
         return response()->json(['success' => true]);
+    }
+
+    private function notifyEventCreated(CalendarEvent $event, User $actor): void
+    {
+        $type = $event->type;
+        if (!in_array($type, ['meeting', 'task', 'interview'], true)) return;
+
+        foreach ($event->participants as $participant) {
+            if ((int) $participant->id === (int) $actor->id) continue;
+            $role = $participant->pivot->role;
+            $label = match ($type) {
+                'task' => 'New task assigned',
+                'interview' => 'Interview scheduled',
+                default => 'Meeting invitation',
+            };
+            $body = "{$actor->name} added {$event->title} on {$event->event_date->format('d M Y')}";
+            if ($event->event_time) $body .= ' at ' . substr((string) $event->event_time, 0, 5);
+            $body .= '.';
+
+            Notification::notifyUser(
+                (int) $participant->id,
+                "calendar_{$type}_created",
+                $label,
+                $body,
+                ['calendar_event_id' => $event->id, 'participant_role' => $role, 'path' => '/calendar'],
+                $type === 'task',
+                $this->notificationOptions($event, $actor, $type)
+            );
+        }
+    }
+
+    private function notifyEventUpdated(CalendarEvent $event, User $actor, array $before): void
+    {
+        if (!in_array($event->type, ['meeting', 'task', 'interview'], true)) return;
+        $changed = collect(['title', 'event_date', 'event_time', 'duration_min'])
+            ->contains(fn ($field) => (string) ($before[$field] ?? '') !== (string) $event->{$field});
+        if (!$changed) return;
+
+        foreach ($event->participants as $participant) {
+            if ((int) $participant->id === (int) $actor->id) continue;
+            Notification::notifyUser(
+                (int) $participant->id,
+                "calendar_{$event->type}_rescheduled",
+                ucfirst($event->type) . ' updated',
+                "{$actor->name} updated {$event->title}. New schedule: {$event->event_date->format('d M Y')}" . ($event->event_time ? ' at ' . substr((string) $event->event_time, 0, 5) : '') . '.',
+                ['calendar_event_id' => $event->id, 'path' => '/calendar'],
+                false,
+                $this->notificationOptions($event, $actor, $event->type, 'warn')
+            );
+        }
+    }
+
+    private function notificationOptions(CalendarEvent $event, User $actor, string $type, string $priority = 'info'): array
+    {
+        return [
+            'category' => match ($type) {
+                'task' => 'task',
+                'interview' => 'hr',
+                default => 'meeting',
+            },
+            'priority' => $priority,
+            'sender_user_id' => $actor->id,
+            'link' => '/calendar?event=' . $event->id,
+            'meta' => array_values(array_filter([
+                ['kind' => 'tag', 'value' => $event->event_date->format('d M Y')],
+                $event->event_time ? ['kind' => 'text', 'value' => substr((string) $event->event_time, 0, 5)] : null,
+            ])),
+            'actions' => [['label' => 'Open', 'style' => 'primary', 'action' => 'open', 'payload' => []]],
+        ];
     }
 
     public function stats(Request $request): JsonResponse

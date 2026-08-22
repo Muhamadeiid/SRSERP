@@ -27,7 +27,14 @@ self.addEventListener('push', (event) => {
     tag: payload.data?.tag || undefined,
     data: payload.data || {},
   }
-  event.waitUntil(self.registration.showNotification(payload.title, opts))
+  event.waitUntil((async () => {
+    await self.registration.showNotification(payload.title, opts)
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    windows.forEach((client) => client.postMessage({
+      type: 'notification-received',
+      notification: payload,
+    }))
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

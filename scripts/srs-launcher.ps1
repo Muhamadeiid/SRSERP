@@ -19,7 +19,10 @@ Log "=== SRS launcher starting ==="
 
 # Skip if already running
 $mysqlRunning = @(Get-Process mysqld -EA SilentlyContinue).Count -gt 0
-$phpRunning = @(Get-Process php -EA SilentlyContinue | Where-Object { $_.Path -eq $php }).Count -gt 0
+$phpProcesses = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -EA SilentlyContinue)
+$phpRunning = @($phpProcesses | Where-Object { $_.CommandLine -match '\s-S\s+0\.0\.0\.0:8000' }).Count -gt 0
+$schedulerRunning = @($phpProcesses |
+    Where-Object { $_.CommandLine -match 'artisan\s+schedule:work' }).Count -gt 0
 
 if ($mysqlRunning) {
     Log "MySQL already running - skipping mysqld start"
@@ -57,6 +60,17 @@ if ($phpRunning) {
         -RedirectStandardError (Join-Path $logDir 'php-server-err.log') `
         -WindowStyle Hidden
     Start-Sleep 2
+}
+
+if ($schedulerRunning) {
+    Log "Laravel scheduler already running - skipping"
+} else {
+    Log "Starting Laravel scheduler..."
+    Start-Process -FilePath $php -ArgumentList "artisan","schedule:work" `
+        -WorkingDirectory $bd `
+        -RedirectStandardOutput (Join-Path $logDir 'laravel-scheduler-out.log') `
+        -RedirectStandardError (Join-Path $logDir 'laravel-scheduler-err.log') `
+        -WindowStyle Hidden
 }
 
 Log "=== Launcher done ==="

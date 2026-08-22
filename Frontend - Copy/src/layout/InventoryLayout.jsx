@@ -3,10 +3,11 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   Package, RotateCcw, AlertTriangle, BarChart3,
-  ChevronLeft, ChevronRight, LogOut, Bell, Plus, Download, Menu,
+  ChevronLeft, ChevronRight, LogOut, Plus, Download, Menu,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
+import NotificationBell from '../components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
   { label: 'Material Ledger', path: '/inventory',         icon: Package,       end: true },
@@ -159,9 +160,7 @@ export default function InventoryLayout() {
             <span className="text-neutral-500">Inventory Control</span>
           </div>
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
-            <button className="w-8 h-8 border border-neutral-100 rounded-lg flex items-center justify-center hover:bg-neutral-50 transition-colors text-secondary">
-              <Bell className="w-4 h-4" />
-            </button>
+            <NotificationBell />
             <div className="w-px h-6 bg-neutral-100" />
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="hidden sm:block text-right">

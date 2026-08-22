@@ -1,30 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   Users, Calendar, Clock, ShieldCheck,
   AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
-  LogOut, Bell, FileText, Package, Settings,
-  X, CheckCheck, GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus, CalendarDays,
+  LogOut, FileText, Package, Settings,
+  GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus, CalendarDays,
   ClipboardList, Briefcase,
 } from 'lucide-react'
-import { getNotifications, markAllRead, markOneRead } from '../services/leaveService'
 import { useSidebar } from '../hooks/useSidebar'
-import { notificationRequestTarget } from '../utils/notificationRoute'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
-
-// ── time formatter ───────────────────────────────────────────────
-const fmtTime = (d) => {
-  if (!d) return ''
-  const dt = new Date(d)
-  const diffMin = Math.floor((new Date() - dt) / 60000)
-  if (diffMin < 1)  return 'Just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24)   return `${diffH}h ago`
-  return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-}
+import NotificationBell from '../components/notifications/NotificationBell'
 
 // Roles that have full HR module access (workforce, attendance, assets, etc.)
 const HR_FULL_ROLES_NAV = ['admin', 'depot_manager', 'hr']
@@ -112,47 +99,6 @@ export default function HRLayout() {
   const sidebarW  = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset = isMobile ? 0 : sidebarW
-
-  // ── notifications ────────────────────────────────────────────
-  const [notifs, setNotifs] = useState([])
-  const [open,   setOpen]   = useState(false)
-  const panelRef = useRef()
-
-  const fetchNotifs = useCallback(async () => {
-    try { const r = await getNotifications(); setNotifs(r.data ?? []) } catch (_) {}
-  }, [])
-
-  useEffect(() => {
-    fetchNotifs()
-    const t = setInterval(fetchNotifs, 30000)
-    return () => clearInterval(t)
-  }, [fetchNotifs])
-
-  useEffect(() => {
-    const h = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-
-  const unread = notifs.filter(n => !n.read).length
-
-  const handleMarkAll = async (e) => {
-    e.stopPropagation()
-    await markAllRead()
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })))
-  }
-
-  const handleNotifClick = async (n) => {
-    if (!n.read) {
-      await markOneRead(n.id)
-      setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
-    }
-    setOpen(false)
-    const target = notificationRequestTarget(n)
-    if (target) navigate(`${target.path}?${target.query}`)
-  }
 
   // ── filter nav by role ───────────────────────────────────────
   const role      = String(user?.role ?? 'staff').trim().toLowerCase()
@@ -347,77 +293,8 @@ export default function HRLayout() {
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
 
-            {/* ── Notification Bell ── */}
-            <div className="relative" ref={panelRef}>
-              <button
-                onClick={() => setOpen(o => !o)}
-                className="relative w-8 h-8 border border-neutral-100 rounded-lg flex items-center justify-center hover:bg-neutral-50 transition-colors text-secondary"
-              >
-                <Bell className="w-4 h-4" />
-                {unread > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
-                    {unread > 9 ? '9+' : unread}
-                  </span>
-                )}
-              </button>
-
-              {open && (
-                <div className="absolute right-0 top-10 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl border border-neutral-200 shadow-2xl z-50 overflow-hidden">
-                  {/* Panel header */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-primary" />
-                      <p className="text-sm font-bold text-secondary-700">Notifications</p>
-                      {unread > 0 && (
-                        <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full">{unread} new</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {unread > 0 && (
-                        <button onClick={handleMarkAll} className="flex items-center gap-1 text-[11px] text-primary font-semibold hover:underline">
-                          <CheckCheck className="w-3 h-3" /> Mark all read
-                        </button>
-                      )}
-                      <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Notification list */}
-                  <div className="max-h-80 overflow-y-auto divide-y divide-neutral-50">
-                    {notifs.length === 0 ? (
-                      <div className="py-12 text-center text-neutral-300">
-                        <Bell className="w-7 h-7 mx-auto mb-2 opacity-40" />
-                        <p className="text-xs">No notifications yet</p>
-                      </div>
-                    ) : notifs.map(n => (
-                      <button key={n.id} onClick={() => handleNotifClick(n)}
-                        className={`w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors flex items-start gap-3 ${!n.read ? 'bg-blue-50/50' : ''}`}>
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!n.read ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-400'}`}>
-                          <Bell className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-bold truncate ${!n.read ? 'text-secondary-700' : 'text-neutral-500'}`}>{n.title}</p>
-                          <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
-                          <p className="text-[10px] text-neutral-300 mt-1">{fmtTime(n.created_at)}</p>
-                        </div>
-                        {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
-                      </button>
-                    ))}
-                  </div>
-
-                  {notifs.length > 0 && (
-                    <div className="px-4 py-2.5 border-t border-neutral-100 text-center">
-                      <button onClick={() => { setOpen(false); navigate('/human-resources/leave') }}
-                        className="text-[11px] text-primary font-semibold hover:underline">
-                        View all in Leave Requests →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* ── Notification Bell — owns its own panel, polling, outside-click. ── */}
+            <NotificationBell />
 
             <div className="w-px h-6 bg-neutral-100" />
 
