@@ -8,7 +8,7 @@ import {
   Loader2, Package2, Wrench, UserCheck, CakeSlice,
 } from 'lucide-react'
 
-import { getEmployees, getEmployeeStats, getUpcomingBirthdays } from '../services/employeeService'
+import { getEmployeeStats, getUpcomingBirthdays } from '../services/employeeService'
 import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
@@ -197,32 +197,30 @@ export default function DashboardPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const tasks = []
+    const coreTasks = []
+    const secondaryTasks = []
     if (isHRFull) {
-      tasks.push(
+      coreTasks.push(
         getEmployeeStats().then(r => setEmpStats(r?.data ?? r)).catch(() => {}),
-        getEmployees({ per_page: 500 }).then(r => {
-          const list = Array.isArray(r?.data?.data) ? r.data.data : Array.isArray(r?.data) ? r.data : []
-          setEmployees(list)
-        }).catch(() => {}),
-        getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}),
         attendanceService.getAttendance({ date: todayISO() }).then(r => {
           setTodayAttendance(Array.isArray(r?.data) ? r.data : [])
         }).catch(() => {}),
       )
+      secondaryTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
     } else {
       // All other roles (staff, manager, procurement, ehs) — see just their own submitted requests
-      tasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
+      coreTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
     }
     if (canSeeProc) {
-      tasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
+      secondaryTasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
     }
     if (canSeeMaintenance) {
-      tasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
+      secondaryTasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
     }
-    tasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
-    tasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
-    await Promise.allSettled(tasks)
+    secondaryTasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
+    secondaryTasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
+    void Promise.allSettled(secondaryTasks)
+    await Promise.allSettled(coreTasks)
     setLoading(false)
   }, [isHRFull, canSeeProc, canSeeMaintenance])
 

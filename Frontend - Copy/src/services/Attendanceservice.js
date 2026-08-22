@@ -62,6 +62,12 @@ export const attendanceService = {
     const response = await api.get('/attendance', { params: filters })
     return response.data
   },
+  getDashboardWeek: async (startDate, endDate) => {
+    const response = await api.get('/attendance/dashboard-week', {
+      params: { start_date: startDate, end_date: endDate },
+    })
+    return response.data
+  },
 
   /**
    * Create manual attendance entry

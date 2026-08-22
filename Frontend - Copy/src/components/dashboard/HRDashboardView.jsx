@@ -17,7 +17,6 @@ const dateKey = date => {
 }
 const addDays = (date, amount) => { const next = new Date(date); next.setDate(next.getDate() + amount); return next }
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase()
-const listFrom = response => Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : []
 const isLeave = row => ['on_leave', 'leave', 'annual', 'casual', 'sick', 'company_paid'].includes(String(row?.status || '').toLowerCase())
 const isAbsent = row => String(row?.status || '').toLowerCase() === 'absent'
 const isPresent = row => Boolean(row?.check_in || row?.check_out) && !isLeave(row)
@@ -60,6 +59,7 @@ export default function HRDashboardView({
   const navigate = useNavigate()
   const { departments } = useLookups()
   const [weeklyRows, setWeeklyRows] = useState([])
+  const [weeklyRecognition, setWeeklyRecognition] = useState([])
   const [weeklyLoading, setWeeklyLoading] = useState(true)
   const [awardSearch, setAwardSearch] = useState('')
   const [weekReload, setWeekReload] = useState(0)
@@ -69,12 +69,20 @@ export default function HRDashboardView({
     const today = new Date()
     const rangeStart = addDays(today, -6)
     setWeeklyLoading(true)
-    Promise.all(Array.from({ length: 7 }, (_, index) => {
-      const date = addDays(rangeStart, index)
-      return attendanceService.getAttendance({ date: dateKey(date) })
-        .then(response => ({ date, rows: listFrom(response) }))
-        .catch(() => ({ date, rows: [] }))
-    })).then(result => { if (active) setWeeklyRows(result) }).finally(() => { if (active) setWeeklyLoading(false) })
+    attendanceService.getDashboardWeek(dateKey(rangeStart), dateKey(today))
+      .then(response => {
+        if (!active) return
+        const rows = Array.isArray(response?.data) ? response.data : []
+        setWeeklyRows(rows.map(day => ({
+          date: new Date(`${day.date}T00:00:00`),
+          present: Number(day.present || 0),
+          absent: Number(day.absent || 0),
+          leave: Number(day.leave || 0),
+        })))
+        setWeeklyRecognition(Array.isArray(response?.recognition) ? response.recognition : [])
+      })
+      .catch(() => { if (active) { setWeeklyRows([]); setWeeklyRecognition([]) } })
+      .finally(() => { if (active) setWeeklyLoading(false) })
     return () => { active = false }
   }, [weekReload])
 
@@ -90,12 +98,12 @@ export default function HRDashboardView({
     return department?.label_en || department?.name || String(key).replaceAll('_', ' ')
   }, [departments])
 
-  const weeklyStats = useMemo(() => weeklyRows.map(({ date, rows }) => ({
+  const weeklyStats = useMemo(() => weeklyRows.map(({ date, present, absent, leave }) => ({
     key: dateKey(date),
     label: date.toLocaleDateString('en-GB', { weekday: 'short' }),
-    present: rows.filter(isPresent).length,
-    absent: rows.filter(isAbsent).length,
-    leave: rows.filter(isLeave).length,
+    present,
+    absent,
+    leave,
   })), [weeklyRows])
   const chartMax = Math.max(total, ...weeklyStats.flatMap(day => [day.present, day.absent, day.leave]), 1)
 
@@ -125,28 +133,11 @@ export default function HRDashboardView({
     .slice(0, 5), [requests])
 
   const recognition = useMemo(() => {
-    const employeeById = new Map(employees.map(employee => [Number(employee.id), employee]))
-    const scores = new Map()
-    weeklyRows.forEach(({ rows }) => rows.forEach(row => {
-      if (!row.employee_id || !isPresent(row)) return
-      const employee = employeeById.get(Number(row.employee_id))
-      const current = scores.get(row.employee_id) || {
-        id: row.employee_id,
-        name: employee?.name || row.employee?.name || row.employee_name || 'Employee',
-        position: employee?.position || employee?.job_title || row.employee?.position || '',
-        department: employee?.department || row.employee?.department || '',
-        present: 0,
-        late: 0,
-      }
-      current.present += 1
-      if (String(row.status).toLowerCase() === 'late') current.late += 1
-      scores.set(row.employee_id, current)
-    }))
-    return [...scores.values()]
+    return [...weeklyRecognition]
       .sort((a, b) => (b.present - b.late) - (a.present - a.late))
       .filter(item => item.name.toLowerCase().includes(awardSearch.toLowerCase()))
       .slice(0, 8)
-  }, [weeklyRows, employees, awardSearch])
+  }, [weeklyRecognition, awardSearch])
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">

@@ -184,6 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Attendance
         Route::prefix('attendance')->group(function () {
             Route::get('/',                          [AttendanceController::class, 'index']);
+            Route::get('/dashboard-week',            [AttendanceController::class, 'dashboardWeek']);
             Route::post('/upload',                   [AttendanceController::class, 'upload']);
             Route::post('/upload-excel',             [AttendanceController::class, 'uploadExcel']);
             Route::post('/manual',                   [AttendanceController::class, 'manual']);

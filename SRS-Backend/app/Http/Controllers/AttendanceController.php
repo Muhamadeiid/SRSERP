@@ -332,6 +332,138 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Lightweight attendance totals for the dashboard chart.
+     * Loads the range once instead of rebuilding the daily workforce overview
+     * in seven separate HTTP requests.
+     */
+    public function dashboardWeek(Request $request)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $start = Carbon::parse($validated['start_date'])->startOfDay();
+        $end = Carbon::parse($validated['end_date'])->startOfDay();
+        if ($start->diffInDays($end) > 13) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dashboard attendance range cannot exceed 14 days.',
+            ], 422);
+        }
+
+        $records = $this->attendanceService->getAttendance([
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+        ])->filter(function ($attendance) {
+            $hiringDate = $attendance->employee?->hiring_date;
+            return !$hiringDate || $attendance->date->gte($hiringDate->copy()->startOfDay());
+        });
+
+        $employees = Employee::active()->get([
+            'id', 'hiring_date', 'saturday_group', 'weekly_off_day',
+        ]);
+        $leaves = LeaveRequest::query()
+            ->where('type', 'lrf')
+            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
+            ->whereIn('leave_type', ['annual', 'casual', 'sick'])
+            ->whereNotNull('employee_id')
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereDate('end_date', '>=', $start->toDateString())
+            ->get(['employee_id', 'start_date', 'end_date']);
+
+        $holidays = \App\Models\PublicHoliday::query()
+            ->whereDate('date', '<=', $end->toDateString())
+            ->where(function ($query) use ($start) {
+                $query->whereDate('end_date', '>=', $start->toDateString())
+                    ->orWhere(function ($singleDay) use ($start) {
+                        $singleDay->whereNull('end_date')
+                            ->whereDate('date', '>=', $start->toDateString());
+                    });
+            })
+            ->get(['date', 'end_date']);
+
+        $recordsByDate = $records->groupBy(fn ($record) => $record->date->toDateString());
+        $days = collect();
+        $recognition = [];
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            $dateKey = $date->toDateString();
+            $dayRecords = $recordsByDate->get($dateKey, collect());
+            $recordedIds = $dayRecords->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
+            $eligibleEmployees = $employees->filter(fn (Employee $employee) =>
+                !$employee->hiring_date || $employee->hiring_date->lte($date)
+            );
+            $leaveIds = $leaves->filter(fn ($leave) =>
+                Carbon::parse($leave->start_date)->startOfDay()->lte($date)
+                && Carbon::parse($leave->end_date)->startOfDay()->gte($date)
+            )->pluck('employee_id')->map(fn ($id) => (int) $id)->flip();
+            $isHoliday = $holidays->contains(function ($holiday) use ($dateKey) {
+                $holidayStart = $holiday->date?->toDateString();
+                $holidayEnd = $holiday->end_date?->toDateString() ?? $holidayStart;
+                return $holidayStart && $holidayStart <= $dateKey && $holidayEnd >= $dateKey;
+            });
+
+            $present = $dayRecords->filter(fn ($record) =>
+                ($record->check_in || $record->check_out)
+                && !in_array(strtolower((string) $record->status), ['on_leave', 'leave', 'annual', 'casual', 'sick', 'company_paid'], true)
+            )->count();
+            $absent = $dayRecords->where('status', 'absent')->count();
+            $leave = $dayRecords->filter(fn ($record) =>
+                in_array(strtolower((string) $record->status), ['on_leave', 'leave', 'annual', 'casual', 'sick', 'company_paid'], true)
+            )->count();
+
+            foreach ($dayRecords as $record) {
+                if (!$record->employee_id || (!$record->check_in && !$record->check_out)) {
+                    continue;
+                }
+                $status = strtolower((string) $record->status);
+                if (in_array($status, ['on_leave', 'leave', 'annual', 'casual', 'sick', 'company_paid'], true)) {
+                    continue;
+                }
+                $employeeId = (int) $record->employee_id;
+                if (!isset($recognition[$employeeId])) {
+                    $recognition[$employeeId] = [
+                        'id' => $employeeId,
+                        'name' => $record->employee?->name ?? 'Employee',
+                        'position' => $record->employee?->position ?? '',
+                        'department' => $record->employee?->department ?? '',
+                        'present' => 0,
+                        'late' => 0,
+                    ];
+                }
+                $recognition[$employeeId]['present']++;
+                if ($status === 'late') {
+                    $recognition[$employeeId]['late']++;
+                }
+            }
+
+            foreach ($eligibleEmployees as $employee) {
+                if ($recordedIds->has((int) $employee->id)) {
+                    continue;
+                }
+                if ($leaveIds->has((int) $employee->id)) {
+                    $leave++;
+                } elseif (!$isHoliday && $employee->isWorkingDay($date->copy())) {
+                    $absent++;
+                }
+            }
+
+            $days->push([
+                'date' => $dateKey,
+                'present' => $present,
+                'absent' => $absent,
+                'leave' => $leave,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $days->values(),
+            'recognition' => array_values($recognition),
+        ]);
+    }
+
+    /**
      * Create manual attendance entry
      *
      * POST /api/attendance/manual
