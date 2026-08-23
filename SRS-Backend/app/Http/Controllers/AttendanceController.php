@@ -647,6 +647,23 @@ class AttendanceController extends Controller
             'CCP can only manage CM Intervention or Mainline employees.'
         );
 
+        $biometric = \App\Models\Attendance::query()
+            ->where('employee_id', $data['employee_id'])
+            ->whereDate('date', $data['date'])
+            ->where('is_manual', false)
+            ->where(function ($query) {
+                $query->whereNotNull('check_in')->orWhereNotNull('check_out');
+            })
+            ->first();
+
+        if ($biometric) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Biometric punches already exist and take priority over manual attendance.',
+                'data' => $biometric->load(['employee', 'creator']),
+            ]);
+        }
+
         $data['check_in'] = $data['check_in'] ?: null;
         $data['check_out'] = $data['check_out'] ?: null;
         if ($data['status'] === 'off') {
@@ -695,8 +712,23 @@ class AttendanceController extends Controller
             'CCP can only manage CM Intervention or Mainline employees.'
         );
 
-        $saved = \DB::transaction(function () use ($data) {
-            return collect($data['rows'])->map(function ($row) use ($data) {
+        $biometricEmployeeIds = \App\Models\Attendance::query()
+            ->whereDate('date', $data['date'])
+            ->whereIn('employee_id', $allowedIds)
+            ->where('is_manual', false)
+            ->where(function ($query) {
+                $query->whereNotNull('check_in')->orWhereNotNull('check_out');
+            })
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        $rowsToSave = collect($data['rows'])->reject(
+            fn ($row) => $biometricEmployeeIds->has((int) $row['employee_id'])
+        );
+
+        $saved = \DB::transaction(function () use ($rowsToSave, $data) {
+            return $rowsToSave->map(function ($row) use ($data) {
                 $row['date'] = $data['date'];
                 $row['check_in'] = $row['check_in'] ?: null;
                 $row['check_out'] = $row['check_out'] ?: null;
@@ -710,8 +742,11 @@ class AttendanceController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "{$saved->count()} attendance records saved.",
+            'message' => $biometricEmployeeIds->isEmpty()
+                ? "{$saved->count()} attendance records saved."
+                : "{$saved->count()} attendance records saved; {$biometricEmployeeIds->count()} biometric records kept unchanged.",
             'saved' => $saved->count(),
+            'biometric_preserved' => $biometricEmployeeIds->count(),
         ]);
     }
 

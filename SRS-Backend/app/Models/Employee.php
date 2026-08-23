@@ -316,7 +316,10 @@ class Employee extends Model
     /** Is this employee in the Intervention department? */
     public function isIntervention(): bool
     {
-        return in_array(strtolower($this->department ?? ''), ['intervention', 'cm_intervention'], true);
+        $department = strtolower(trim((string) $this->department));
+        $normalized = trim((string) preg_replace('/[^a-z0-9]+/', '_', $department), '_');
+
+        return in_array($normalized, ['intervention', 'cm_intervention'], true);
     }
 
     /**
