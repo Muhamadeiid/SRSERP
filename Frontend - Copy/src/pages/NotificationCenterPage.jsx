@@ -119,6 +119,11 @@ export default function NotificationCenterPage() {
         ...(action.action === 'decline' ? { reason: reason.trim() } : {}),
       })
       setDeclining(null); setReason('')
+      if (action.action === 'open') {
+        const target = notificationRequestTarget(item)
+        if (target) navigate(`${target.path}${target.query ? `?${target.query}` : ''}`)
+        return
+      }
       await load()
     } finally { setBusyId(null) }
   }

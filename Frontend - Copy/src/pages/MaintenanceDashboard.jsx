@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   Wrench, Zap, CalendarClock, HardHat, Cog, ArrowRight, Construction,
@@ -92,7 +92,7 @@ const trainPositionLabel = task => {
   return `TS${String(task.train_number).padStart(2, '0')}${unit}${car}`
 }
 
-function PendingTasks({ user }) {
+function PendingTasks({ user, focusedTaskId }) {
   const canCreate = ['admin', 'depot_manager'].includes(user?.role)
   const [tasks, setTasks] = useState([])
   const [options, setOptions] = useState({ managers: [] })
@@ -123,6 +123,23 @@ function PendingTasks({ user }) {
   }, [canCreate])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!focusedTaskId || loading || tasks.length === 0) return
+    const task = tasks.find(item => Number(item.id) === Number(focusedTaskId))
+    if (!task) return
+
+    setExpandedTaskId(task.id)
+    setActivityDraft(emptyUpdate(task.status === 'done' ? 'done' : task.status || 'in_progress'))
+    if (!activities[task.id]) {
+      getMaintenanceTaskActivities(task.id)
+        .then(result => setActivities(current => ({ ...current, [task.id]: result.data ?? [] })))
+        .catch(err => setError(err.message))
+    }
+    requestAnimationFrame(() => {
+      document.getElementById(`maintenance-task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [focusedTaskId, loading, tasks, activities])
 
   const toggleActivity = async task => {
     if (expandedTaskId === task.id) {
@@ -234,7 +251,11 @@ function PendingTasks({ user }) {
             const taskActivities = activities[task.id] ?? []
             const isExpanded = expandedTaskId === task.id
             return (
-              <div key={task.id}>
+              <div
+                key={task.id}
+                id={`maintenance-task-${task.id}`}
+                className={Number(focusedTaskId) === Number(task.id) ? 'ring-2 ring-primary/40 ring-inset' : ''}
+              >
               <div className={`grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_90px_130px_100px] gap-3 items-center px-5 py-3 ${task.priority === 'critical' ? 'bg-red-50/40' : task.priority === 'high' ? 'bg-orange-50/30' : ''}`}>
                 <div className="min-w-0 flex items-start gap-3">
                   <div className="min-w-0">
@@ -401,6 +422,8 @@ function PendingTasks({ user }) {
 
 export default function MaintenanceDashboard() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const focusedTaskId = searchParams.get('task')
   const { user } = useSelector(state => state.auth)
   const isAdmin = user?.role === 'admin'
   const [loading, setLoading] = useState(true)
@@ -479,7 +502,7 @@ export default function MaintenanceDashboard() {
         )}
       </div>}
 
-      <PendingTasks user={user} />
+      <PendingTasks user={user} focusedTaskId={focusedTaskId} />
 
       {/* 3 Maintenance tabs */}
       {isAdmin && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

@@ -112,6 +112,12 @@ export default function NotificationPanel({ onClose }) {
       })
       setDeclining(null)
       setReason('')
+      if (action.action === 'open') {
+        const target = notificationRequestTarget(item)
+        if (target) navigate(`${target.path}${target.query ? `?${target.query}` : ''}`)
+        onClose?.()
+        return
+      }
       await load()
     } finally {
       setBusyId(null)
