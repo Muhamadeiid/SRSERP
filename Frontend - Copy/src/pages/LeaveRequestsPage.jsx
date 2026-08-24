@@ -1481,6 +1481,13 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
   const [showResubmitBanner, setShowResubmitBanner] = useState(!!prefill)
   const leavePurposeOptions = useConfiguredOptions('leave_purpose_options', DEFAULT_LEAVE_PURPOSE_OPTIONS)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const setLeaveType = (leaveType) => setForm(f => ({
+    ...f,
+    leave_type: leaveType,
+    // A sick request should not silently keep the default "Personal matter"
+    // purpose. The employee can still choose another configured purpose after.
+    purpose: leaveType === 'sick' ? 'Sick' : f.purpose,
+  }))
   const setPayment = (companyPaid, paid = true) => setForm(f => ({
     ...f,
     paid: companyPaid ? true : paid,
@@ -1626,7 +1633,7 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
             <div className={LBL}>Leave Type <span className="text-neutral-400 font-normal" dir="rtl">— نوع الاذن</span></div>
             <div className="grid grid-cols-2 gap-2">
               {[['annual', 'Annual'], ['casual', 'Casual'], ['sick', 'Sick'], ['early', 'Early Leave']].map(([key, label]) => (
-                <button key={key} type="button" onClick={() => set('leave_type', key)}
+                <button key={key} type="button" onClick={() => setLeaveType(key)}
                   className={`min-h-[44px] flex items-center justify-center gap-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
                     form.leave_type === key
                       ? 'bg-primary text-white border-primary shadow-sm'
@@ -1783,12 +1790,12 @@ function OfficialLRFForm({ onSubmit, saving, prefill, onPrefillDone }) {
             <tr>{labelCell('Leave Type:', 'نوع الاذن')}<td className="border border-neutral-900 p-0">
               <div className="grid grid-cols-[24px_1fr_24px_1fr_24px_1fr] border-b border-neutral-900">
                 {[['annual', 'Annual Leave'], ['casual', 'Casual Leave'], ['sick', 'Sick Leave']].map(([key, text]) => (
-                  <div key={key} className="contents"><button type="button" onClick={() => set('leave_type', key)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === key} /></button><button type="button" onClick={() => set('leave_type', key)} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">{text}</button></div>
+                  <div key={key} className="contents"><button type="button" onClick={() => setLeaveType(key)} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === key} /></button><button type="button" onClick={() => setLeaveType(key)} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">{text}</button></div>
                 ))}
               </div>
               <div className="grid grid-cols-[24px_1fr_132px_132px_60px_44px]">
-                <button type="button" onClick={() => set('leave_type', 'early')} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === 'early'} /></button>
-                <button type="button" onClick={() => set('leave_type', 'early')} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">Early Leave</button>
+                <button type="button" onClick={() => setLeaveType('early')} className="flex items-center justify-center border-r border-neutral-400 py-2"><CheckMark checked={form.leave_type === 'early'} /></button>
+                <button type="button" onClick={() => setLeaveType('early')} className="border-r border-neutral-900 px-2 py-2 text-left text-[12px] font-semibold">Early Leave</button>
                 <div className="flex items-center gap-1 border-r border-neutral-400 px-2 py-2 text-[12px]">From:<PickerInput type="time" value={form.early_from} onChange={v => set('early_from', v)} onBlur={e => set('early_from', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="08:00" className="w-[112px]" inputClassName="w-full bg-transparent outline-none text-xs font-semibold disabled:opacity-30" /></div>
                 <div className="flex items-center gap-1 border-r border-neutral-900 px-2 py-2 text-[12px]">To:<PickerInput type="time" value={form.early_to} onChange={v => set('early_to', v)} onBlur={e => set('early_to', normalizeTime(e.target.value))} disabled={form.leave_type !== 'early'} placeholder="10:00" className="w-[112px]" inputClassName="w-full bg-transparent outline-none text-xs font-semibold disabled:opacity-30" /></div>
                 <div className="border-r border-neutral-400 px-2 py-2 text-center text-[12px]">( {form.leave_type === 'early' ? earlyDays(form.early_from, form.early_to) : ''} )</div><div className="px-2 py-2 text-[12px]">Day</div>
