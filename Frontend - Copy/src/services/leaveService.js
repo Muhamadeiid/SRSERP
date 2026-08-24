@@ -1,5 +1,40 @@
 import { API_BASE_URL as BASE_URL } from '../config/api'
 
+const READ_CACHE_TTL_MS = 20_000
+const readCache = new Map()
+const inFlightReads = new Map()
+
+const cacheKeyFor = (path) => `${localStorage.getItem('srs_token') || 'anonymous'}:${path}`
+
+function invalidateLeaveReads() {
+  readCache.clear()
+  inFlightReads.clear()
+}
+
+function cachedRequest(path, ttlMs = READ_CACHE_TTL_MS) {
+  const key = cacheKeyFor(path)
+  const cached = readCache.get(key)
+  if (cached?.expiresAt > Date.now()) return Promise.resolve(cached.value)
+  if (inFlightReads.has(key)) return inFlightReads.get(key)
+
+  const promise = request(path)
+    .then(value => {
+      readCache.set(key, { value, expiresAt: Date.now() + ttlMs })
+      return value
+    })
+    .finally(() => inFlightReads.delete(key))
+
+  inFlightReads.set(key, promise)
+  return promise
+}
+
+function mutate(path, options) {
+  return request(path, options).then(value => {
+    invalidateLeaveReads()
+    return value
+  })
+}
+
 async function request(path, options = {}) {
   const token = localStorage.getItem('srs_token')
   const isFormData = options.body instanceof FormData
@@ -23,25 +58,25 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-export const getLeaveBalance   = (employeeId) => request(`/employees/${employeeId}/leave-balance`)
-export const updateLeaveBalance = (employeeId, data) => request(`/employees/${employeeId}/leave-balance`, { method: 'PUT', body: JSON.stringify(data) })
+export const getLeaveBalance   = (employeeId) => cachedRequest(`/employees/${employeeId}/leave-balance`, 30_000)
+export const updateLeaveBalance = (employeeId, data) => mutate(`/employees/${employeeId}/leave-balance`, { method: 'PUT', body: JSON.stringify(data) })
 
 export const getLeaveRequests  = (params = {}) => {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v]) => v))).toString()
-  return request(`/leave-requests${qs ? '?' + qs : ''}`)
+  return cachedRequest(`/leave-requests${qs ? '?' + qs : ''}`)
 }
-export const getLeaveRequest   = (id) => request(`/leave-requests/${id}`)
-export const getCalendarLeaves = () => request('/leave-requests/calendar')
+export const getLeaveRequest   = (id) => cachedRequest(`/leave-requests/${id}`, 10_000)
+export const getCalendarLeaves = () => cachedRequest('/leave-requests/calendar', 30_000)
 export const createLeaveRequest = (data) => {
   if (!(data.medical_attachment instanceof File)) {
-    return request('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
+    return mutate('/leave-requests', { method: 'POST', body: JSON.stringify(data) })
   }
   const body = new FormData()
   Object.entries(data).forEach(([key, value]) => {
     if (value === null || value === undefined || value === '') return
     body.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : value)
   })
-  return request('/leave-requests', { method: 'POST', body })
+  return mutate('/leave-requests', { method: 'POST', body })
 }
 export const getLeaveMedicalAttachment = async (id) => {
   const token = localStorage.getItem('srs_token')
@@ -51,24 +86,24 @@ export const getLeaveMedicalAttachment = async (id) => {
   if (!response.ok) throw new Error('Unable to load medical attachment')
   return response.blob()
 }
-export const managerApproveLeave = (id, data = {}) => request(`/leave-requests/${id}/manager-approve`, { method: 'POST', body: JSON.stringify(data) })
-export const hrApproveLeave      = (id, data = {}) => request(`/leave-requests/${id}/hr-approve`,    { method: 'POST', body: JSON.stringify(data) })
-export const approveLeave        = (id, data = {}) => request(`/leave-requests/${id}/approve`,       { method: 'POST', body: JSON.stringify(data) })
-export const updateLeaveDetails  = (id, data = {}) => request(`/leave-requests/${id}/details`,       { method: 'PATCH', body: JSON.stringify(data) })
-export const rejectLeave         = (id, reason)  => request(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
-export const cancelLeave         = (id, reason)  => request(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
-export const approveLeaveCancellation = (id) => request(`/leave-requests/${id}/approve-cancellation`, { method: 'POST' })
-export const rejectLeaveCancellation = (id, reason) => request(`/leave-requests/${id}/reject-cancellation`, { method: 'POST', body: JSON.stringify({ reason }) })
-export const requestLeaveAmendment = (id, data) => request(`/leave-requests/${id}/request-amendment`, { method: 'POST', body: JSON.stringify(data) })
-export const approveLeaveAmendment = (id) => request(`/leave-requests/${id}/approve-amendment`, { method: 'POST' })
-export const rejectLeaveAmendment = (id, reason) => request(`/leave-requests/${id}/reject-amendment`, { method: 'POST', body: JSON.stringify({ reason }) })
-export const rescheduleLeave     = (id, reason)  => request(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
-export const archiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'POST' })
-export const unarchiveLeaveRequest = (id) => request(`/leave-requests/${id}/archive`, { method: 'DELETE' })
+export const managerApproveLeave = (id, data = {}) => mutate(`/leave-requests/${id}/manager-approve`, { method: 'POST', body: JSON.stringify(data) })
+export const hrApproveLeave      = (id, data = {}) => mutate(`/leave-requests/${id}/hr-approve`,    { method: 'POST', body: JSON.stringify(data) })
+export const approveLeave        = (id, data = {}) => mutate(`/leave-requests/${id}/approve`,       { method: 'POST', body: JSON.stringify(data) })
+export const updateLeaveDetails  = (id, data = {}) => mutate(`/leave-requests/${id}/details`,       { method: 'PATCH', body: JSON.stringify(data) })
+export const rejectLeave         = (id, reason)  => mutate(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
+export const cancelLeave         = (id, reason)  => mutate(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
+export const approveLeaveCancellation = (id) => mutate(`/leave-requests/${id}/approve-cancellation`, { method: 'POST' })
+export const rejectLeaveCancellation = (id, reason) => mutate(`/leave-requests/${id}/reject-cancellation`, { method: 'POST', body: JSON.stringify({ reason }) })
+export const requestLeaveAmendment = (id, data) => mutate(`/leave-requests/${id}/request-amendment`, { method: 'POST', body: JSON.stringify(data) })
+export const approveLeaveAmendment = (id) => mutate(`/leave-requests/${id}/approve-amendment`, { method: 'POST' })
+export const rejectLeaveAmendment = (id, reason) => mutate(`/leave-requests/${id}/reject-amendment`, { method: 'POST', body: JSON.stringify({ reason }) })
+export const rescheduleLeave     = (id, reason)  => mutate(`/leave-requests/${id}/reschedule`,      { method: 'POST', body: JSON.stringify({ reason }) })
+export const archiveLeaveRequest = (id) => mutate(`/leave-requests/${id}/archive`, { method: 'POST' })
+export const unarchiveLeaveRequest = (id) => mutate(`/leave-requests/${id}/archive`, { method: 'DELETE' })
 
 // HR-only — manually set the tracking number before printing
 export const updateLeaveTrackingNo = (id, tracking_no) =>
-  request(`/leave-requests/${id}/tracking-no`, { method: 'PUT', body: JSON.stringify({ tracking_no }) })
+  mutate(`/leave-requests/${id}/tracking-no`, { method: 'PUT', body: JSON.stringify({ tracking_no }) })
 
 export const getNotifications  = ()  => request('/notifications')
 export const markAllRead       = ()  => request('/notifications/read-all', { method: 'POST' })

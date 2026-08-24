@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import ProtectedRoute    from './components/auth/ProtectedRoute'
 import { getMe } from './services/authService'
@@ -27,18 +27,32 @@ const lazyWithRetry = importer => lazy(async () => {
   }
 })
 
+// Keep the import functions reusable. Calling the same importer ahead of a
+// navigation warms Vite's module cache, so React.lazy can render immediately.
+const importDashboard       = () => import('./pages/Dashboard')
+const importProducts        = () => import('./pages/Products')
+const importLeaveRequests   = () => import('./pages/LeaveRequestsPage')
+const importWorkCalendar    = () => import('./pages/WorkCalendarPage')
+const importHRLayout        = () => import('./layout/HRLayout')
+const importInventoryLayout = () => import('./layout/InventoryLayout')
+const importMainLayout      = () => import('./layout/MainLayout')
+const importProcLayout      = () => import('./layout/ProcurementLayout')
+const importPrfDashboard    = () => import('./pages/PrfDashboard')
+const importWorkforce       = () => import('./components/hr/WorkforceTab')
+const importAttendance      = () => import('./components/hr/AttendanceTab')
+
 const Login             = lazyWithRetry(() => import('./pages/Login'))
-const DashboardPage     = lazyWithRetry(() => import('./pages/Dashboard'))
-const ProductsPage      = lazyWithRetry(() => import('./pages/Products'))
+const DashboardPage     = lazyWithRetry(importDashboard)
+const ProductsPage      = lazyWithRetry(importProducts)
 const Users             = lazyWithRetry(() => import('./pages/Users/Index'))
-const LeaveRequestsPage = lazyWithRetry(() => import('./pages/LeaveRequestsPage'))
+const LeaveRequestsPage = lazyWithRetry(importLeaveRequests)
 const CalendarPage      = lazyWithRetry(() => import('./pages/CalendarPage'))
-const WorkCalendarPage  = lazyWithRetry(() => import('./pages/WorkCalendarPage'))
-const HRLayout          = lazyWithRetry(() => import('./layout/HRLayout'))
-const InventoryLayout   = lazyWithRetry(() => import('./layout/InventoryLayout'))
-const MainLayout        = lazyWithRetry(() => import('./layout/MainLayout'))
-const ProcurementLayout = lazyWithRetry(() => import('./layout/ProcurementLayout'))
-const PrfDashboard      = lazyWithRetry(() => import('./pages/PrfDashboard'))
+const WorkCalendarPage  = lazyWithRetry(importWorkCalendar)
+const HRLayout          = lazyWithRetry(importHRLayout)
+const InventoryLayout   = lazyWithRetry(importInventoryLayout)
+const MainLayout        = lazyWithRetry(importMainLayout)
+const ProcurementLayout = lazyWithRetry(importProcLayout)
+const PrfDashboard      = lazyWithRetry(importPrfDashboard)
 const PrfNewPage        = lazyWithRetry(() => import('./pages/PrfNewPage'))
 const PrfDetail         = lazyWithRetry(() => import('./pages/PrfDetail'))
 const PrfMasterList     = lazyWithRetry(() => import('./pages/PrfMasterList'))
@@ -60,8 +74,8 @@ const FleetChecksPage      = lazyWithRetry(() => import('./pages/FleetChecksPage
 const WithdrawalsPage      = lazyWithRetry(() => import('./pages/WithdrawalsPage'))
 
 // HR tab components — each mounted at its own route
-const WorkforceTab      = lazyWithRetry(() => import('./components/hr/WorkforceTab'))
-const AttendanceTab     = lazyWithRetry(() => import('./components/hr/AttendanceTab'))
+const WorkforceTab      = lazyWithRetry(importWorkforce)
+const AttendanceTab     = lazyWithRetry(importAttendance)
 const CertificationsTab = lazyWithRetry(() => import('./components/hr/CertificationsTab'))
 const DisciplinaryTab   = lazyWithRetry(() => import('./components/hr/DisciplinaryTab'))
 const AssetsTab         = lazyWithRetry(() => import('./components/hr/AssetsTab'))
@@ -133,10 +147,76 @@ const AuthSync = () => {
   return null
 }
 
+const RoutePreloader = () => {
+  const { token, user } = useSelector(state => state.auth)
+  const location = useLocation()
+
+  useEffect(() => {
+    if (!token) return
+
+    const role = String(user?.role ?? '').trim().toLowerCase()
+    const isHRRoute = location.pathname.startsWith('/human-resources')
+    const loaders = isHRRoute
+      ? [importMainLayout, importDashboard, importLeaveRequests, importWorkCalendar]
+      : [importHRLayout, importLeaveRequests, importWorkCalendar]
+
+    if (['admin', 'depot_manager', 'hr'].includes(role)) {
+      // From the dashboard, /human-resources opens Workforce first. Put it
+      // ahead of the heavier request page so user intent never queues behind it.
+      if (!isHRRoute) loaders.splice(1, 0, importWorkforce)
+      loaders.push(importAttendance)
+    }
+    if (['admin', 'depot_manager', 'purchasing'].includes(role)) {
+      loaders.push(importProcLayout, importPrfDashboard)
+    }
+    if (['admin', 'depot_manager'].includes(role)) {
+      loaders.push(importInventoryLayout, importProducts)
+    }
+
+    let cancelled = false
+    let timer
+    let idleId
+    let index = 0
+
+    const scheduleNext = () => {
+      if (cancelled || index >= loaders.length) return
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(warmNext, { timeout: 1500 })
+      } else {
+        timer = window.setTimeout(warmNext, 350)
+      }
+    }
+
+    const warmNext = () => {
+      if (cancelled || index >= loaders.length) return
+      loaders[index++]().catch(() => undefined).finally(() => {
+        timer = window.setTimeout(scheduleNext, 120)
+      })
+    }
+
+    // Let the currently visible page finish first, then warm likely destinations
+    // one by one instead of competing with its API requests.
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(warmNext, { timeout: 1200 })
+    } else {
+      timer = window.setTimeout(warmNext, 600)
+    }
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      if (idleId !== undefined && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId)
+    }
+  }, [token, user?.role, location.pathname])
+
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthSync />
+      <RoutePreloader />
       <MaintenanceTaskToasts />
       <Suspense fallback={<PageFallback />}>
       <Routes>
