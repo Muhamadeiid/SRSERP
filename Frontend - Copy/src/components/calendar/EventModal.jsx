@@ -4,7 +4,7 @@ import { createCalendarEvent, getCalendarUsers, updateCalendarEvent } from '../.
 
 const TYPES = [
   { key: 'meeting', label: 'Meeting' },
-  { key: 'task', label: 'Task', roles: ['admin', 'depot_manager', 'manager'] },
+  { key: 'task', label: 'Task' },
   { key: 'interview', label: 'Interview', roles: ['admin', 'hr'] },
   { key: 'leave', label: 'Leave' },
 ]
@@ -55,6 +55,7 @@ export default function EventModal({ open, event, initialDate, initialType, curr
   }, [open, event, initialDate, initialType])
 
   const allowedTypes = TYPES.filter(type => !type.roles || type.roles.includes(currentUser?.role))
+  const canAssignTasks = ['admin', 'depot_manager', 'manager'].includes(currentUser?.role)
   const availableUsers = useMemo(() => users.filter(user => {
     if (user.id === currentUser?.id) return false
     if (form.type === 'task' && !taskAssignable.includes(user.id)) return false
@@ -82,7 +83,9 @@ export default function EventModal({ open, event, initialDate, initialType, curr
         duration_min: form.type === 'leave' || form.is_all_day ? null : Number(form.duration_min),
         is_all_day: form.type === 'leave' ? true : form.is_all_day,
         leave_end_date: form.type === 'leave' ? (form.leave_end_date || form.event_date) : null,
-        participants: form.type === 'leave' ? [] : form.participantIds.map(userId => ({ user_id: userId, role: participantRole })),
+        participants: form.type === 'leave' || (form.type === 'task' && !canAssignTasks)
+          ? []
+          : form.participantIds.map(userId => ({ user_id: userId, role: participantRole })),
         recurrence_type: form.recurrence_type,
         recurrence_interval: Number(form.recurrence_interval),
         recurrence_weekdays: form.recurrence_type === 'weekly' ? form.recurrence_weekdays : null,
@@ -124,7 +127,9 @@ export default function EventModal({ open, event, initialDate, initialType, curr
 
           {form.type !== 'leave' && <div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1 block text-xs font-bold text-neutral-500">Duration (minutes)</span><input type="number" min="1" max="1440" disabled={form.is_all_day} value={form.duration_min} onChange={e => set('duration_min', e.target.value)} className="h-10 w-full rounded-md border border-neutral-200 px-3 text-sm disabled:bg-neutral-50" /></label><label className="flex items-end"><span className="flex h-10 w-full items-center gap-2 rounded-md border border-neutral-200 px-3 text-sm"><input type="checkbox" checked={form.is_all_day} onChange={e => set('is_all_day', e.target.checked)} /> All-day event</span></label></div>}
 
-          {form.type !== 'leave' && <section className="rounded-md border border-neutral-200 p-3"><div className="mb-2 flex items-center gap-2"><Search className="h-4 w-4 text-neutral-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={form.type === 'task' ? 'Search eligible assignee...' : 'Search participants...'} className="h-8 flex-1 text-sm outline-none" /></div><div className="grid max-h-36 gap-1 overflow-y-auto sm:grid-cols-2">{availableUsers.map(user => <button type="button" key={user.id} onClick={() => toggleParticipant(user.id)} className={`flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs ${form.participantIds.includes(user.id) ? 'bg-primary-50 text-primary' : 'hover:bg-neutral-50 text-secondary-700'}`}><span className={`grid h-5 w-5 place-items-center rounded border ${form.participantIds.includes(user.id) ? 'border-primary bg-primary text-white' : 'border-neutral-200'}`}>{form.participantIds.includes(user.id) && <Check className="h-3 w-3" />}</span><span className="truncate font-semibold">{user.name}</span><span className="ml-auto shrink-0 text-[9px] text-neutral-400">{user.department}</span></button>)}</div></section>}
+          {form.type === 'task' && !canAssignTasks && <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">This task will be added to your calendar and assigned to you.</div>}
+
+          {form.type !== 'leave' && (form.type !== 'task' || canAssignTasks) && <section className="rounded-md border border-neutral-200 p-3"><div className="mb-2 flex items-center gap-2"><Search className="h-4 w-4 text-neutral-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={form.type === 'task' ? 'Search eligible assignee...' : 'Search participants...'} className="h-8 flex-1 text-sm outline-none" /></div><div className="grid max-h-36 gap-1 overflow-y-auto sm:grid-cols-2">{availableUsers.map(user => <button type="button" key={user.id} onClick={() => toggleParticipant(user.id)} className={`flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs ${form.participantIds.includes(user.id) ? 'bg-primary-50 text-primary' : 'hover:bg-neutral-50 text-secondary-700'}`}><span className={`grid h-5 w-5 place-items-center rounded border ${form.participantIds.includes(user.id) ? 'border-primary bg-primary text-white' : 'border-neutral-200'}`}>{form.participantIds.includes(user.id) && <Check className="h-3 w-3" />}</span><span className="truncate font-semibold">{user.name}</span><span className="ml-auto shrink-0 text-[9px] text-neutral-400">{user.department}</span></button>)}</div></section>}
 
           <section className="rounded-md border border-neutral-200 p-3"><div className="grid gap-3 sm:grid-cols-3"><label><span className="mb-1 block text-xs font-bold text-neutral-500">Repeat</span><select value={form.recurrence_type} onChange={e => set('recurrence_type', e.target.value)} className="h-10 w-full rounded-md border border-neutral-200 px-3 text-sm"><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>{form.recurrence_type !== 'none' && <><label><span className="mb-1 block text-xs font-bold text-neutral-500">Every</span><input type="number" min="1" max="52" value={form.recurrence_interval} onChange={e => set('recurrence_interval', e.target.value)} className="h-10 w-full rounded-md border border-neutral-200 px-3 text-sm" /></label><label><span className="mb-1 block text-xs font-bold text-neutral-500">Repeat until</span><input type="date" min={form.event_date} value={form.recurrence_until} onChange={e => set('recurrence_until', e.target.value)} className="h-10 w-full rounded-md border border-neutral-200 px-3 text-sm" /></label></>}</div>{form.recurrence_type === 'weekly' && <div className="mt-3 flex flex-wrap gap-1">{WEEKDAYS.map((day, index) => <button type="button" key={day} onClick={() => toggleWeekday(index)} className={`h-8 min-w-10 rounded-md border px-2 text-xs font-bold ${form.recurrence_weekdays.includes(index) ? 'border-primary bg-primary text-white' : 'border-neutral-200 text-neutral-500'}`}>{day}</button>)}</div>}</section>
 

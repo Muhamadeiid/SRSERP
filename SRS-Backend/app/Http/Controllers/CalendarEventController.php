@@ -434,12 +434,17 @@ class CalendarEventController extends Controller
         $participants = collect($data['participants'] ?? []);
 
         if ($type === 'task') {
-            abort_unless(in_array($user->role, ['admin', 'depot_manager', 'manager'], true), 403);
             if ($user->role === 'manager') {
                 $allowed = $user->subordinates()->pluck('id')
                     ->merge($user->assignedEmployees()->whereNotNull('user_id')->pluck('user_id'))
                     ->push($user->id)->unique();
                 abort_unless($participants->pluck('user_id')->diff($allowed)->isEmpty(), 403, 'Managers can assign tasks only to their direct reports.');
+            } elseif (!in_array($user->role, ['admin', 'depot_manager'], true)) {
+                abort_unless(
+                    $participants->isEmpty() || $participants->pluck('user_id')->unique()->all() === [$user->id],
+                    403,
+                    'You can create tasks only for your own calendar.'
+                );
             }
         }
         if ($type === 'interview') abort_unless(in_array($user->role, ['admin', 'hr'], true), 403);

@@ -53,6 +53,21 @@ class CalendarEventApiTest extends TestCase
         ]))->assertForbidden();
     }
 
+    public function test_staff_can_create_a_task_for_their_own_calendar_only(): void
+    {
+        $staff = $this->user('staff');
+        $other = $this->user('staff');
+        Sanctum::actingAs($staff);
+
+        $this->postJson('/api/calendar/events', $this->eventPayload('task'))
+            ->assertCreated()
+            ->assertJsonPath('data.by.id', $staff->id);
+
+        $this->postJson('/api/calendar/events', $this->eventPayload('task', [
+            ['user_id' => $other->id, 'role' => 'assignee'],
+        ]))->assertForbidden();
+    }
+
     public function test_only_hr_and_admin_can_create_interviews(): void
     {
         Sanctum::actingAs($this->user('staff'));
