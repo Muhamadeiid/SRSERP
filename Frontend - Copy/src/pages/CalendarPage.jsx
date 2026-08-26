@@ -5,6 +5,8 @@ import { getCalendarLeaves } from '../services/leaveService'
 // ── helpers ───────────────────────────────────────────────────
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December']
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+                      'Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 const LEAVE_COLORS = {
@@ -31,6 +33,13 @@ function parseDateKey(value) {
   const s = String(value).slice(0, 10)
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
+}
+
+function formatDisplayDate(value) {
+  if (!value) return '-'
+  const [year, month, day] = String(value).slice(0, 10).split('-').map(Number)
+  if (!year || !SHORT_MONTHS[month - 1] || !day) return '-'
+  return `${String(day).padStart(2, '0')} ${SHORT_MONTHS[month - 1]} ${year}`
 }
 
 // Returns array of date strings YYYY-MM-DD between start and end inclusive
@@ -316,7 +325,7 @@ export default function CalendarPage() {
                       <td className="px-6 py-3 font-semibold text-secondary-700">{row.employee_name}</td>
                       <td className="px-4 py-3 text-neutral-600">{row.requests}</td>
                       <td className="px-4 py-3 text-neutral-600">{row.days}</td>
-                      <td className="px-4 py-3 text-neutral-500">{row.last_date || '-'}</td>
+                      <td className="px-4 py-3 text-neutral-500">{formatDisplayDate(row.last_date)}</td>
                       <td className="px-4 py-3">
                         {flagged ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">
