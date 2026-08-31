@@ -476,6 +476,11 @@ class AttendanceService
      */
     public function createManualEntry(array $data, $userId): Attendance
     {
+        // A manually selected status is authoritative. Time calculations still
+        // populate hours and late minutes, but must not silently change Late,
+        // Permission, or another reviewed status back to Present.
+        $requestedStatus = $data['status'] ?? null;
+
         // Calculate if check_in and check_out provided
         if (!empty($data['check_in']) && !empty($data['check_out'])) {
             $checkIn  = Carbon::parse($data['date'] . ' ' . $data['check_in']);
@@ -497,6 +502,10 @@ class AttendanceService
             $data = array_merge($data, $calculated, [
                 'expected_hours' => $expectedHours,
             ]);
+
+            if ($requestedStatus !== null) {
+                $data['status'] = $requestedStatus;
+            }
         } elseif (!empty($data['check_in']) || !empty($data['check_out'])) {
             // Open shift: preserve the available punch and postpone work-hour
             // calculations until CCP enters the second punch.

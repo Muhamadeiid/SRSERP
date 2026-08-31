@@ -657,10 +657,18 @@ class AttendanceController extends Controller
             ->first();
 
         if ($biometric) {
+            // Biometric times remain authoritative, while CCP may review and
+            // correct the attendance classification and notes.
+            $biometric->update([
+                'status' => $data['status'],
+                'notes' => $data['notes'] ?? null,
+                'created_by' => auth()->id(),
+            ]);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Biometric punches already exist and take priority over manual attendance.',
-                'data' => $biometric->load(['employee', 'creator']),
+                'message' => 'Attendance status saved; biometric punch times were kept unchanged.',
+                'data' => $biometric->fresh()->load(['employee', 'creator']),
             ]);
         }
 
@@ -723,12 +731,23 @@ class AttendanceController extends Controller
             ->map(fn ($id) => (int) $id)
             ->flip();
 
-        $rowsToSave = collect($data['rows'])->reject(
-            fn ($row) => $biometricEmployeeIds->has((int) $row['employee_id'])
-        );
+        $saved = \DB::transaction(function () use ($data, $biometricEmployeeIds) {
+            return collect($data['rows'])->map(function ($row) use ($data, $biometricEmployeeIds) {
+                if ($biometricEmployeeIds->has((int) $row['employee_id'])) {
+                    $attendance = \App\Models\Attendance::query()
+                        ->where('employee_id', $row['employee_id'])
+                        ->whereDate('date', $data['date'])
+                        ->firstOrFail();
 
-        $saved = \DB::transaction(function () use ($rowsToSave, $data) {
-            return $rowsToSave->map(function ($row) use ($data) {
+                    $attendance->update([
+                        'status' => $row['status'],
+                        'notes' => $row['notes'] ?? null,
+                        'created_by' => auth()->id(),
+                    ]);
+
+                    return $attendance->fresh();
+                }
+
                 $row['date'] = $data['date'];
                 $row['check_in'] = $row['check_in'] ?: null;
                 $row['check_out'] = $row['check_out'] ?: null;
@@ -742,9 +761,7 @@ class AttendanceController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $biometricEmployeeIds->isEmpty()
-                ? "{$saved->count()} attendance records saved."
-                : "{$saved->count()} attendance records saved; {$biometricEmployeeIds->count()} biometric records kept unchanged.",
+            'message' => "{$saved->count()} attendance records saved; biometric punch times were kept unchanged.",
             'saved' => $saved->count(),
             'biometric_preserved' => $biometricEmployeeIds->count(),
         ]);
