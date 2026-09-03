@@ -3238,6 +3238,20 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     return true
   }, [])
 
+  const applyOptimisticStatus = useCallback((id, status) => {
+    const previous = requests.find(request => String(request.id) === String(id))
+    setRequests(current => current.map(request =>
+      String(request.id) === String(id) ? { ...request, status } : request
+    ))
+    setViewReq(null)
+    return () => {
+      if (!previous) return
+      setRequests(current => current.map(request =>
+        String(request.id) === String(id) ? previous : request
+      ))
+    }
+  }, [requests])
+
   // Auto-open request modal (?req=<id>) OR prefill form for resubmit (?resubmit=<id>)
   // when notification deep-links point here.
   useEffect(() => {
@@ -3305,27 +3319,27 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   }
 
   const handleManagerApprove = async (id, changes = {}) => {
+    const rollback = applyOptimisticStatus(id, 'manager_approved')
     try {
       const response = await managerApproveLeave(id, changes)
       applyActionResult(response)
-      setViewReq(null)
-    } catch (e) { alert(e.message) }
+    } catch (e) { rollback(); alert(e.message) }
   }
 
   const handleHrApprove = async (id, changes = {}) => {
+    const rollback = applyOptimisticStatus(id, 'hr_approved')
     try {
       const response = await hrApproveLeave(id, changes)
       applyActionResult(response)
-      setViewReq(null)
-    } catch (e) { alert(e.message) }
+    } catch (e) { rollback(); alert(e.message) }
   }
 
   const handleApprove = async (id, changes = {}) => {
+    const rollback = applyOptimisticStatus(id, 'approved')
     try {
       const response = await approveLeave(id, changes)
       applyActionResult(response)
-      setViewReq(null)
-    } catch (e) { alert(e.message) }
+    } catch (e) { rollback(); alert(e.message) }
   }
 
   const handleArchive = async (id) => {

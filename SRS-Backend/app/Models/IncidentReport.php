@@ -28,4 +28,9 @@ class IncidentReport extends Model
     public function followUpUser(): BelongsTo { return $this->belongsTo(User::class, 'followed_up_by'); }
     public function hrGeneralist(): BelongsTo { return $this->belongsTo(User::class, 'hr_generalist_id'); }
     public function depotManager(): BelongsTo { return $this->belongsTo(User::class, 'depot_manager_id'); }
+
+    public function getClassificationAttribute(?string $value): string
+    {
+        return $value ?? '';
+    }
 }

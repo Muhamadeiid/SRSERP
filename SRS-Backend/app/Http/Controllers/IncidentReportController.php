@@ -43,10 +43,16 @@ class IncidentReportController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
+        $isHr = in_array($request->user()->role, ['admin', 'hr'], true);
+        if (! $isHr) {
+            $data = array_intersect_key($data, ['description' => true]);
+            $data['report_date'] = now()->toDateString();
+        }
+        $data['report_date'] ??= now()->toDateString();
         $data['created_by'] = $request->user()->id;
         $data['report_no'] = 'MCI-TMP-' . Str::uuid();
         $data['status'] = 'submitted';
-        $this->storePictures($request, $data);
+        if ($isHr) $this->storePictures($request, $data);
 
         $report = IncidentReport::create($data);
         $report->update(['report_no' => sprintf('MCI-%s-%04d', now()->format('Y'), $report->id)]);
@@ -64,26 +70,19 @@ class IncidentReportController extends Controller
     {
         $user = $request->user();
         $isReviewer = in_array($user->role, self::REVIEW_ROLES, true);
+        $isHr = in_array($user->role, ['admin', 'hr'], true);
+        $isDepot = in_array($user->role, ['admin', 'depot_manager'], true);
         abort_unless($isReviewer || ($incidentReport->created_by === $user->id && $incidentReport->status === 'submitted'), 403);
 
         $data = $this->validated($request, true);
-        if (! $isReviewer) {
-            $data = array_intersect_key($data, array_flip([
-                'report_date', 'classification', 'classification_other',
-                'concerned_area_department', 'description',
-            ]));
+        if (! $isHr) {
+            $allowed = $isDepot ? ['depot_manager_signed'] : ['description'];
+            $data = array_intersect_key($data, array_flip($allowed));
         } else {
             if (array_key_exists('hr_signed', $data)) {
-                abort_unless(in_array($user->role, ['admin', 'hr'], true), 403);
                 $data['hr_generalist_id'] = $data['hr_signed'] ? $user->id : null;
                 $data['hr_signed_at'] = $data['hr_signed'] ? now()->toDateString() : null;
                 unset($data['hr_signed']);
-            }
-            if (array_key_exists('depot_manager_signed', $data)) {
-                abort_unless(in_array($user->role, ['admin', 'depot_manager'], true), 403);
-                $data['depot_manager_id'] = $data['depot_manager_signed'] ? $user->id : null;
-                $data['depot_manager_signed_at'] = $data['depot_manager_signed'] ? now()->toDateString() : null;
-                unset($data['depot_manager_signed']);
             }
             if (! empty($data['needs_investigation']) && ($data['status'] ?? null) === 'submitted') {
                 $data['status'] = 'under_investigation';
@@ -94,7 +93,13 @@ class IncidentReportController extends Controller
             }
         }
 
-        $this->storePictures($request, $data, $incidentReport);
+        if ($isDepot && array_key_exists('depot_manager_signed', $data)) {
+            $data['depot_manager_id'] = $data['depot_manager_signed'] ? $user->id : null;
+            $data['depot_manager_signed_at'] = $data['depot_manager_signed'] ? now()->toDateString() : null;
+            unset($data['depot_manager_signed']);
+        }
+
+        if ($isHr) $this->storePictures($request, $data, $incidentReport);
         $incidentReport->update($data);
         return response()->json(['success' => true, 'data' => $incidentReport->fresh()->load($this->relations())]);
     }
@@ -112,10 +117,10 @@ class IncidentReportController extends Controller
     {
         $required = $partial ? 'sometimes' : 'required';
         return $request->validate([
-            'report_date' => [$required, 'date'],
-            'classification' => [$required, Rule::in(['ethical', 'process_workflow', 'other'])],
+            'report_date' => ['nullable', 'date'],
+            'classification' => ['nullable', Rule::in(['ethical', 'process_workflow', 'other'])],
             'classification_other' => ['nullable', 'required_if:classification,other', 'string', 'max:255'],
-            'concerned_area_department' => [$required, 'string', 'max:255'],
+            'concerned_area_department' => ['nullable', 'string', 'max:255'],
             'description' => [$required, 'string', 'max:10000'],
             'picture_1' => ['nullable', 'image', 'max:5120'],
             'picture_2' => ['nullable', 'image', 'max:5120'],
@@ -167,7 +172,8 @@ class IncidentReportController extends Controller
             ]],
             'dedupe_key' => 'incident-report-submitted-' . $report->id,
         ];
-        $body = "{$requester->name} submitted {$report->report_no} for {$report->concerned_area_department}.";
+        $area = $report->concerned_area_department ? " for {$report->concerned_area_department}" : '';
+        $body = "{$requester->name} submitted {$report->report_no}{$area}.";
 
         Notification::notifyRole('hr', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);
         Notification::notifyRole('depot_manager', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);

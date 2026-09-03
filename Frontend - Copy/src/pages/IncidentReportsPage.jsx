@@ -8,7 +8,7 @@ import { getIncidentReport, getIncidentReports, saveIncidentReport } from '../se
 const inputClass = 'w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500'
 const emptyForm = {
-  report_date: new Date().toISOString().slice(0, 10), classification: 'ethical',
+  report_date: new Date().toISOString().slice(0, 10), classification: '',
   classification_other: '', concerned_area_department: '', description: '',
   picture_1: null, picture_2: null, needs_investigation: '', investigation_notes: '',
   follow_up_date: '', case_frequency_severity: '', warning_letter_required: '',
@@ -22,7 +22,7 @@ const statusStyle = {
   closed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 }
 
-function ReportModal({ report, reviewer, canSignHr, canSignDepot, onClose, onSaved }) {
+function ReportModal({ report, currentUser, canSignHr, canSignDepot, onClose, onSaved }) {
   const [form, setForm] = useState(report ? {
     ...emptyForm, ...report,
     needs_investigation: report.needs_investigation === null ? '' : report.needs_investigation,
@@ -36,6 +36,10 @@ function ReportModal({ report, reviewer, canSignHr, canSignDepot, onClose, onSav
   const submit = async e => {
     e.preventDefault(); setSaving(true); setError('')
     const payload = { ...form }
+    if (!canSignHr) {
+      delete payload.classification
+      delete payload.classification_other
+    }
     if (!canSignHr) delete payload.hr_signed
     if (!canSignDepot) delete payload.depot_manager_signed
     try { onSaved(await saveIncidentReport(payload, report?.id)) }
@@ -51,31 +55,36 @@ function ReportModal({ report, reviewer, canSignHr, canSignDepot, onClose, onSav
       </div>
       <div className="space-y-4 p-5">
         {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-        <div className="grid gap-4 md:grid-cols-2">
-          <label><span className={labelClass}>Report date</span><input type="date" required className={inputClass} value={String(form.report_date || '').slice(0, 10)} onChange={e => set('report_date', e.target.value)} /></label>
-          <label><span className={labelClass}>Concerned area / department</span><input required maxLength="255" className={inputClass} value={form.concerned_area_department || ''} onChange={e => set('concerned_area_department', e.target.value)} /></label>
+        <div className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-3">
+          <div><span className={labelClass}>Requester</span><strong className="text-sm text-secondary">{report?.requester?.name || currentUser?.name || 'Current user'}</strong></div>
+          <div><span className={labelClass}>Date</span><strong className="text-sm text-secondary">{String(report?.report_date || form.report_date).slice(0, 10)}</strong></div>
+          <div><span className={labelClass}>Signature</span><strong className="text-sm text-emerald-700">{report ? (report.requester?.e_signature ? 'E-Signature attached' : 'No E-Signature saved') : 'Saved E-Signature will be attached'}</strong></div>
         </div>
+        {canSignHr && <div className="grid gap-4 md:grid-cols-2">
+          <label><span className={labelClass}>Report date</span><input type="date" required className={inputClass} value={String(form.report_date || '').slice(0, 10)} onChange={e => set('report_date', e.target.value)} /></label>
+          <label><span className={labelClass}>Concerned area / department</span><input maxLength="255" className={inputClass} value={form.concerned_area_department || ''} onChange={e => set('concerned_area_department', e.target.value)} /></label>
+        </div>}
 
-        <fieldset className="rounded-md border border-amber-200 bg-amber-50/60 p-4">
+        {canSignHr && <fieldset className="rounded-md border border-amber-200 bg-amber-50/60 p-4">
           <legend className="px-2 text-sm font-bold text-secondary">Classification of Incident</legend>
           <div className="flex flex-wrap gap-5 text-sm">
             {[['ethical','Ethical'],['process_workflow','Process / Workflow'],['other','Other']].map(([value,label]) => <label key={value} className="flex items-center gap-2"><input type="radio" name="classification" checked={form.classification === value} onChange={() => set('classification', value)} />{label}</label>)}
           </div>
           {form.classification === 'other' && <input required className={`${inputClass} mt-3`} placeholder="Specify other classification" value={form.classification_other || ''} onChange={e => set('classification_other', e.target.value)} />}
-        </fieldset>
+        </fieldset>}
 
         <section className="overflow-hidden rounded-md border border-emerald-200">
           <h3 className="bg-emerald-50 px-4 py-2 text-center text-sm font-bold text-secondary">(1) Description of the Incident (mention the reference and evidence)</h3>
           <div className="p-4"><textarea required rows="6" maxLength="10000" className={inputClass} value={form.description || ''} onChange={e => set('description', e.target.value)} /></div>
-          <div className="grid border-t border-emerald-200 md:grid-cols-2">
+          {canSignHr && <div className="grid border-t border-emerald-200 md:grid-cols-2">
             {[1,2].map(slot => <label key={slot} className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 border-emerald-200 p-4 text-sm text-neutral-500 first:border-r hover:bg-neutral-50">
               <Camera className="h-5 w-5 text-primary" /><span>Picture {slot} (if needed)</span>
               <input type="file" accept="image/png,image/jpeg,image/webp" className="max-w-full text-xs" onChange={e => set(`picture_${slot}`, e.target.files?.[0] || null)} />
             </label>)}
-          </div>
+          </div>}
         </section>
 
-        {reviewer && <>
+        {canSignHr && <>
           <section className="overflow-hidden rounded-md border border-emerald-200">
             <h3 className="bg-emerald-50 px-4 py-2 text-center text-sm font-bold text-secondary">(2) Investigation</h3>
             <div className="grid md:grid-cols-[280px_1fr]">
@@ -105,6 +114,7 @@ function ReportModal({ report, reviewer, canSignHr, canSignDepot, onClose, onSav
             </div>
           </section>
         </>}
+        {canSignDepot && !canSignHr && report && <section className="rounded-md border border-emerald-200 bg-emerald-50 p-4"><label className="flex items-center gap-2 text-sm font-semibold text-secondary"><input type="checkbox" checked={form.depot_manager_signed} onChange={e => set('depot_manager_signed', e.target.checked)} />Add my Depot Manager E-Signature</label></section>}
       </div>
       <div className="sticky bottom-0 flex justify-end gap-2 border-t border-neutral-200 bg-white px-5 py-4"><button type="button" onClick={onClose} className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-semibold">Cancel</button><button disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />}Save Report</button></div>
     </form>
@@ -162,6 +172,6 @@ export default function IncidentReportsPage() {
         {loading ? <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></td></tr> : shown.length === 0 ? <tr><td colSpan="7" className="py-16 text-center text-neutral-400">No incident reports found</td></tr> : shown.map(report => <tr key={report.id} className="border-t border-neutral-100 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-primary">{report.report_no}</td><td className="px-4 py-3">{String(report.report_date).slice(0,10)}</td><td className="px-4 py-3 font-semibold">{report.requester?.name}</td><td className="px-4 py-3">{report.concerned_area_department}</td><td className="px-4 py-3 capitalize">{report.classification.replace('_',' / ')}</td><td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[report.status]}`}>{statusLabel[report.status]}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openReport(report)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">Open</button><button onClick={() => downloadReport(report)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button></div></td></tr>)}
       </tbody></table></div>
     </div>
-    {editing !== undefined && <ReportModal report={editing} reviewer={reviewer} canSignHr={canSignHr} canSignDepot={canSignDepot} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load() }} />}
+    {editing !== undefined && <ReportModal report={editing} currentUser={user} canSignHr={canSignHr} canSignDepot={canSignDepot} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load() }} />}
   </div>
 }

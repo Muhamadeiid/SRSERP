@@ -13,9 +13,9 @@ return new class extends Migration
             $table->string('report_no')->unique();
             $table->date('report_date')->index();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->enum('classification', ['ethical', 'process_workflow', 'other']);
+            $table->enum('classification', ['ethical', 'process_workflow', 'other'])->nullable();
             $table->string('classification_other')->nullable();
-            $table->string('concerned_area_department');
+            $table->string('concerned_area_department')->nullable();
             $table->text('description');
             $table->string('picture_1_path')->nullable();
             $table->string('picture_2_path')->nullable();

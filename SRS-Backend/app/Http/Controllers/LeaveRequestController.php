@@ -650,7 +650,6 @@ class LeaveRequestController extends Controller
                 'depot_signature' => $user->e_signature ?? null,
             ]));
 
-            $this->resequenceFinalizedTrackingNumbers($this->trackingPrefix($locked->type, $employee));
         });
 
         $leaveRequest->refresh();
@@ -1258,15 +1257,16 @@ class LeaveRequestController extends Controller
     {
         $prefix = $this->trackingPrefix($type, $employee);
 
-        $next = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
+        $latestTrackingNo = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
             ->whereNotNull('tracking_no')
+            ->orderByDesc('tracking_no')
             ->lockForUpdate()
-            ->pluck('tracking_no')
-            ->map(function ($tracking) use ($prefix) {
-                $tail = substr((string) $tracking, strlen($prefix));
-                return ctype_digit($tail) ? (int) $tail : 0;
-            })
-            ->max() + 1;
+            ->value('tracking_no');
+
+        $tail = $latestTrackingNo
+            ? substr((string) $latestTrackingNo, strlen($prefix))
+            : '';
+        $next = (ctype_digit($tail) ? (int) $tail : 0) + 1;
 
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
@@ -1276,62 +1276,6 @@ class LeaveRequestController extends Controller
         return ($type === 'lrf' ? 'LRF' : 'OTR')
             . '-' . ($employee?->projectCode() ?? 'EG1')
             . '-';
-    }
-
-    private function resequenceFinalizedTrackingNumbers(string $prefix): void
-    {
-        $ids = LeaveRequest::query()
-            ->where('tracking_no', 'like', $prefix . '%')
-            ->where(function ($query) {
-                $query->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
-                    ->orWhere(function ($cancelled) {
-                        $cancelled->where('status', 'cancelled')->whereNotNull('approved_at');
-                    });
-            })
-            ->orderByRaw('COALESCE(request_date, DATE(created_at))')
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->pluck('id')
-            ->all();
-
-        // Move every number to a collision-free temporary value first, then
-        // assign the final sequence in bulk. This avoids two queries per row.
-        foreach (array_chunk($ids, 500) as $chunk) {
-            $case = 'CASE id ';
-            $bindings = [];
-
-            foreach ($chunk as $id) {
-                $case .= 'WHEN ? THEN ? ';
-                $bindings[] = $id;
-                $bindings[] = '__TRACKING_RENUMBER__' . $id;
-            }
-
-            $case .= 'END';
-            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            DB::update(
-                "UPDATE leave_requests SET tracking_no = {$case} WHERE id IN ({$placeholders})",
-                [...$bindings, ...$chunk]
-            );
-        }
-
-        foreach (array_chunk(array_values($ids), 500, true) as $chunk) {
-            $case = 'CASE id ';
-            $bindings = [];
-
-            foreach ($chunk as $index => $id) {
-                $case .= 'WHEN ? THEN ? ';
-                $bindings[] = $id;
-                $bindings[] = $prefix . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
-            }
-
-            $case .= 'END';
-            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            DB::update(
-                "UPDATE leave_requests SET tracking_no = {$case} WHERE id IN ({$placeholders})",
-                [...$bindings, ...array_values($chunk)]
-            );
-        }
     }
 
     private function availableLeaveBalances(int $employeeId, ?int $excludeRequestId = null): array
