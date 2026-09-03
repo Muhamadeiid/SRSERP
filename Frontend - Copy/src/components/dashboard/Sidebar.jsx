@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../store/slices/authSlice";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileWarning } from "lucide-react";
 
 export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCollapsedProp, isMobile = false } = {}) {
   const [collapsedLocal, setCollapsedLocal] = useState(false);
@@ -81,6 +81,12 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       ),
+    },
+    {
+      label: "Incident Reports",
+      path: "/incident-reports",
+      show: true,
+      icon: <FileWarning className="w-[18px] h-[18px] shrink-0" />,
     },
     {
       label: "Work Calendar",

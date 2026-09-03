@@ -83,6 +83,7 @@ const OrgChartTab       = lazyWithRetry(() => import('./components/hr/OrgChartTa
 const SettingsPage      = lazyWithRetry(() => import('./pages/SettingsPage'))
 const NotificationPreferencesPage = lazyWithRetry(() => import('./pages/NotificationPreferencesPage'))
 const NotificationCenterPage = lazyWithRetry(() => import('./pages/NotificationCenterPage'))
+const IncidentReportsPage = lazyWithRetry(() => import('./pages/IncidentReportsPage'))
 
 // ── Access rules ──────────────────────────────────────────────────────────────
 // HR Full: Admin, Depot Manager, or the dedicated HR role
@@ -233,6 +234,7 @@ export default function App() {
           <Route path="/work-calendar" element={<WorkCalendarPage />} />
           <Route path="/notification-settings" element={<NotificationPreferencesPage />} />
           <Route path="/notifications" element={<NotificationCenterPage />} />
+          <Route path="/incident-reports" element={<IncidentReportsPage />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
           <Route path="/users"       element={
             <ProtectedRoute roles={['admin']} redirect="/">

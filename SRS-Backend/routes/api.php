@@ -31,6 +31,7 @@ use App\Http\Controllers\ResignationRequestController;
 use App\Http\Controllers\InterventionShiftPlanController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\IncidentReportController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -38,6 +39,13 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 
 // ── Authenticated (all roles) ─────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+    // Incident reports: all users can submit; reviewers see and complete all reports.
+    Route::get('/incident-reports', [IncidentReportController::class, 'index']);
+    Route::post('/incident-reports', [IncidentReportController::class, 'store']);
+    Route::get('/incident-reports/{incidentReport}', [IncidentReportController::class, 'show']);
+    Route::post('/incident-reports/{incidentReport}', [IncidentReportController::class, 'update']);
+    Route::get('/incident-reports/{incidentReport}/pictures/{slot}', [IncidentReportController::class, 'picture']);
 
     Route::get('/calendar/events', [CalendarEventController::class, 'index']);
     Route::get('/calendar/users', [CalendarEventController::class, 'users']);
