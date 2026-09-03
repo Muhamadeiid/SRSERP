@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/incident-reports', [IncidentReportController::class, 'store']);
     Route::get('/incident-reports/{incidentReport}', [IncidentReportController::class, 'show']);
     Route::post('/incident-reports/{incidentReport}', [IncidentReportController::class, 'update']);
+    Route::delete('/incident-reports/{incidentReport}', [IncidentReportController::class, 'destroy']);
     Route::get('/incident-reports/{incidentReport}/pictures/{slot}', [IncidentReportController::class, 'picture']);
 
     Route::get('/calendar/events', [CalendarEventController::class, 'index']);

@@ -2,6 +2,7 @@ import api from './axios'
 
 export const getIncidentReports = (params = {}) => api.get('/incident-reports', { params }).then(r => r.data)
 export const getIncidentReport = id => api.get(`/incident-reports/${id}`).then(r => r.data?.data)
+export const deleteIncidentReport = id => api.delete(`/incident-reports/${id}`).then(r => r.data)
 
 export const saveIncidentReport = (values, id = null) => {
   const form = new FormData()

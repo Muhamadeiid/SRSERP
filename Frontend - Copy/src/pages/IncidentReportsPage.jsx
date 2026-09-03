@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useSearchParams } from 'react-router-dom'
-import { Camera, Download, FileWarning, Loader2, Plus, Search, X } from 'lucide-react'
+import { Camera, Download, FileWarning, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
 import { generateIncidentReport } from '../utils/generateIncidentReport'
-import { getIncidentReport, getIncidentReports, saveIncidentReport } from '../services/incidentReportService'
+import { deleteIncidentReport, getIncidentReport, getIncidentReports, saveIncidentReport } from '../services/incidentReportService'
 import { searchEmployees } from '../services/employeeService'
 
 const inputClass = 'w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
@@ -192,6 +192,11 @@ export default function IncidentReportsPage() {
   }), [reports])
   const openReport = async report => setEditing(await getIncidentReport(report.id))
   const downloadReport = async report => generateIncidentReport(await getIncidentReport(report.id))
+  const removeReport = async report => {
+    if (!window.confirm(`Delete incident report ${report.report_no}? This action cannot be undone.`)) return
+    await deleteIncidentReport(report.id)
+    setReports(current => current.filter(item => item.id !== report.id))
+  }
 
   return <div className="min-h-full bg-neutral-50 p-4 lg:p-6">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-secondary"><FileWarning className="h-6 w-6 text-primary" />Incident Reports</h1><p className="text-sm text-neutral-500">Management conflict incident records</p></div><button onClick={() => setEditing(null)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white"><Plus className="h-4 w-4" />New Report</button></div>
@@ -209,7 +214,7 @@ export default function IncidentReportsPage() {
     </div>
     <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-secondary text-white"><tr>{['Report No.','Date','Requester','Area / Department','Classification','Status','Actions'].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase">{h}</th>)}</tr></thead><tbody>
-        {loading ? <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></td></tr> : shown.length === 0 ? <tr><td colSpan="7" className="py-16 text-center text-neutral-400">No incident reports found</td></tr> : shown.map(report => <tr key={report.id} className="border-t border-neutral-100 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-primary">{report.report_no}</td><td className="px-4 py-3">{String(report.report_date).slice(0,10)}</td><td className="px-4 py-3 font-semibold">{report.requester_employee?.name || report.requester?.name}</td><td className="px-4 py-3">{report.concerned_area_department}</td><td className="px-4 py-3 capitalize">{report.classification.replace('_',' / ')}</td><td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[report.status]}`}>{statusLabel[report.status]}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openReport(report)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">Open</button><button onClick={() => downloadReport(report)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button></div></td></tr>)}
+        {loading ? <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></td></tr> : shown.length === 0 ? <tr><td colSpan="7" className="py-16 text-center text-neutral-400">No incident reports found</td></tr> : shown.map(report => <tr key={report.id} className="border-t border-neutral-100 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-primary">{report.report_no}</td><td className="px-4 py-3">{String(report.report_date).slice(0,10)}</td><td className="px-4 py-3 font-semibold">{report.requester_employee?.name || report.requester?.name}</td><td className="px-4 py-3">{report.concerned_area_department}</td><td className="px-4 py-3 capitalize">{report.classification.replace('_',' / ')}</td><td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[report.status]}`}>{statusLabel[report.status]}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openReport(report)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">Details</button><button onClick={() => downloadReport(report)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button>{reviewer && <button onClick={() => removeReport(report)} title="Delete incident" className="rounded-md border border-red-200 p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>}</div></td></tr>)}
       </tbody></table></div>
     </div>
     {editing !== undefined && <ReportModal report={editing} canSignHr={canSignHr} canSignDepot={canSignDepot} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load() }} />}

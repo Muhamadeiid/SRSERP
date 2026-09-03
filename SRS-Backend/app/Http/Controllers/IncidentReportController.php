@@ -21,7 +21,10 @@ class IncidentReportController extends Controller
         $query = IncidentReport::with($this->relations(false))->latest('report_date')->latest('id');
 
         if (! in_array($user->role, self::REVIEW_ROLES, true)) {
-            $query->where('created_by', $user->id);
+            $query->where(fn ($visible) => $visible
+                ->where('created_by', $user->id)
+                ->orWhereHas('requesterEmployee', fn ($employee) => $this->scopeEmployeeVisibleTo($employee, $user))
+            );
         }
 
         if ($request->filled('status') && $request->status !== 'all') {
@@ -114,6 +117,19 @@ class IncidentReportController extends Controller
         return Storage::disk('local')->response($path);
     }
 
+    public function destroy(Request $request, IncidentReport $incidentReport): JsonResponse
+    {
+        abort_unless(in_array($request->user()->role, self::REVIEW_ROLES, true), 403);
+
+        Storage::disk('local')->delete(array_filter([
+            $incidentReport->picture_1_path,
+            $incidentReport->picture_2_path,
+        ]));
+        $incidentReport->delete();
+
+        return response()->json(['success' => true]);
+    }
+
     private function validated(Request $request, bool $partial = false): array
     {
         $required = $partial ? 'sometimes' : 'required';
@@ -151,7 +167,24 @@ class IncidentReportController extends Controller
 
     private function authorizeView(User $user, IncidentReport $report): void
     {
-        abort_unless(in_array($user->role, self::REVIEW_ROLES, true) || $report->created_by === $user->id, 403);
+        if (in_array($user->role, self::REVIEW_ROLES, true) || (int) $report->created_by === (int) $user->id) {
+            return;
+        }
+
+        $canViewRequester = $report->requesterEmployee()
+            ->where(fn ($employee) => $this->scopeEmployeeVisibleTo($employee, $user))
+            ->exists();
+        abort_unless($canViewRequester, 403);
+    }
+
+    private function scopeEmployeeVisibleTo($query, User $user)
+    {
+        return $query->where(function ($employee) use ($user) {
+            $employee->where('user_id', $user->id)
+                ->orWhere('user_manager_id', $user->id)
+                ->orWhereHas('directManager', fn ($manager) => $manager->where('user_id', $user->id))
+                ->orWhereHas('user', fn ($account) => $account->where('manager_id', $user->id));
+        });
     }
 
     private function notifyReviewers(IncidentReport $report, User $requester): void
@@ -186,8 +219,11 @@ class IncidentReportController extends Controller
     private function relations(bool $withSignatures = true): array
     {
         $columns = $withSignatures ? 'id,name,e_signature' : 'id,name';
+        $employeeColumns = $withSignatures
+            ? 'id,name,position,department,e_signature'
+            : 'id,name,position,department';
         return [
-            "requester:{$columns}", "requesterEmployee:id,name,position,department,e_signature", "followUpUser:{$columns}",
+            "requester:{$columns}", "requesterEmployee:{$employeeColumns}", "followUpUser:{$columns}",
             "hrGeneralist:{$columns}", "depotManager:{$columns}",
         ];
     }
