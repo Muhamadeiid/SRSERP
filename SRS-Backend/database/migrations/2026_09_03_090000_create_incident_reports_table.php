@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('report_no')->unique();
             $table->date('report_date')->index();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('requester_employee_id')->nullable()->constrained('employees')->nullOnDelete();
             $table->enum('classification', ['ethical', 'process_workflow', 'other'])->nullable();
             $table->string('classification_other')->nullable();
             $table->string('concerned_area_department')->nullable();

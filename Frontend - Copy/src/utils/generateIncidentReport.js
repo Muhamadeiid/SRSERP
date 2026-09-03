@@ -12,7 +12,6 @@ const MARGIN = 720
 const CONTENT_W = PAGE_W - (MARGIN * 2)
 const MINT = 'E2F0D9'
 const CREAM = 'FFF2CC'
-const GREY = 'D9D9D9'
 const border = { style: BorderStyle.SINGLE, size: 6, color: '000000' }
 const borders = { top: border, bottom: border, left: border, right: border }
 const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
@@ -90,11 +89,12 @@ function signatureCell(user, width, columnSpan = 1) {
 }
 
 export async function generateIncidentReport(report) {
+  const requester = report.requester_employee || report.requester
   const [logo, picture1, picture2] = await Promise.all([
     fetch('/logo.png').then(r => r.arrayBuffer()).then(b => new Uint8Array(b)).catch(() => null),
     attachment(report, 1), attachment(report, 2),
   ])
-  for (const relation of ['requester', 'follow_up_user', 'hr_generalist', 'depot_manager']) {
+  for (const relation of ['requester_employee', 'requester', 'follow_up_user', 'hr_generalist', 'depot_manager']) {
     const user = report?.[relation]
     if (user?.e_signature) user.signatureBytes = await bytesFromUrl(user.e_signature)
   }
@@ -131,14 +131,14 @@ export async function generateIncidentReport(report) {
       row([cell(p('(1) Description of the Incident (mention the reference and evidence)', { bold: true, alignment: AlignmentType.CENTER }), { columnSpan: 6, fill: MINT })]),
       row([cell(p(report.description || '', { alignment: AlignmentType.CENTER }), { columnSpan: 6 })], 2500),
       row([
-        cell(p('Requester', { bold: true })), cell(p('Name', { bold: true })), cell(p(report.requester?.name || '')),
-        signatureCell(report.requester, 3500, 2), cell(p(`Date:  ${date(report.report_date)}`, { size: 13 })),
+        cell(p('Requester', { bold: true })), cell(p('Name', { bold: true })), cell(p(requester?.name || '')),
+        signatureCell(requester, 3500, 2), cell(p(`Date:  ${date(report.report_date)}`, { size: 13 })),
       ], 460),
       row([cell(p('Picture 1 (If Needed)', { bold: true, alignment: AlignmentType.CENTER }), { columnSpan: 3, fill: MINT }), cell(p('Picture 2 (If Needed)', { bold: true, alignment: AlignmentType.CENTER }), { columnSpan: 3, fill: MINT })]),
       row([pictureCell(picture1), pictureCell(picture2)], 2800),
       row([cell(p('(2) Investigation', { bold: true, alignment: AlignmentType.CENTER }), { columnSpan: 6, fill: MINT })]),
       row([
-        cell([p(`${checked(report.needs_investigation === true)}  Need Investigation`), p(`${checked(report.needs_investigation === false)}  Doesn’t Need Investigation`)], { columnSpan: 3, fill: GREY }),
+        cell([p(`${checked(report.needs_investigation === true)}  Need Investigation`), p(`${checked(report.needs_investigation === false)}  Doesn’t Need Investigation`)], { columnSpan: 3 }),
         cell([p('Notes:', { bold: true }), p(report.investigation_notes || '', { alignment: AlignmentType.CENTER })], { columnSpan: 3 }),
       ], 1400),
       row([cell(p('Follow up by', { bold: true })), cell(p(report.follow_up_user?.name || ''), { columnSpan: 2 }), signatureCell(report.follow_up_user, 3500, 2), cell(p(`Date:  ${date(report.follow_up_date)}`, { size: 13 }))], 460),

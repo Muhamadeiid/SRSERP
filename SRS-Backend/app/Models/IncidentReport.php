@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class IncidentReport extends Model
 {
     protected $fillable = [
-        'report_no', 'report_date', 'created_by', 'classification', 'classification_other',
+        'report_no', 'report_date', 'created_by', 'requester_employee_id', 'classification', 'classification_other',
         'concerned_area_department', 'description', 'picture_1_path', 'picture_2_path',
         'needs_investigation', 'investigation_notes', 'followed_up_by', 'follow_up_date',
         'case_frequency_severity', 'warning_letter_required', 'warning_letter_no',
@@ -25,6 +25,7 @@ class IncidentReport extends Model
     ];
 
     public function requester(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function requesterEmployee(): BelongsTo { return $this->belongsTo(Employee::class, 'requester_employee_id')->withTrashed(); }
     public function followUpUser(): BelongsTo { return $this->belongsTo(User::class, 'followed_up_by'); }
     public function hrGeneralist(): BelongsTo { return $this->belongsTo(User::class, 'hr_generalist_id'); }
     public function depotManager(): BelongsTo { return $this->belongsTo(User::class, 'depot_manager_id'); }

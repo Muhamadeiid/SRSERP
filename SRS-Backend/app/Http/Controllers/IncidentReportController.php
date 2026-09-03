@@ -33,6 +33,7 @@ class IncidentReportController extends Controller
                 $q->where('report_no', 'like', "%{$term}%")
                     ->orWhere('concerned_area_department', 'like', "%{$term}%")
                     ->orWhere('description', 'like', "%{$term}%")
+                    ->orWhereHas('requesterEmployee', fn ($employee) => $employee->where('name', 'like', "%{$term}%"))
                     ->orWhereHas('requester', fn ($u) => $u->where('name', 'like', "%{$term}%"));
             });
         }
@@ -45,7 +46,7 @@ class IncidentReportController extends Controller
         $data = $this->validated($request);
         $isHr = in_array($request->user()->role, ['admin', 'hr'], true);
         if (! $isHr) {
-            $data = array_intersect_key($data, ['description' => true]);
+            $data = array_intersect_key($data, ['description' => true, 'requester_employee_id' => true]);
             $data['report_date'] = now()->toDateString();
         }
         $data['report_date'] ??= now()->toDateString();
@@ -56,7 +57,7 @@ class IncidentReportController extends Controller
 
         $report = IncidentReport::create($data);
         $report->update(['report_no' => sprintf('MCI-%s-%04d', now()->format('Y'), $report->id)]);
-        $this->notifyReviewers($report->fresh(), $request->user());
+        $this->notifyReviewers($report->fresh()->load('requesterEmployee:id,name'), $request->user());
         return response()->json(['success' => true, 'data' => $report->load($this->relations())], 201);
     }
 
@@ -76,7 +77,7 @@ class IncidentReportController extends Controller
 
         $data = $this->validated($request, true);
         if (! $isHr) {
-            $allowed = $isDepot ? ['depot_manager_signed'] : ['description'];
+            $allowed = $isDepot ? ['depot_manager_signed'] : ['description', 'requester_employee_id'];
             $data = array_intersect_key($data, array_flip($allowed));
         } else {
             if (array_key_exists('hr_signed', $data)) {
@@ -118,6 +119,7 @@ class IncidentReportController extends Controller
         $required = $partial ? 'sometimes' : 'required';
         return $request->validate([
             'report_date' => ['nullable', 'date'],
+            'requester_employee_id' => [$partial ? 'sometimes' : 'required', 'integer', 'exists:employees,id'],
             'classification' => ['nullable', Rule::in(['ethical', 'process_workflow', 'other'])],
             'classification_other' => ['nullable', 'required_if:classification,other', 'string', 'max:255'],
             'concerned_area_department' => ['nullable', 'string', 'max:255'],
@@ -173,7 +175,8 @@ class IncidentReportController extends Controller
             'dedupe_key' => 'incident-report-submitted-' . $report->id,
         ];
         $area = $report->concerned_area_department ? " for {$report->concerned_area_department}" : '';
-        $body = "{$requester->name} submitted {$report->report_no}{$area}.";
+        $requesterName = $report->requesterEmployee?->name ?: $requester->name;
+        $body = "{$requesterName} submitted {$report->report_no}{$area}.";
 
         Notification::notifyRole('hr', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);
         Notification::notifyRole('depot_manager', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);
@@ -184,7 +187,7 @@ class IncidentReportController extends Controller
     {
         $columns = $withSignatures ? 'id,name,e_signature' : 'id,name';
         return [
-            "requester:{$columns}", "followUpUser:{$columns}",
+            "requester:{$columns}", "requesterEmployee:id,name,position,department,e_signature", "followUpUser:{$columns}",
             "hrGeneralist:{$columns}", "depotManager:{$columns}",
         ];
     }

@@ -1,18 +1,55 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useSearchParams } from 'react-router-dom'
 import { Camera, Download, FileWarning, Loader2, Plus, Search, X } from 'lucide-react'
 import { generateIncidentReport } from '../utils/generateIncidentReport'
 import { getIncidentReport, getIncidentReports, saveIncidentReport } from '../services/incidentReportService'
+import { searchEmployees } from '../services/employeeService'
 
 const inputClass = 'w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500'
 const emptyForm = {
-  report_date: new Date().toISOString().slice(0, 10), classification: '',
+  report_date: new Date().toISOString().slice(0, 10), requester_employee_id: '', classification: '',
   classification_other: '', concerned_area_department: '', description: '',
   picture_1: null, picture_2: null, needs_investigation: '', investigation_notes: '',
   follow_up_date: '', case_frequency_severity: '', warning_letter_required: '',
   warning_letter_no: '', status: 'submitted', hr_signed: false, depot_manager_signed: false,
+}
+
+function RequesterPicker({ value, onChange }) {
+  const [query, setQuery] = useState(value?.name || '')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const timer = useRef()
+
+  useEffect(() => {
+    clearTimeout(timer.current)
+    if (query.trim().length < 2 || query === value?.name) {
+      setResults([])
+      return
+    }
+    setLoading(true)
+    timer.current = setTimeout(() => {
+      searchEmployees(query.trim())
+        .then(data => { setResults(Array.isArray(data) ? data : []); setOpen(true) })
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer.current)
+  }, [query, value?.name])
+
+  return <div className="relative">
+    <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
+    <input required className={`${inputClass} pl-9 pr-9`} value={query} placeholder="Search employee name or IBS..." onChange={event => { setQuery(event.target.value); onChange(null) }} onFocus={() => results.length && setOpen(true)} />
+    {loading && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-neutral-400" />}
+    {open && results.length > 0 && <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-neutral-200 bg-white shadow-xl">
+      {results.map(employee => <button type="button" key={employee.id} onClick={() => { onChange(employee); setQuery(employee.name); setOpen(false) }} className="flex w-full items-center justify-between gap-3 border-b border-neutral-100 px-3 py-2.5 text-left last:border-0 hover:bg-neutral-50">
+        <span><strong className="block text-sm text-secondary">{employee.name}</strong><small className="text-neutral-500">{employee.position || 'No position'} · {employee.department || 'No department'}</small></span>
+        <small className="shrink-0 font-semibold text-primary">{employee.ibs_code || ''}</small>
+      </button>)}
+    </div>}
+  </div>
 }
 
 const statusLabel = { submitted: 'Submitted', under_investigation: 'Under Investigation', closed: 'Closed' }
@@ -22,13 +59,15 @@ const statusStyle = {
   closed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 }
 
-function ReportModal({ report, currentUser, canSignHr, canSignDepot, onClose, onSaved }) {
+function ReportModal({ report, canSignHr, canSignDepot, onClose, onSaved }) {
+  const initialRequester = report?.requester_employee || null
   const [form, setForm] = useState(report ? {
     ...emptyForm, ...report,
     needs_investigation: report.needs_investigation === null ? '' : report.needs_investigation,
     warning_letter_required: report.warning_letter_required === null ? '' : report.warning_letter_required,
     hr_signed: Boolean(report.hr_generalist_id), depot_manager_signed: Boolean(report.depot_manager_id),
   } : emptyForm)
+  const [requesterEmployee, setRequesterEmployee] = useState(initialRequester)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
@@ -36,6 +75,7 @@ function ReportModal({ report, currentUser, canSignHr, canSignDepot, onClose, on
   const submit = async e => {
     e.preventDefault(); setSaving(true); setError('')
     const payload = { ...form }
+    payload.requester_employee_id = requesterEmployee?.id || form.requester_employee_id
     if (!canSignHr) {
       delete payload.classification
       delete payload.classification_other
@@ -56,9 +96,9 @@ function ReportModal({ report, currentUser, canSignHr, canSignDepot, onClose, on
       <div className="space-y-4 p-5">
         {error && <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <div className="grid gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-3">
-          <div><span className={labelClass}>Requester</span><strong className="text-sm text-secondary">{report?.requester?.name || currentUser?.name || 'Current user'}</strong></div>
+          <div className="sm:col-span-1"><span className={labelClass}>Requester</span>{report ? <strong className="text-sm text-secondary">{report.requester_employee?.name || report.requester?.name || 'Not selected'}</strong> : <RequesterPicker value={requesterEmployee} onChange={employee => { setRequesterEmployee(employee); set('requester_employee_id', employee?.id || '') }} />}</div>
           <div><span className={labelClass}>Date</span><strong className="text-sm text-secondary">{String(report?.report_date || form.report_date).slice(0, 10)}</strong></div>
-          <div><span className={labelClass}>Signature</span><strong className="text-sm text-emerald-700">{report ? (report.requester?.e_signature ? 'E-Signature attached' : 'No E-Signature saved') : 'Saved E-Signature will be attached'}</strong></div>
+          <div><span className={labelClass}>Signature</span><strong className="text-sm text-emerald-700">{report ? (report.requester_employee?.e_signature || report.requester?.e_signature ? 'E-Signature attached' : 'No E-Signature saved') : 'Selected employee E-Signature will be attached'}</strong></div>
         </div>
         {canSignHr && <div className="grid gap-4 md:grid-cols-2">
           <label><span className={labelClass}>Report date</span><input type="date" required className={inputClass} value={String(form.report_date || '').slice(0, 10)} onChange={e => set('report_date', e.target.value)} /></label>
@@ -143,7 +183,7 @@ export default function IncidentReportsPage() {
       .catch(() => {})
       .finally(() => setSearchParams({}, { replace: true }))
   }, [searchParams, setSearchParams])
-  const shown = useMemo(() => reports.filter(r => (status === 'all' || r.status === status) && `${r.report_no} ${r.requester?.name} ${r.concerned_area_department} ${r.description}`.toLowerCase().includes(search.toLowerCase())), [reports, search, status])
+  const shown = useMemo(() => reports.filter(r => (status === 'all' || r.status === status) && `${r.report_no} ${r.requester_employee?.name || r.requester?.name} ${r.concerned_area_department} ${r.description}`.toLowerCase().includes(search.toLowerCase())), [reports, search, status])
   const summary = useMemo(() => ({
     total: reports.length,
     submitted: reports.filter(r => r.status === 'submitted').length,
@@ -169,9 +209,9 @@ export default function IncidentReportsPage() {
     </div>
     <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-secondary text-white"><tr>{['Report No.','Date','Requester','Area / Department','Classification','Status','Actions'].map(h => <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase">{h}</th>)}</tr></thead><tbody>
-        {loading ? <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></td></tr> : shown.length === 0 ? <tr><td colSpan="7" className="py-16 text-center text-neutral-400">No incident reports found</td></tr> : shown.map(report => <tr key={report.id} className="border-t border-neutral-100 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-primary">{report.report_no}</td><td className="px-4 py-3">{String(report.report_date).slice(0,10)}</td><td className="px-4 py-3 font-semibold">{report.requester?.name}</td><td className="px-4 py-3">{report.concerned_area_department}</td><td className="px-4 py-3 capitalize">{report.classification.replace('_',' / ')}</td><td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[report.status]}`}>{statusLabel[report.status]}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openReport(report)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">Open</button><button onClick={() => downloadReport(report)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button></div></td></tr>)}
+        {loading ? <tr><td colSpan="7" className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></td></tr> : shown.length === 0 ? <tr><td colSpan="7" className="py-16 text-center text-neutral-400">No incident reports found</td></tr> : shown.map(report => <tr key={report.id} className="border-t border-neutral-100 hover:bg-neutral-50"><td className="px-4 py-3 font-bold text-primary">{report.report_no}</td><td className="px-4 py-3">{String(report.report_date).slice(0,10)}</td><td className="px-4 py-3 font-semibold">{report.requester_employee?.name || report.requester?.name}</td><td className="px-4 py-3">{report.concerned_area_department}</td><td className="px-4 py-3 capitalize">{report.classification.replace('_',' / ')}</td><td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[report.status]}`}>{statusLabel[report.status]}</span></td><td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openReport(report)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">Open</button><button onClick={() => downloadReport(report)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button></div></td></tr>)}
       </tbody></table></div>
     </div>
-    {editing !== undefined && <ReportModal report={editing} currentUser={user} canSignHr={canSignHr} canSignDepot={canSignDepot} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load() }} />}
+    {editing !== undefined && <ReportModal report={editing} canSignHr={canSignHr} canSignDepot={canSignDepot} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load() }} />}
   </div>
 }
