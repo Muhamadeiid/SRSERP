@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useSearchParams } from 'react-router-dom'
 import { Camera, Download, FileWarning, Loader2, Plus, Search, X } from 'lucide-react'
 import { generateIncidentReport } from '../utils/generateIncidentReport'
 import { getIncidentReport, getIncidentReports, saveIncidentReport } from '../services/incidentReportService'
@@ -120,15 +121,38 @@ export default function IncidentReportsPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [editing, setEditing] = useState(undefined)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const load = () => { setLoading(true); getIncidentReports({ per_page: 100 }).then(r => setReports(r.data || [])).finally(() => setLoading(false)) }
   useEffect(load, [])
+  useEffect(() => {
+    const id = Number(searchParams.get('report'))
+    if (!id) return
+    getIncidentReport(id)
+      .then(setEditing)
+      .catch(() => {})
+      .finally(() => setSearchParams({}, { replace: true }))
+  }, [searchParams, setSearchParams])
   const shown = useMemo(() => reports.filter(r => (status === 'all' || r.status === status) && `${r.report_no} ${r.requester?.name} ${r.concerned_area_department} ${r.description}`.toLowerCase().includes(search.toLowerCase())), [reports, search, status])
+  const summary = useMemo(() => ({
+    total: reports.length,
+    submitted: reports.filter(r => r.status === 'submitted').length,
+    under_investigation: reports.filter(r => r.status === 'under_investigation').length,
+    closed: reports.filter(r => r.status === 'closed').length,
+  }), [reports])
   const openReport = async report => setEditing(await getIncidentReport(report.id))
   const downloadReport = async report => generateIncidentReport(await getIncidentReport(report.id))
 
   return <div className="min-h-full bg-neutral-50 p-4 lg:p-6">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-secondary"><FileWarning className="h-6 w-6 text-primary" />Incident Reports</h1><p className="text-sm text-neutral-500">Management conflict incident records</p></div><button onClick={() => setEditing(null)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white"><Plus className="h-4 w-4" />New Report</button></div>
+    {reviewer && <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {[
+        ['Total Reports', summary.total, 'border-neutral-200 bg-white text-secondary'],
+        ['Submitted', summary.submitted, 'border-amber-200 bg-amber-50 text-amber-700'],
+        ['Under Investigation', summary.under_investigation, 'border-blue-200 bg-blue-50 text-blue-700'],
+        ['Closed', summary.closed, 'border-emerald-200 bg-emerald-50 text-emerald-700'],
+      ].map(([label, value, style]) => <button type="button" key={label} onClick={() => setStatus(label === 'Total Reports' ? 'all' : label.toLowerCase().replace(' ', '_'))} className={`rounded-lg border p-4 text-left ${style}`}><strong className="block text-2xl">{value}</strong><span className="text-xs font-semibold">{label}</span></button>)}
+    </div>}
     <div className="mb-4 flex flex-wrap gap-3 rounded-lg border border-neutral-200 bg-white p-3">
       <label className="relative min-w-64 flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" /><input className={`${inputClass} pl-9`} placeholder="Search reports..." value={search} onChange={e => setSearch(e.target.value)} /></label>
       <select className={`${inputClass} w-52`} value={status} onChange={e => setStatus(e.target.value)}><option value="all">All statuses</option><option value="submitted">Submitted</option><option value="under_investigation">Under Investigation</option><option value="closed">Closed</option></select>

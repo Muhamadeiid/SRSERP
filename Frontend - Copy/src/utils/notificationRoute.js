@@ -26,6 +26,10 @@ export function notificationRequestTarget(notification) {
     return { path: `/procurement/${data.prf_id}`, query: '' }
   }
 
+  if (data.incident_report_id) {
+    return { path: '/incident-reports', query: `report=${data.incident_report_id}` }
+  }
+
   const requestId = data.leave_request_id
   if (!requestId) {
     const rawLink = notification?.link || data.path

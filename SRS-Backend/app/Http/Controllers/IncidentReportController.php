@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\IncidentReport;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,7 @@ class IncidentReportController extends Controller
 
         $report = IncidentReport::create($data);
         $report->update(['report_no' => sprintf('MCI-%s-%04d', now()->format('Y'), $report->id)]);
+        $this->notifyReviewers($report->fresh(), $request->user());
         return response()->json(['success' => true, 'data' => $report->load($this->relations())], 201);
     }
 
@@ -143,6 +145,33 @@ class IncidentReportController extends Controller
     private function authorizeView(User $user, IncidentReport $report): void
     {
         abort_unless(in_array($user->role, self::REVIEW_ROLES, true) || $report->created_by === $user->id, 403);
+    }
+
+    private function notifyReviewers(IncidentReport $report, User $requester): void
+    {
+        $data = [
+            'incident_report_id' => $report->id,
+            'path' => '/incident-reports?report=' . $report->id,
+        ];
+        $options = [
+            'category' => 'report',
+            'priority' => 'warn',
+            'sender_user_id' => $requester->id,
+            'link' => $data['path'],
+            'meta' => [
+                ['kind' => 'code', 'value' => $report->report_no],
+                ['kind' => 'area', 'value' => $report->concerned_area_department],
+            ],
+            'actions' => [[
+                'label' => 'Open report', 'style' => 'primary', 'action' => 'open', 'payload' => [],
+            ]],
+            'dedupe_key' => 'incident-report-submitted-' . $report->id,
+        ];
+        $body = "{$requester->name} submitted {$report->report_no} for {$report->concerned_area_department}.";
+
+        Notification::notifyRole('hr', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);
+        Notification::notifyRole('depot_manager', 'incident_report_submitted', 'New Incident Report', $body, $data, true, $options);
+        Notification::notifyRole('admin', 'incident_report_submitted', 'New Incident Report', $body, $data, false, $options);
     }
 
     private function relations(bool $withSignatures = true): array
