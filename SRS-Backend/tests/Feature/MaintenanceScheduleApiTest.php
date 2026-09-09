@@ -8,6 +8,7 @@ use App\Models\Train;
 use App\Models\User;
 use App\Services\MaintenanceScheduleGenerator;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -118,6 +119,31 @@ class MaintenanceScheduleApiTest extends TestCase
         );
         $this->assertCount(2, $generatedCodes->filter(fn ($entry) => $entry['trainId'] === '08' && $entry['code'] === 'G'));
         $this->assertFalse($generatedCodes->contains(fn ($entry) => $entry['trainId'] === '11' && $entry['code'] === 'G'));
+    }
+
+    public function test_train_returns_to_normal_maintenance_after_nine_year_overhaul(): void
+    {
+        Train::updateOrCreate(['id' => 'O1'], ['name' => 'Overhaul Train', 'display_order' => 0]);
+        MaintenanceSchedule::create(['schedule_date' => '2026-08-17', 'train_id' => 'O1', 'code' => 'A']);
+        foreach (CarbonPeriod::create('2026-09-01', '2026-09-30') as $date) {
+            MaintenanceSchedule::create(['schedule_date' => $date, 'train_id' => 'O1', 'code' => '9Y']);
+        }
+
+        $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
+        $overhaulDates = collect($preview['entries'])
+            ->filter(fn ($entries) => ($entries['O1'] ?? null) === '9Y')
+            ->keys()
+            ->map(fn ($date) => Carbon::parse($date));
+        $normalVisit = collect($preview['entries'])
+            ->first(fn ($entries) => ($entries['O1'] ?? null) === 'A');
+        $normalDate = collect($preview['entries'])
+            ->search(fn ($entries) => ($entries['O1'] ?? null) === 'A');
+
+        $this->assertNotEmpty($overhaulDates);
+        $this->assertNotNull($normalVisit);
+        $gap = $overhaulDates->max()->diffInDays(Carbon::parse($normalDate));
+        $this->assertGreaterThanOrEqual(13, $gap);
+        $this->assertLessThanOrEqual(17, $gap);
     }
 
     private function seedOptions(): void

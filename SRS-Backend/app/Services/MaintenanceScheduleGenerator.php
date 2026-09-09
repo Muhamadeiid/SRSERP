@@ -101,6 +101,11 @@ class MaintenanceScheduleGenerator
             $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
             $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')->values();
             $lastVisit = $routinePast->last()?->schedule_date?->copy();
+            $lastOverhaul = $this->latestOverhaulDate($trainId, $trainPast, $plan);
+            $resumingAfterOverhaul = $lastOverhaul && (! $lastVisit || $lastOverhaul->gt($lastVisit));
+            if ($resumingAfterOverhaul) {
+                $lastVisit = $lastOverhaul->copy();
+            }
             if (! $lastVisit) {
                 $warnings[] = "Train {$trainId}: no visit history was found; no schedule was invented.";
 
@@ -112,7 +117,7 @@ class MaintenanceScheduleGenerator
             $nextBDue = isset($lastB['date']) ? $lastB['date']->copy()->addMonthsNoOverflow(3) : null;
             while ($lastVisit->copy()->addDays(self::A_MIN)->lte($end)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
-                $code = $this->nextVisitCode($target, $lastBCode, $nextBDue);
+                $code = $resumingAfterOverhaul ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
                 $date = $this->balancedVisitDate($lastVisit, $start, $end, $trainId, $code, $plan, $blocked, $holidays);
                 if (! $date) {
                     if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
@@ -126,6 +131,7 @@ class MaintenanceScheduleGenerator
                     $this->planSecondGDay($date, $end, $trainId, $plan, $blocked, $holidays, $warnings);
                 }
                 $lastVisit = $date->copy();
+                $resumingAfterOverhaul = false;
                 if (in_array($code, self::B_CYCLE, true)) {
                     $lastBCode = $code;
                     $nextBDue = $date->copy()->addMonthsNoOverflow(3);
@@ -136,6 +142,22 @@ class MaintenanceScheduleGenerator
                 $warnings[] = "Train {$trainId}: no B/G history was found; no B/G schedule was invented.";
             }
         }
+    }
+
+    private function latestOverhaulDate(string $trainId, Collection $history, array $plan): ?Carbon
+    {
+        $dates = $history
+            ->filter(fn ($row) => $this->isNineYearCode($row->code))
+            ->pluck('schedule_date')
+            ->map(fn ($date) => $date->copy());
+
+        foreach ($plan as $date => $entries) {
+            if (isset($entries[$trainId]) && $this->isNineYearCode($entries[$trainId])) {
+                $dates->push(Carbon::parse($date));
+            }
+        }
+
+        return $dates->sort()->last()?->copy();
     }
 
     private function nextBDueForTrain(string $trainId, Collection $past, Carbon $start): ?Carbon
