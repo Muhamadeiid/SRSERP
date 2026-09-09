@@ -47,7 +47,7 @@ class LateDeductionService
             ->each(function (Attendance $record) use (&$result, &$graceRemaining, &$occurrences, $employee, $holidays, $leaveDates) {
                 $date = $record->date->toDateString();
                 $lateMinutes = (int) $record->late_minutes;
-                if ($lateMinutes <= 0 || !$employee->isWorkingDay($record->date) || isset($holidays[$date]) || isset($leaveDates[$date])) return;
+                if ($lateMinutes <= 0 || $record->status === 'off' || !$employee->isWorkingDay($record->date) || isset($holidays[$date]) || isset($leaveDates[$date])) return;
 
                 // A delay over an hour follows the absence policy, not the late table.
                 if ($lateMinutes > 60) return;

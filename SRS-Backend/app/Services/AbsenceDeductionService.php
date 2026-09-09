@@ -76,6 +76,7 @@ class AbsenceDeductionService
             $date = $cursor->toDateString();
             $record = $attendance->get($date);
             $isExcluded = !$employee->isWorkingDay($cursor)
+                || $record?->status === 'off'
                 || isset($holidayDates[$date])
                 || isset($leaveDates[$date]);
             // A delay exceeding one hour is treated as absence under the company rule.

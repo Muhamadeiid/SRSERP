@@ -315,7 +315,7 @@ export default function CcpAttendancePage() {
                         <option value="absent">Absent</option>
                         <option value="late">Late</option>
                         <option value="permission">Permission</option>
-                        <option value="off">OFF - Day Off</option>
+                        <option value="off">OFF - Manual Day Off</option>
                       </select>
                     )}
                   </td>

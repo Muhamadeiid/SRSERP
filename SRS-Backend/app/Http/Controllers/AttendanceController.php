@@ -882,7 +882,8 @@ class AttendanceController extends Controller
         while ($cur->lte($end)) {
             $ds  = $cur->toDateString();
             $rec = $attendances->first(fn($a) => $a->date?->format('Y-m-d') === $ds);
-            $off = $employee ? !$employee->isWorkingDay($cur->copy()) : in_array($cur->dayOfWeek,[5,6]);
+            $off = $rec?->status === 'off'
+                || ($employee ? !$employee->isWorkingDay($cur->copy()) : in_array($cur->dayOfWeek, [5, 6]));
             $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec, 'absence' => $absenceDeductions[$ds] ?? null];
             $cur->addDay();
         }
@@ -1342,7 +1343,7 @@ class AttendanceController extends Controller
         while ($cur->lte($end)) {
             $ds  = $cur->toDateString();
             $rec = $attendances->first(fn($a) => $a->date?->format('Y-m-d') === $ds);
-            $off = !$employee->isWorkingDay($cur->copy());
+            $off = $rec?->status === 'off' || !$employee->isWorkingDay($cur->copy());
             $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec, 'absence' => $absenceDeductions[$ds] ?? null];
             $cur->addDay();
         }
@@ -1967,6 +1968,9 @@ class AttendanceController extends Controller
 
         $empOTRs = $approvedOTRs->where('employee_id', $employee->id);
         $holidaysSet = array_flip($holidays);
+        $manualDayOffDates = $attendances
+            ->filter(fn ($attendance) => $attendance->status === 'off')
+            ->mapWithKeys(fn ($attendance) => [$attendance->date->toDateString() => true]);
 
         foreach ($empOTRs as $otr) {
             $startM = $timeToMin($otr->start_time);
@@ -1985,7 +1989,11 @@ class AttendanceController extends Controller
             // Double pay always requires an approved OTR. Public holidays and
             // scheduled days off only decide how that approved OTR is classified.
             $otDate = Carbon::parse($otr->ot_date);
-            if (!$employee->isWorkingDay($otDate) || isset($holidaysSet[$otDate->toDateString()])) {
+            if (
+                !$employee->isWorkingDay($otDate)
+                || isset($holidaysSet[$otDate->toDateString()])
+                || $manualDayOffDates->has($otDate->toDateString())
+            ) {
                 $doublePayOT += $approvedHours;
                 continue;
             }
