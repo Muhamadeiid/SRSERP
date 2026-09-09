@@ -69,6 +69,7 @@ class MaintenanceScheduleApiTest extends TestCase
         MaintenanceSchedule::insert([
             ['schedule_date' => '2026-09-18', 'train_id' => '01', 'code' => 'A'],
             ['schedule_date' => '2026-09-22', 'train_id' => '08', 'code' => 'A'],
+            ['schedule_date' => '2026-09-24', 'train_id' => '11', 'code' => 'A'],
         ]);
 
         $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
@@ -112,6 +113,7 @@ class MaintenanceScheduleApiTest extends TestCase
             $generatedCodes->toJson()
         );
         $this->assertCount(2, $generatedCodes->filter(fn ($entry) => $entry['trainId'] === '08' && $entry['code'] === 'G'));
+        $this->assertFalse($generatedCodes->contains(fn ($entry) => $entry['trainId'] === '11' && $entry['code'] === 'G'));
     }
 
     private function seedOptions(): void

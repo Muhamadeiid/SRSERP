@@ -130,7 +130,7 @@ class MaintenanceScheduleGenerator
 
     private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue): string
     {
-        if ($lastBCode && $nextBDue && $nextBDue->lte($target->copy()->addDays(2))) {
+        if ($lastBCode && $nextBDue && abs($target->diffInDays($nextBDue, false)) <= 8) {
             $index = array_search($lastBCode, self::B_CYCLE, true);
 
             return self::B_CYCLE[((int) $index + 1) % count(self::B_CYCLE)];
@@ -191,11 +191,31 @@ class MaintenanceScheduleGenerator
             if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || $this->routineVisitCount($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
                 continue;
             }
+            if ($code === 'G' && ! $this->hasAvailableSecondGDay($candidate, $end, $trainId, $plan, $blocked, $holidays)) {
+                continue;
+            }
 
             return $candidate;
         }
 
         return null;
+    }
+
+    private function hasAvailableSecondGDay(Carbon $first, Carbon $end, string $trainId, array $plan, array $blocked, array $holidays): bool
+    {
+        $second = $first->copy()->addDay();
+        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
+            $second->addDay();
+        }
+        if ($second->gt($end)) {
+            return false;
+        }
+
+        $key = $second->toDateString();
+
+        return empty($blocked[$trainId][$key])
+            && empty($plan[$key][$trainId])
+            && $this->routineVisitCount($plan[$key] ?? []) < self::MAX_VISITS_PER_DAY;
     }
 
     private function planMonthlyCVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
