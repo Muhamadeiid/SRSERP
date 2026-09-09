@@ -87,6 +87,16 @@ class MaintenanceScheduleGenerator
 
     private function planRoutineVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
     {
+        usort($trains, function ($leftTrain, $rightTrain) use ($past, $start, $end) {
+            $leftDue = $this->nextBDueForTrain($leftTrain, $past, $start);
+            $rightDue = $this->nextBDueForTrain($rightTrain, $past, $start);
+            $leftPriority = $leftDue && $leftDue->betweenIncluded($start->copy()->subDays(8), $end->copy()->addDays(8)) ? 0 : 1;
+            $rightPriority = $rightDue && $rightDue->betweenIncluded($start->copy()->subDays(8), $end->copy()->addDays(8)) ? 0 : 1;
+
+            return $leftPriority <=> $rightPriority
+                ?: ($leftDue?->timestamp ?? PHP_INT_MAX) <=> ($rightDue?->timestamp ?? PHP_INT_MAX);
+        });
+
         foreach ($trains as $trainId) {
             $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
             $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')->values();
@@ -126,6 +136,14 @@ class MaintenanceScheduleGenerator
                 $warnings[] = "Train {$trainId}: no B/G history was found; no B/G schedule was invented.";
             }
         }
+    }
+
+    private function nextBDueForTrain(string $trainId, Collection $past, Carbon $start): ?Carbon
+    {
+        $history = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
+        $reference = $this->lastBReference($trainId, $history, $start);
+
+        return isset($reference['date']) ? $reference['date']->copy()->addMonthsNoOverflow(3) : null;
     }
 
     private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue): string
