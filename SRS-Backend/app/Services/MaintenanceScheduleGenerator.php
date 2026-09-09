@@ -27,6 +27,29 @@ class MaintenanceScheduleGenerator
 
     private const B_CYCLE = ['B1', 'B2', 'B3', 'G'];
 
+    private const B_HISTORY_BASELINE = [
+        '01' => ['2026-07-02', 'B1'],
+        '02' => ['2026-06-29', 'B3'],
+        '12' => ['2026-08-12', 'G'],
+        '04' => ['2026-09-29', 'G'],
+        '13' => ['2026-08-23', 'B3'],
+        '03' => ['2026-09-30', 'B3'],
+        '14' => ['2026-08-08', 'B2'],
+        '07' => ['2026-07-09', 'B1'],
+        '05' => ['2026-09-17', 'B2'],
+        '06' => ['2026-08-13', 'B1'],
+        '15' => ['2026-01-26', 'B1'],
+        '09' => ['2026-04-18', 'B3'],
+        '10' => ['2026-04-21', 'B3'],
+        '16' => ['2026-02-22', 'B3'],
+        '08' => ['2026-07-07', 'B3'],
+        '11' => ['2026-05-21', 'B3'],
+        '17' => ['2026-08-26', 'B1'],
+        '18' => ['2026-05-25', 'B2'],
+        '19' => ['2026-09-19', 'B3'],
+        '20' => ['2026-08-02', 'B2'],
+    ];
+
     public function preview(int $year, int $month): array
     {
         $start = Carbon::create($year, $month, 1)->startOfMonth();
@@ -74,9 +97,9 @@ class MaintenanceScheduleGenerator
                 continue;
             }
 
-            $lastB = $routinePast->filter(fn ($row) => in_array($this->baseCode($row->code), self::B_CYCLE, true))->last();
-            $lastBCode = $lastB ? $this->baseCode($lastB->code) : null;
-            $nextBDue = $lastB?->schedule_date?->copy()->addMonthsNoOverflow(3);
+            $lastB = $this->lastBReference($trainId, $routinePast, $start);
+            $lastBCode = $lastB['code'] ?? null;
+            $nextBDue = isset($lastB['date']) ? $lastB['date']->copy()->addMonthsNoOverflow(3) : null;
             while ($lastVisit->copy()->addDays(self::A_MIN)->lte($end)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
                 $code = $this->nextVisitCode($target, $lastBCode, $nextBDue);
@@ -89,6 +112,9 @@ class MaintenanceScheduleGenerator
                 }
 
                 $this->put($plan, $date, $trainId, $code);
+                if ($code === 'G') {
+                    $this->planSecondGDay($date, $end, $trainId, $plan, $blocked, $holidays, $warnings);
+                }
                 $lastVisit = $date->copy();
                 if (in_array($code, self::B_CYCLE, true)) {
                     $lastBCode = $code;
@@ -111,6 +137,47 @@ class MaintenanceScheduleGenerator
         }
 
         return 'A';
+    }
+
+    private function lastBReference(string $trainId, Collection $history, Carbon $start): ?array
+    {
+        $databaseEntry = $history
+            ->filter(fn ($row) => in_array($this->baseCode($row->code), self::B_CYCLE, true))
+            ->last();
+        $reference = $databaseEntry ? [
+            'date' => $databaseEntry->schedule_date->copy(),
+            'code' => $this->baseCode($databaseEntry->code),
+        ] : null;
+
+        $baseline = self::B_HISTORY_BASELINE[$trainId] ?? null;
+        if ($baseline) {
+            $baselineDate = Carbon::parse($baseline[0]);
+            if ($baselineDate->lt($start) && (! $reference || $baselineDate->gt($reference['date']))) {
+                $reference = ['date' => $baselineDate, 'code' => $baseline[1]];
+            }
+        }
+
+        return $reference;
+    }
+
+    private function planSecondGDay(Carbon $first, Carbon $end, string $trainId, array &$plan, array $blocked, array $holidays, array &$warnings): void
+    {
+        $second = $first->copy()->addDay();
+        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
+            $second->addDay();
+        }
+        if ($second->gt($end) || ! empty($blocked[$trainId][$second->toDateString()]) || ! empty($plan[$second->toDateString()][$trainId])) {
+            $warnings[] = "Train {$trainId}: the second G day falls outside the available schedule.";
+
+            return;
+        }
+        if ($this->routineVisitCount($plan[$second->toDateString()] ?? []) >= self::MAX_VISITS_PER_DAY) {
+            $warnings[] = "Train {$trainId}: no K6/K5 track was available for the second G day.";
+
+            return;
+        }
+
+        $this->put($plan, $second, $trainId, 'G');
     }
 
     private function balancedVisitDate(Carbon $lastVisit, Carbon $start, Carbon $end, string $trainId, string $code, array $plan, array $blocked, array $holidays): ?Carbon

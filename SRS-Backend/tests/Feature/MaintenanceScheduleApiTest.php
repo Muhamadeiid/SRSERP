@@ -66,6 +66,10 @@ class MaintenanceScheduleApiTest extends TestCase
                 ['schedule_date' => '2026-09-20', 'train_id' => $trainId, 'code' => 'A'],
             ]);
         }
+        MaintenanceSchedule::insert([
+            ['schedule_date' => '2026-09-18', 'train_id' => '01', 'code' => 'A'],
+            ['schedule_date' => '2026-09-22', 'train_id' => '08', 'code' => 'A'],
+        ]);
 
         $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
         $visits = collect($preview['entries'])
@@ -97,6 +101,17 @@ class MaintenanceScheduleApiTest extends TestCase
         foreach ($routine as $visit) {
             $this->assertSame('T1', $preview['meta'][$visit['date']]['k6']);
         }
+
+        $generatedCodes = collect($preview['entries'])->flatMap(function ($entries, $date) {
+            return collect($entries)->map(
+                fn ($code, $trainId) => ['date' => $date, 'trainId' => $trainId, 'code' => $code]
+            )->values();
+        });
+        $this->assertTrue(
+            $generatedCodes->contains(fn ($entry) => (string) $entry['trainId'] === '01' && $entry['code'] === 'B2'),
+            $generatedCodes->toJson()
+        );
+        $this->assertCount(2, $generatedCodes->filter(fn ($entry) => $entry['trainId'] === '08' && $entry['code'] === 'G'));
     }
 
     private function seedOptions(): void
