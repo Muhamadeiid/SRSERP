@@ -58,12 +58,14 @@ class MaintenanceScheduleApiTest extends TestCase
                 ['name' => "Type {$code}", 'color_hex' => '#FFFFFF']
             );
         }
-        Train::updateOrCreate(['id' => 'T1'], ['name' => 'Test Train', 'display_order' => 999]);
-        MaintenanceSchedule::insert([
-            ['schedule_date' => '2026-07-05', 'train_id' => 'T1', 'code' => 'B1'],
-            ['schedule_date' => '2026-09-05', 'train_id' => 'T1', 'code' => 'C'],
-            ['schedule_date' => '2026-09-20', 'train_id' => 'T1', 'code' => 'A'],
-        ]);
+        foreach (['T1', 'T2', 'T3'] as $index => $trainId) {
+            Train::updateOrCreate(['id' => $trainId], ['name' => "Test Train {$trainId}", 'display_order' => 990 + $index]);
+            MaintenanceSchedule::insert([
+                ['schedule_date' => '2026-07-05', 'train_id' => $trainId, 'code' => 'B1'],
+                ['schedule_date' => '2026-09-05', 'train_id' => $trainId, 'code' => 'C'],
+                ['schedule_date' => '2026-09-20', 'train_id' => $trainId, 'code' => 'A'],
+            ]);
+        }
 
         $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
         $visits = collect($preview['entries'])
@@ -87,7 +89,10 @@ class MaintenanceScheduleApiTest extends TestCase
         $this->assertGreaterThanOrEqual(5, $dates->min(fn ($date) => $date->diffInDays($cDate)));
         $this->assertSame('T1', $preview['meta'][$cVisit['date']]['k19']);
         foreach ($preview['entries'] as $date => $entries) {
-            $this->assertLessThanOrEqual(2, count($entries), "More than two trains were planned on {$date}.");
+            $routineCount = collect($entries)->reject(fn ($code) => $code === 'C' || str_starts_with($code, '9Y'))->count();
+            $cCount = collect($entries)->filter(fn ($code) => $code === 'C')->count();
+            $this->assertLessThanOrEqual(2, $routineCount, "More than two K6/K5 visits were planned on {$date}.");
+            $this->assertLessThanOrEqual(1, $cCount, "More than one C visit was planned on {$date}.");
         }
         foreach ($routine as $visit) {
             $this->assertSame('T1', $preview['meta'][$visit['date']]['k6']);

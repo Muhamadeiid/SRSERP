@@ -58,7 +58,7 @@ class MaintenanceScheduleGenerator
             'warnings' => array_values(array_unique($warnings)),
             'replaces_existing' => $existing->isNotEmpty(),
             'existing_count' => $existing->count(),
-            'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_visits_per_day' => 2, 'c_min_routine_gap' => 5],
+            'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_routine_visits_per_day' => 2, 'max_c_per_day' => 1, 'c_min_routine_gap' => 5],
         ];
     }
 
@@ -121,7 +121,7 @@ class MaintenanceScheduleGenerator
                 continue;
             }
             $key = $candidate->toDateString();
-            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || count($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
+            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || $this->routineVisitCount($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
                 continue;
             }
 
@@ -156,7 +156,7 @@ class MaintenanceScheduleGenerator
                 $key = $date->toDateString();
                 $hasC = collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C');
                 $tooClose = $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP);
-                if ($hasC || $tooClose || count($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+                if ($hasC || $tooClose || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
                     continue;
                 }
 
@@ -190,6 +190,13 @@ class MaintenanceScheduleGenerator
                 $meta[$date]['k5'] = $routineTrains[1];
             }
         }
+    }
+
+    private function routineVisitCount(array $entries): int
+    {
+        return collect($entries)
+            ->reject(fn ($code) => $code === 'C' || $this->isNineYearCode($code))
+            ->count();
     }
 
     private function planBCycle(string $trainId, int $trainIndex, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
