@@ -7,6 +7,7 @@ use App\Models\MaintenanceSchedule;
 use App\Models\ScheduleDayMeta;
 use App\Models\Train;
 use App\Models\User;
+use App\Services\MaintenanceScheduleGenerator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,20 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class MaintenanceScheduleController extends Controller
 {
+    public function generate(Request $request, MaintenanceScheduleGenerator $generator): JsonResponse
+    {
+        $this->authorizeSchedule($request->user());
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'between:2020,2100'],
+            'month' => ['required', 'integer', 'between:1,12'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $generator->preview((int) $data['year'], (int) $data['month']),
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizeSchedule($request->user());

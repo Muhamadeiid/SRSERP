@@ -54,6 +54,7 @@ export const addMaintenanceTaskActivity = (id, data) => request(`/maintenance-ta
 
 // PM monthly train schedule
 export const getMaintenanceSchedule = (year, month) => request(`/schedule?year=${year}&month=${month}`)
+export const generateMaintenanceSchedule = (year, month) => request('/schedule/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, month }) })
 export const saveMaintenanceSchedule = data => request('/schedule/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
 export const uploadMaintenanceSchedule = (file, year, month) => {
   const body = new FormData()

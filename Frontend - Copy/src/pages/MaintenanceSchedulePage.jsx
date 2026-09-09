@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Save, Upload } from 'lucide-react'
-import { getMaintenanceSchedule, saveMaintenanceSchedule, uploadMaintenanceSchedule } from '../services/maintenanceService'
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Loader2, Save, Sparkles, Upload } from 'lucide-react'
+import { generateMaintenanceSchedule, getMaintenanceSchedule, saveMaintenanceSchedule, uploadMaintenanceSchedule } from '../services/maintenanceService'
 
 const EMPTY_META = { k6: '', k5: '', c_col: '', k19: '', remark: '' }
 const META_COLUMNS = [['k6', 'K6', 70], ['k5', 'K5', 70], ['c_col', 'C', 70], ['k19', 'K19', 70], ['remark', 'Remark', 240]]
@@ -16,6 +16,8 @@ export default function MaintenanceSchedulePage() {
   const [metaChanges, setMetaChanges] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generationWarnings, setGenerationWarnings] = useState([])
   const [notice, setNotice] = useState(null)
   const fileRef = useRef()
 
@@ -35,6 +37,16 @@ export default function MaintenanceSchedulePage() {
   const days = useMemo(() => Array.from({ length: schedule?.days_in_month || 0 }, (_, index) => index + 1), [schedule])
   const dirtyCount = Object.keys(entryChanges).length + Object.keys(metaChanges).length
   const monthLabel = new Date(cursor.year, cursor.month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const validation = useMemo(() => {
+    if (!schedule) return []
+    return schedule.trains.map(train => {
+      const codes = days.map(day => entries[isoDate(cursor.year, cursor.month, day)]?.[train.id] || '')
+      const counts = Object.fromEntries(['A', 'B1', 'B2', 'B3', 'G', 'C'].map(code => [code, codes.filter(value => value === code).length]))
+      const aDays = codes.map((code, index) => code === 'A' || code === 'A+C' ? index + 1 : null).filter(Boolean)
+      const gaps = aDays.slice(1).map((day, index) => day - aDays[index])
+      return { train, counts, total: counts.A + counts.B1 + counts.B2 + counts.B3 + counts.G, gaps }
+    })
+  }, [cursor, days, entries, schedule])
 
   const moveMonth = delta => setCursor(current => {
     const date = new Date(current.year, current.month - 1 + delta, 1)
@@ -76,12 +88,48 @@ export default function MaintenanceSchedulePage() {
     finally { setSaving(false) }
   }
 
+  const generate = async () => {
+    setGenerating(true); setNotice(null); setGenerationWarnings([])
+    try {
+      const response = await generateMaintenanceSchedule(cursor.year, cursor.month)
+      const result = response.data
+      if (result.replaces_existing && !window.confirm(`${monthLabel} already contains ${result.existing_count} saved entries. Replace them in the draft? Nothing will be changed until you click Save Changes.`)) return
+      const generated = result.entries || {}
+      const changes = {}
+      const dates = new Set([...Object.keys(entries), ...Object.keys(generated)])
+      dates.forEach(date => {
+        const trainIds = new Set([...Object.keys(entries[date] || {}), ...Object.keys(generated[date] || {})])
+        trainIds.forEach(trainId => {
+          const code = generated[date]?.[trainId] || ''
+          if ((entries[date]?.[trainId] || '') !== code) changes[`${date}:${trainId}`] = { date, train_id: trainId, code: code || null }
+        })
+      })
+      setEntries(generated)
+      setEntryChanges(changes)
+      const generatedMeta = result.meta || {}
+      if (Object.keys(generatedMeta).length) {
+        const nextMeta = { ...meta }
+        const nextMetaChanges = {}
+        Object.entries(generatedMeta).forEach(([date, values]) => {
+          nextMeta[date] = { ...EMPTY_META, ...(nextMeta[date] || {}), ...values }
+          nextMetaChanges[date] = { date, ...nextMeta[date] }
+        })
+        setMeta(nextMeta)
+        setMetaChanges(nextMetaChanges)
+      }
+      setGenerationWarnings(result.warnings || [])
+      setNotice({ text: `Draft generated with ${Object.values(generated).reduce((sum, row) => sum + Object.keys(row).length, 0)} planned entries. Review and edit it, then click Save Changes.` })
+    } catch (error) { setNotice({ error: true, text: error.message || 'Could not generate the schedule.' }) }
+    finally { setGenerating(false) }
+  }
+
   return <div className="min-h-full bg-neutral-50 p-4 lg:p-6">
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="flex items-center gap-2 text-2xl font-bold text-secondary"><CalendarDays className="h-6 w-6 text-primary" />PM Schedule</h1><p className="text-sm text-neutral-500">Monthly preventive maintenance plan by train</p></div>
       <div className="flex flex-wrap gap-2">
         <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={upload} />
         <button type="button" disabled={saving} onClick={() => fileRef.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50 disabled:opacity-50"><Upload className="h-4 w-4" />Upload Excel</button>
+        <button type="button" disabled={saving || generating || loading} onClick={generate} className="inline-flex h-10 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-4 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50">{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Generate Draft</button>
         <button type="button" disabled={!dirtyCount || saving} onClick={save} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-bold text-white disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Changes {dirtyCount ? `(${dirtyCount})` : ''}</button>
       </div>
     </div>
@@ -91,6 +139,7 @@ export default function MaintenanceSchedulePage() {
       <button type="button" onClick={() => moveMonth(1)} className="rounded-md border border-neutral-200 p-2 hover:bg-neutral-50" title="Next month"><ChevronRight className="h-4 w-4" /></button>
     </div>
     {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice.text}</div>}
+    {generationWarnings.length > 0 && <div className="mb-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><div className="mb-1 flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" />Generation review ({generationWarnings.length})</div><ul className="max-h-28 overflow-auto pl-5 text-xs list-disc">{generationWarnings.map(warning => <li key={warning}>{warning}</li>)}</ul></div>}
     <div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
       {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div className="max-h-[calc(100vh-250px)] overflow-auto">
         <table className="border-collapse text-xs" style={{ width: 1824, minWidth: 1824, tableLayout: 'fixed' }}>
@@ -147,6 +196,14 @@ export default function MaintenanceSchedulePage() {
         </table>
       </div>}
     </div>
+    {schedule && <div className="mt-4 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
+      <div className="border-b border-neutral-200 px-4 py-3"><h2 className="font-bold text-secondary">Schedule Validation</h2><p className="text-xs text-neutral-500">A target: 15 days. Accepted balance range: 13-17 days.</p></div>
+      <div className="overflow-x-auto"><table className="min-w-[1150px] w-full border-collapse text-xs"><thead className="bg-neutral-100"><tr><th className="border border-neutral-200 px-3 py-2 text-left">Check</th>{validation.map(item => <th key={item.train.id} className="border border-neutral-200 px-2 py-2 text-center">{item.train.id}</th>)}</tr></thead><tbody>
+        {['A', 'B1', 'B2', 'B3', 'G', 'C'].map(code => <tr key={code}><th className="border border-neutral-200 px-3 py-2 text-left">{code}</th>{validation.map(item => <td key={item.train.id} className="border border-neutral-200 px-2 py-2 text-center">{item.counts[code]}</td>)}</tr>)}
+        <tr className="font-bold"><th className="border border-neutral-200 px-3 py-2 text-left">TO</th>{validation.map(item => <td key={item.train.id} className="border border-neutral-200 px-2 py-2 text-center">{item.total}</td>)}</tr>
+        <tr className="bg-yellow-100"><th className="border border-neutral-200 px-3 py-2 text-left">A gaps</th>{validation.map(item => <td key={item.train.id} className="border border-neutral-200 px-2 py-2 text-center">{item.gaps.length ? item.gaps.join(', ') : '-'}</td>)}</tr>
+      </tbody></table></div>
+    </div>}
     <div className="mt-3 flex flex-wrap gap-3 text-xs text-neutral-600">{schedule?.codes?.map(code => <span key={code.code} className="inline-flex items-center gap-1.5"><i className="h-3 w-3 border border-neutral-300" style={{ backgroundColor: code.color_hex }} />{code.code}: {code.name}</span>)}</div>
   </div>
 }

@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('leave:process-deductions')->dailyAt('00:10');
         $schedule->command('notifications:dispatch-reminders')->everyMinute()->withoutOverlapping();
+        $schedule->command('maintenance:generate-next-schedule')->monthlyOn(20, '01:00')->withoutOverlapping();
     }
 
     /**
