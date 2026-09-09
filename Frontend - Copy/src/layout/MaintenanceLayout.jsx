@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
-  BarChart3, Zap, CalendarClock, HardHat, Cog,
+  BarChart3, Zap, CalendarClock, CalendarDays, HardHat, Cog,
   ChevronLeft, ChevronRight, LogOut, Menu, Construction,
   ClipboardCheck, ArrowLeftRight,
 } from 'lucide-react'
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard',    path: '/maintenance',          icon: BarChart3,     end: true },
   { label: 'CM — Corrective', path: '/maintenance/cm',    icon: Zap                      },
   { label: 'PM — Preventive', path: '/maintenance/pm',    icon: CalendarClock             },
+  { label: 'PM Schedule',     path: '/maintenance/pm-schedule', icon: CalendarDays         },
   { label: 'HM — Heavy',      path: '/maintenance/hm',   icon: HardHat                   },
   { label: 'Fleet Checks', path: '/maintenance/fleet-checks', icon: ClipboardCheck         },
   { label: 'Withdrawals',  path: '/maintenance/withdrawals',  icon: ArrowLeftRight          },
@@ -26,7 +27,11 @@ export default function MaintenanceLayout() {
   const location  = useLocation()
   const dispatch  = useDispatch()
   const { user }  = useSelector(s => s.auth)
-  const visibleNavItems = user?.role === 'admin' ? NAV_ITEMS : NAV_ITEMS.slice(0, 1)
+  const canViewPmSchedule = user?.role === 'depot_manager'
+    || ((user?.role === 'manager' || user?.is_team_manager) && ['pm', 'maintenance'].includes(String(user?.department || '').toLowerCase()))
+  const visibleNavItems = user?.role === 'admin'
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter(item => item.end || (item.path === '/maintenance/pm-schedule' && canViewPmSchedule))
   const sidebarW  = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset = isMobile ? 0 : sidebarW

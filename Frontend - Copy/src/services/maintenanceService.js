@@ -51,3 +51,14 @@ export const updateMaintenanceTask = (id, data) => request(`/maintenance-tasks/$
 export const deleteMaintenanceTask = (id) => request(`/maintenance-tasks/${id}`, { method: 'DELETE' })
 export const getMaintenanceTaskActivities = (id) => request(`/maintenance-tasks/${id}/activities`)
 export const addMaintenanceTaskActivity = (id, data) => request(`/maintenance-tasks/${id}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+
+// PM monthly train schedule
+export const getMaintenanceSchedule = (year, month) => request(`/schedule?year=${year}&month=${month}`)
+export const saveMaintenanceSchedule = data => request('/schedule/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+export const uploadMaintenanceSchedule = (file, year, month) => {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('year', year)
+  body.append('month', month)
+  return request('/schedule/upload', { method: 'POST', body })
+}

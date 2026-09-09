@@ -26,6 +26,7 @@ use App\Http\Controllers\FleetCheckController;
 use App\Http\Controllers\WithdrawalController;
 use App\Http\Controllers\PublicHolidayController;
 use App\Http\Controllers\MaintenanceTaskController;
+use App\Http\Controllers\MaintenanceScheduleController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ResignationRequestController;
 use App\Http\Controllers\InterventionShiftPlanController;
@@ -141,6 +142,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'destroy']);
     Route::get('/maintenance-tasks/{maintenanceTask}/activities', [MaintenanceTaskController::class, 'activities']);
     Route::post('/maintenance-tasks/{maintenanceTask}/activities', [MaintenanceTaskController::class, 'addActivity']);
+
+    // PM monthly train schedule. Authorization is enforced by the controller.
+    Route::get('/schedule', [MaintenanceScheduleController::class, 'index']);
+    Route::post('/schedule/entry', [MaintenanceScheduleController::class, 'storeEntry']);
+    Route::delete('/schedule/entry', [MaintenanceScheduleController::class, 'destroyEntry']);
+    Route::post('/schedule/batch', [MaintenanceScheduleController::class, 'saveBatch']);
+    Route::put('/schedule/meta/{date}', [MaintenanceScheduleController::class, 'updateMeta']);
+    Route::post('/schedule/upload', [MaintenanceScheduleController::class, 'upload']);
 
     // ── Procurement (PRF) — every authenticated user can submit; approvals
     //     gated inside the controller (procurement → ehs → depot_manager)

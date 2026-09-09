@@ -70,6 +70,7 @@ const InterventionShiftsPage = lazyWithRetry(() => import('./pages/InterventionS
 const MaintenanceLayout    = lazyWithRetry(() => import('./layout/MaintenanceLayout'))
 const MaintenanceDashboard = lazyWithRetry(() => import('./pages/MaintenanceDashboard'))
 const MaintenanceTab       = lazyWithRetry(() => import('./pages/MaintenanceTab'))
+const MaintenanceSchedulePage = lazyWithRetry(() => import('./pages/MaintenanceSchedulePage'))
 const FleetChecksPage      = lazyWithRetry(() => import('./pages/FleetChecksPage'))
 const WithdrawalsPage      = lazyWithRetry(() => import('./pages/WithdrawalsPage'))
 
@@ -252,6 +253,7 @@ export default function App() {
           <Route index element={<MaintenanceDashboard />} />
           <Route path="cm" element={<MaintenanceTab key="cm" type="cm" label="Corrective Maintenance" departments={['cm','cm_intervention']} />} />
           <Route path="pm" element={<MaintenanceTab key="pm" type="pm" label="Preventive Maintenance" departments={['pm']} />} />
+          <Route path="pm-schedule" element={<MaintenanceSchedulePage />} />
           <Route path="hm" element={<MaintenanceTab key="hm" type="hm" label="Heavy Maintenance" departments={['hm']} />} />
           <Route path="fleet-checks" element={<FleetChecksPage />} />
           <Route path="withdrawals"  element={<WithdrawalsPage />} />
