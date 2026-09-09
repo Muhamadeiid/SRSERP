@@ -107,10 +107,12 @@ class MaintenanceScheduleGenerator
             $plannedOverhaul = $this->plannedOverhaulWindow($trainId, $plan);
             $lastOverhaul = $this->latestOverhaulDate($trainId, $trainPast, $plan);
             $resumingAfterOverhaul = false;
+            $enteringOverhaul = false;
 
             if ($plannedOverhaul && $plannedOverhaul['start']->gt($start)) {
                 $scheduleEnd = $plannedOverhaul['start']->copy()->subDay();
                 $lastOverhaul = null;
+                $enteringOverhaul = true;
             } elseif ($lastOverhaul && (! $lastVisit || $lastOverhaul->gt($lastVisit))) {
                 $resumingAfterOverhaul = true;
             }
@@ -128,7 +130,7 @@ class MaintenanceScheduleGenerator
             $nextBDue = isset($lastB['date']) ? $lastB['date']->copy()->addMonthsNoOverflow(3) : null;
             while ($lastVisit->copy()->addDays(self::A_MIN)->lte($scheduleEnd)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
-                $code = $resumingAfterOverhaul ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
+                $code = ($resumingAfterOverhaul || $enteringOverhaul) ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
                 $date = $this->balancedVisitDate($lastVisit, $start, $scheduleEnd, $trainId, $code, $plan, $blocked, $holidays);
                 if (! $date) {
                     if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
