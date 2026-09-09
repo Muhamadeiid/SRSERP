@@ -98,7 +98,7 @@ export default function MaintenanceSchedulePage() {
             <th className="sticky left-0 z-30 w-10 border border-white/15 bg-secondary px-2 py-3 text-center">No</th>
             <th className="sticky left-10 z-30 w-24 border border-white/15 bg-secondary px-2 py-3 text-center">Date</th>
             <th className="sticky left-[136px] z-30 w-12 border border-white/15 bg-secondary px-2 py-3 text-center">D</th>
-            {schedule.trains.map(train => <th key={train.id} className="w-16 border border-white/15 px-1 py-3 text-center">{train.id}</th>)}
+            {schedule.trains.map(train => <th key={train.id} className="w-14 min-w-14 border border-white/15 px-1 py-3 text-center">{train.id}</th>)}
             {META_COLUMNS.map(([key, label, width]) => <th key={key} className="border border-white/15 px-2 py-3 text-center" style={{ minWidth: width }}>{label}</th>)}
           </tr></thead>
           <tbody>{days.map(day => {
@@ -113,7 +113,26 @@ export default function MaintenanceSchedulePage() {
               {schedule.trains.map(train => {
                 const code = entries[date]?.[train.id] || ''; const config = codeMap[code]
                 const whiteText = ['A+C', 'G', '9Y'].includes(code)
-                return <td key={train.id} className="h-10 border border-neutral-300 p-0 text-center" style={{ backgroundColor: friday ? rowBackground : (config?.color_hex || '#FFFFFF') }}><select aria-label={`${train.name} on ${date}`} value={code} onChange={event => updateEntry(date, train.id, event.target.value)} className="h-10 w-full cursor-pointer border-0 bg-transparent px-1 text-center text-xs font-bold outline-none" style={{ color: friday && !code ? '#333333' : whiteText ? '#FFFFFF' : '#111111' }}><option value=""> </option>{schedule.codes.map(item => <option key={item.code} value={item.code} style={{ color: '#111111', backgroundColor: item.color_hex }}>{item.code}</option>)}</select></td>
+                return <td key={train.id} className="h-10 w-14 min-w-14 border border-neutral-300 p-0 text-center" style={{ backgroundColor: friday ? rowBackground : (config?.color_hex || '#FFFFFF') }}>
+                  <select
+                    aria-label={`${train.name} on ${date}`}
+                    title={code ? `${train.name}: ${config?.name || code}` : `${train.name}: Not planned`}
+                    value={code}
+                    onChange={event => updateEntry(date, train.id, event.target.value)}
+                    className="h-10 w-full cursor-pointer appearance-none border-0 bg-transparent p-0 text-center text-xs font-bold outline-none hover:bg-black/5 focus:ring-2 focus:ring-inset focus:ring-primary"
+                    style={{
+                      color: friday && !code ? '#333333' : whiteText ? '#FFFFFF' : '#111111',
+                      appearance: 'none',
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      textAlign: 'center',
+                      textAlignLast: 'center',
+                    }}
+                  >
+                    <option value=""> </option>
+                    {schedule.codes.map(item => <option key={item.code} value={item.code} style={{ color: '#111111', backgroundColor: item.color_hex }}>{item.code}</option>)}
+                  </select>
+                </td>
               })}
               {META_COLUMNS.map(([key]) => <td key={key} className="h-10 border border-neutral-300 p-0" style={{ backgroundColor: rowBackground }}><input aria-label={`${key} on ${date}`} value={meta[date]?.[key] || ''} onChange={event => updateMeta(date, key, event.target.value)} className="h-10 w-full border-0 bg-transparent px-2 text-center text-xs outline-none focus:bg-blue-50" /></td>)}
             </tr>
