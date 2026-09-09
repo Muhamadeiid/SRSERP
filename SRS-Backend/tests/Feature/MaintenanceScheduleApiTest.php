@@ -69,6 +69,7 @@ class MaintenanceScheduleApiTest extends TestCase
         }
         MaintenanceSchedule::insert([
             ['schedule_date' => '2026-09-18', 'train_id' => '01', 'code' => 'A'],
+            ['schedule_date' => '2026-08-24', 'train_id' => '08', 'code' => 'B3'],
             ['schedule_date' => '2026-09-22', 'train_id' => '08', 'code' => 'A'],
             ['schedule_date' => '2026-09-24', 'train_id' => '11', 'code' => 'A'],
         ]);

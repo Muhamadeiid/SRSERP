@@ -27,6 +27,8 @@ class MaintenanceScheduleGenerator
 
     private const B_CYCLE = ['B1', 'B2', 'B3', 'G'];
 
+    private const VERIFIED_BASELINE_END = '2026-09-30';
+
     private const B_HISTORY_BASELINE = [
         '01' => ['2026-07-02', 'B1'],
         '02' => ['2026-06-29', 'B3'],
@@ -192,7 +194,9 @@ class MaintenanceScheduleGenerator
         $baseline = self::B_HISTORY_BASELINE[$trainId] ?? null;
         if ($baseline) {
             $baselineDate = Carbon::parse($baseline[0]);
-            if ($baselineDate->lt($start) && (! $reference || $baselineDate->gt($reference['date']))) {
+            $databaseIsAfterVerifiedBaseline = $reference
+                && $reference['date']->gt(Carbon::parse(self::VERIFIED_BASELINE_END));
+            if ($baselineDate->lt($start) && ! $databaseIsAfterVerifiedBaseline) {
                 $reference = ['date' => $baselineDate, 'code' => $baseline[1]];
             }
         }
