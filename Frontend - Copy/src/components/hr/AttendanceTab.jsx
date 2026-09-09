@@ -157,7 +157,7 @@ const STATUS_CFG = {
   late:         { label: 'Late',         cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   shortage:     { label: 'Shortage',     cls: 'bg-orange-50 text-orange-700 border-orange-200' },
   absent:       { label: 'Absent',       cls: 'bg-red-50 text-red-600 border-red-200' },
-  off:          { label: 'Manual Day Off', cls: 'bg-neutral-200 text-neutral-700 border-neutral-300' },
+  off:          { label: 'Day Off',       cls: 'bg-neutral-200 text-neutral-700 border-neutral-300' },
   incomplete:   { label: 'Incomplete',   cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   wfh:          { label: 'WFH',          cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   intervention: { label: 'Intervention', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
