@@ -4,6 +4,7 @@ import { generateMaintenanceSchedule, getMaintenanceSchedule, saveMaintenanceSch
 
 const EMPTY_META = { k6: '', k5: '', c_col: '', k19: '', remark: '' }
 const META_COLUMNS = [['k6', 'K6', 70], ['k5', 'K5', 70], ['c_col', 'C', 70], ['k19', 'K19', 70], ['remark', 'Remark', 240]]
+const SCHEDULE_TABLE_WIDTH = 1824
 const isoDate = (year, month, day) => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
 export default function MaintenanceSchedulePage() {
@@ -19,7 +20,20 @@ export default function MaintenanceSchedulePage() {
   const [generating, setGenerating] = useState(false)
   const [generationWarnings, setGenerationWarnings] = useState([])
   const [notice, setNotice] = useState(null)
+  const [tableScale, setTableScale] = useState(1)
   const fileRef = useRef()
+  const tableViewportRef = useRef()
+
+  useEffect(() => {
+    const viewport = tableViewportRef.current
+    if (!viewport || typeof ResizeObserver === 'undefined') return undefined
+
+    const fitTable = () => setTableScale(Math.min(1, Math.max(0.55, viewport.clientWidth / SCHEDULE_TABLE_WIDTH)))
+    const observer = new ResizeObserver(fitTable)
+    observer.observe(viewport)
+    fitTable()
+    return () => observer.disconnect()
+  }, [schedule])
 
   const load = useCallback(async () => {
     setLoading(true); setNotice(null)
@@ -141,8 +155,8 @@ export default function MaintenanceSchedulePage() {
     {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice.text}</div>}
     {generationWarnings.length > 0 && <div className="mb-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><div className="mb-1 flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" />Generation review ({generationWarnings.length})</div><ul className="max-h-28 overflow-auto pl-5 text-xs list-disc">{generationWarnings.map(warning => <li key={warning}>{warning}</li>)}</ul></div>}
     <div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
-      {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div className="max-h-[calc(100vh-250px)] overflow-auto">
-        <table className="border-collapse text-xs" style={{ width: 1824, minWidth: 1824, tableLayout: 'fixed' }}>
+      {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div ref={tableViewportRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-hidden">
+        <table className="origin-top-left border-collapse text-xs" style={{ width: SCHEDULE_TABLE_WIDTH, minWidth: SCHEDULE_TABLE_WIDTH, tableLayout: 'fixed', zoom: tableScale }}>
           <colgroup>
             <col style={{ width: 40 }} />
             <col style={{ width: 96 }} />
