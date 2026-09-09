@@ -103,8 +103,17 @@ class MaintenanceScheduleGenerator
             $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
             $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')->values();
             $lastVisit = $routinePast->last()?->schedule_date?->copy();
+            $scheduleEnd = $end->copy();
+            $plannedOverhaul = $this->plannedOverhaulWindow($trainId, $plan);
             $lastOverhaul = $this->latestOverhaulDate($trainId, $trainPast, $plan);
-            $resumingAfterOverhaul = $lastOverhaul && (! $lastVisit || $lastOverhaul->gt($lastVisit));
+            $resumingAfterOverhaul = false;
+
+            if ($plannedOverhaul && $plannedOverhaul['start']->gt($start)) {
+                $scheduleEnd = $plannedOverhaul['start']->copy()->subDay();
+                $lastOverhaul = null;
+            } elseif ($lastOverhaul && (! $lastVisit || $lastOverhaul->gt($lastVisit))) {
+                $resumingAfterOverhaul = true;
+            }
             if ($resumingAfterOverhaul) {
                 $lastVisit = $lastOverhaul->copy();
             }
@@ -117,10 +126,10 @@ class MaintenanceScheduleGenerator
             $lastB = $this->lastBReference($trainId, $routinePast, $start);
             $lastBCode = $lastB['code'] ?? null;
             $nextBDue = isset($lastB['date']) ? $lastB['date']->copy()->addMonthsNoOverflow(3) : null;
-            while ($lastVisit->copy()->addDays(self::A_MIN)->lte($end)) {
+            while ($lastVisit->copy()->addDays(self::A_MIN)->lte($scheduleEnd)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
                 $code = $resumingAfterOverhaul ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
-                $date = $this->balancedVisitDate($lastVisit, $start, $end, $trainId, $code, $plan, $blocked, $holidays);
+                $date = $this->balancedVisitDate($lastVisit, $start, $scheduleEnd, $trainId, $code, $plan, $blocked, $holidays);
                 if (! $date) {
                     if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
                         $warnings[] = "Train {$trainId}: no slot keeps the visit gap between 13 and 17 days.";
@@ -130,7 +139,7 @@ class MaintenanceScheduleGenerator
 
                 $this->put($plan, $date, $trainId, $code);
                 if ($code === 'G') {
-                    $this->planSecondGDay($date, $end, $trainId, $plan, $blocked, $holidays, $warnings);
+                    $this->planSecondGDay($date, $scheduleEnd, $trainId, $plan, $blocked, $holidays, $warnings);
                 }
                 $lastVisit = $date->copy();
                 $resumingAfterOverhaul = false;
@@ -144,6 +153,18 @@ class MaintenanceScheduleGenerator
                 $warnings[] = "Train {$trainId}: no B/G history was found; no B/G schedule was invented.";
             }
         }
+    }
+
+    private function plannedOverhaulWindow(string $trainId, array $plan): ?array
+    {
+        $dates = collect($plan)
+            ->filter(fn ($entries) => isset($entries[$trainId]) && $this->isNineYearCode($entries[$trainId]))
+            ->keys()
+            ->map(fn ($date) => Carbon::parse($date))
+            ->sort()
+            ->values();
+
+        return $dates->isEmpty() ? null : ['start' => $dates->first()->copy(), 'end' => $dates->last()->copy()];
     }
 
     private function latestOverhaulDate(string $trainId, Collection $history, array $plan): ?Carbon

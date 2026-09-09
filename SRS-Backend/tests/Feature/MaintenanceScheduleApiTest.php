@@ -147,6 +147,25 @@ class MaintenanceScheduleApiTest extends TestCase
         $this->assertLessThanOrEqual(17, $gap);
     }
 
+    public function test_train_keeps_due_maintenance_before_entering_nine_year_overhaul(): void
+    {
+        MaintenanceSchedule::create(['schedule_date' => '2026-09-22', 'train_id' => '08', 'code' => 'A']);
+        foreach (CarbonPeriod::create('2026-09-19', '2026-09-30') as $date) {
+            MaintenanceSchedule::create(['schedule_date' => $date, 'train_id' => '16', 'code' => '9Y']);
+        }
+
+        $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
+        $trainEight = collect($preview['entries'])
+            ->map(fn ($entries, $date) => isset($entries['08']) ? ['date' => $date, 'code' => $entries['08']] : null)
+            ->filter()
+            ->values();
+        $gDates = $trainEight->where('code', 'G')->pluck('date')->values();
+        $overhaulDates = $trainEight->where('code', '9Y')->pluck('date')->values();
+
+        $this->assertCount(2, $gDates);
+        $this->assertTrue($gDates->every(fn ($date) => Carbon::parse($date)->lt(Carbon::parse($overhaulDates->first()))));
+    }
+
     private function seedOptions(): void
     {
         Train::updateOrCreate(['id' => '01'], ['name' => 'Train 01', 'display_order' => 1]);
