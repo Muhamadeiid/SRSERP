@@ -93,12 +93,19 @@ export default function MaintenanceSchedulePage() {
     {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice.text}</div>}
     <div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
       {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div className="max-h-[calc(100vh-250px)] overflow-auto">
-        <table className="border-collapse text-xs" style={{ minWidth: 1680 }}>
+        <table className="border-collapse text-xs" style={{ width: 1824, minWidth: 1824, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 40 }} />
+            <col style={{ width: 96 }} />
+            <col style={{ width: 48 }} />
+            {schedule.trains.map(train => <col key={train.id} style={{ width: 56 }} />)}
+            {META_COLUMNS.map(([key, , width]) => <col key={key} style={{ width }} />)}
+          </colgroup>
           <thead className="sticky top-0 z-20 bg-secondary text-white"><tr>
-            <th className="sticky left-0 z-30 w-10 border border-white/15 bg-secondary px-2 py-3 text-center">No</th>
-            <th className="sticky left-10 z-30 w-24 border border-white/15 bg-secondary px-2 py-3 text-center">Date</th>
-            <th className="sticky left-[136px] z-30 w-12 border border-white/15 bg-secondary px-2 py-3 text-center">D</th>
-            {schedule.trains.map(train => <th key={train.id} className="w-14 min-w-14 border border-white/15 px-1 py-3 text-center">{train.id}</th>)}
+            <th className="sticky left-0 z-30 border border-white/15 bg-secondary px-2 py-3 text-center">No</th>
+            <th className="sticky left-10 z-30 border border-white/15 bg-secondary px-2 py-3 text-center">Date</th>
+            <th className="sticky left-[136px] z-30 border border-white/15 bg-secondary px-2 py-3 text-center">D</th>
+            {schedule.trains.map(train => <th key={train.id} className="border border-white/15 px-1 py-3 text-center">{train.id}</th>)}
             {META_COLUMNS.map(([key, label, width]) => <th key={key} className="border border-white/15 px-2 py-3 text-center" style={{ minWidth: width }}>{label}</th>)}
           </tr></thead>
           <tbody>{days.map(day => {
