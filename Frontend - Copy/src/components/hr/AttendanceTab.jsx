@@ -157,11 +157,12 @@ const STATUS_CFG = {
   late:         { label: 'Late',         cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   shortage:     { label: 'Shortage',     cls: 'bg-orange-50 text-orange-700 border-orange-200' },
   absent:       { label: 'Absent',       cls: 'bg-red-50 text-red-600 border-red-200' },
+  off:          { label: 'Manual Day Off', cls: 'bg-neutral-200 text-neutral-700 border-neutral-300' },
   incomplete:   { label: 'Incomplete',   cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   wfh:          { label: 'WFH',          cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   intervention: { label: 'Intervention', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
 }
-const STATUS_OPTIONS = ['present','late','shortage','absent','incomplete','wfh','intervention']
+const STATUS_OPTIONS = ['present','late','shortage','absent','off','incomplete','wfh','intervention']
 const EDITABLE_COLUMNS = ['check_in', 'check_out', 'status', 'notes']
 
 const normalizePastedTime = value => {
@@ -699,7 +700,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 
   const rowsHtml = rows.map((r,i) => {
     const rec = r.record
-    const off = r.isWeekend && !rec?.is_manual
+    const off = rec?.status === 'off' || (r.isWeekend && !rec?.is_manual)
     const ot  = rec ? getOT(rec) : null
     const dedMin = rec?.status==='absent' ? 540 : 0
     const workStr = rec ? (rec.status==='absent'?'0:00':decHHMM(rec.work_hours)) : (off?'0:00':'')
@@ -1656,8 +1657,9 @@ export default function AttendanceTab() {
                           const isHoliday = !!r.holiday
                           // A saved manual record is an explicit override of the
                           // scheduled OFF day, so it should read like a normal row.
-                          const isManualOffOverride = r.isWeekend && !!rec?.is_manual
+                          const isManualOffOverride = r.isWeekend && !!rec?.is_manual && rec?.status !== 'off'
                           const isAutomaticDayOff = r.isWeekend && !isManualOffOverride
+                          const isEffectiveDayOff = rec?.status === 'off' || isAutomaticDayOff
                           // More than one hour late follows the absence rule; otherwise use late policy.
                           const penaltyKind = r.absence ? 'absence' : (r.late ? 'late' : null)
                           const penalty = r.absence ?? r.late
@@ -1672,7 +1674,7 @@ export default function AttendanceTab() {
                             : ''
                           // Public holidays and scheduled OFF days are double pay
                           // only when an approved OTR exists for this exact date.
-                          const doublePayHrs = (isAutomaticDayOff || isHoliday) && ot?.total > 0
+                          const doublePayHrs = (isEffectiveDayOff || isHoliday) && ot?.total > 0
                             ? ot.total
                             : 0
                           // Early-leave permission note
@@ -1694,7 +1696,7 @@ export default function AttendanceTab() {
                               className={`border-b border-neutral-100 transition-colors group ${
                                 isHoliday
                                   ? 'bg-rose-50 hover:bg-rose-100'
-                                : isAutomaticDayOff
+                                : isEffectiveDayOff
                                     ? 'bg-neutral-100 text-neutral-400'
                                     : r.absence
                                       ? 'bg-red-50 hover:bg-red-100'
@@ -1741,7 +1743,7 @@ export default function AttendanceTab() {
                                   : rec
                                     ? (s==='absent' ? <span className="text-neutral-400">0:00</span> : decToHHMM(rec.work_hours))
                                     : isAutoAbsent ? <span className="text-neutral-400">0:00</span>
-                                    : (isAutomaticDayOff ? <span className="text-neutral-300">0:00</span> : '')}
+                                    : (isEffectiveDayOff ? <span className="text-neutral-300">0:00</span> : '')}
                               </td>
                               <td className="px-2 py-2 text-center text-neutral-400">0</td>
                               <td className="px-2 py-2 text-center font-mono text-blue-600">{ot && ot.total > 0 ? fmt12(ot.start) : ''}</td>
