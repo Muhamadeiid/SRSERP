@@ -191,6 +191,11 @@ class MaintenanceScheduleGenerator
             if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || $this->routineVisitCount($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
                 continue;
             }
+            $heavyVisit = $this->isHeavyVisit($code);
+            if (($heavyVisit && $this->nonOverhaulVisitCount($plan[$key] ?? []) > 0)
+                || (! $heavyVisit && $this->hasHeavyVisit($plan[$key] ?? []))) {
+                continue;
+            }
             if ($code === 'G' && ! $this->hasAvailableSecondGDay($candidate, $end, $trainId, $plan, $blocked, $holidays)) {
                 continue;
             }
@@ -215,7 +220,7 @@ class MaintenanceScheduleGenerator
 
         return empty($blocked[$trainId][$key])
             && empty($plan[$key][$trainId])
-            && $this->routineVisitCount($plan[$key] ?? []) < self::MAX_VISITS_PER_DAY;
+            && $this->nonOverhaulVisitCount($plan[$key] ?? []) === 0;
     }
 
     private function planMonthlyCVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
@@ -243,7 +248,7 @@ class MaintenanceScheduleGenerator
                 $key = $date->toDateString();
                 $hasC = collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C');
                 $tooClose = $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP);
-                if ($hasC || $tooClose || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+                if ($hasC || $tooClose || $this->hasHeavyVisit($plan[$key] ?? []) || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
                     continue;
                 }
 
@@ -284,6 +289,21 @@ class MaintenanceScheduleGenerator
         return collect($entries)
             ->reject(fn ($code) => $code === 'C' || $this->isNineYearCode($code))
             ->count();
+    }
+
+    private function nonOverhaulVisitCount(array $entries): int
+    {
+        return collect($entries)->reject(fn ($code) => $this->isNineYearCode($code))->count();
+    }
+
+    private function hasHeavyVisit(array $entries): bool
+    {
+        return collect($entries)->contains(fn ($code) => $this->isHeavyVisit($code));
+    }
+
+    private function isHeavyVisit(string $code): bool
+    {
+        return $code === 'G' || str_starts_with($code, 'B');
     }
 
     private function planBCycle(string $trainId, int $trainIndex, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void

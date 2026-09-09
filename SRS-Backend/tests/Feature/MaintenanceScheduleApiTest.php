@@ -59,7 +59,7 @@ class MaintenanceScheduleApiTest extends TestCase
             );
         }
         foreach (['T1', 'T2', 'T3'] as $index => $trainId) {
-            Train::updateOrCreate(['id' => $trainId], ['name' => "Test Train {$trainId}", 'display_order' => 990 + $index]);
+            Train::updateOrCreate(['id' => $trainId], ['name' => "Test Train {$trainId}", 'display_order' => $index]);
             MaintenanceSchedule::insert([
                 ['schedule_date' => '2026-07-05', 'train_id' => $trainId, 'code' => 'B1'],
                 ['schedule_date' => '2026-09-05', 'train_id' => $trainId, 'code' => 'C'],
@@ -98,6 +98,10 @@ class MaintenanceScheduleApiTest extends TestCase
             $cCount = collect($entries)->filter(fn ($code) => $code === 'C')->count();
             $this->assertLessThanOrEqual(2, $routineCount, "More than two K6/K5 visits were planned on {$date}.");
             $this->assertLessThanOrEqual(1, $cCount, "More than one C visit was planned on {$date}.");
+            $nonOverhaul = collect($entries)->reject(fn ($code) => str_starts_with($code, '9Y'));
+            if ($nonOverhaul->contains(fn ($code) => $code === 'G' || str_starts_with($code, 'B'))) {
+                $this->assertCount(1, $nonOverhaul, "A B/G day was not exclusive on {$date}.");
+            }
         }
         foreach ($routine as $visit) {
             $this->assertSame('T1', $preview['meta'][$visit['date']]['k6']);
