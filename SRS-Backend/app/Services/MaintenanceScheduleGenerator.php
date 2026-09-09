@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 
 class MaintenanceScheduleGenerator
 {
-    private const A_TARGET = 15;
+    private const VISIT_TARGET = 15;
 
     private const A_MIN = 13;
 
@@ -44,34 +44,7 @@ class MaintenanceScheduleGenerator
 
         $blocked = $this->planNineYearWork($start, $end, $past, $trains, $holidays, $plan, $generatedMeta, $warnings);
 
-        foreach ($trains as $trainIndex => $trainId) {
-            if ($trainId === '04') {
-                $date = $this->nearestAvailable($start->copy()->day(min(7, $start->daysInMonth)), $start, $end, $trainId, $plan, $blocked, $holidays);
-                if ($date) {
-                    $this->put($plan, $date, $trainId, 'A+C');
-                }
-
-                continue;
-            }
-
-            $trainPast = $past->where('train_id', $trainId);
-            $this->planBCycle($trainId, $trainIndex, $trainPast, $start, $end, $plan, $blocked, $holidays, $warnings);
-
-            $lastC = $this->lastDateFor($trainPast, ['C', 'A+C', '9Y+C']);
-            if ($lastC) {
-                foreach ($this->dueDates($lastC, self::C_TARGET, $start, $end, $holidays) as $due) {
-                    $date = $this->nearestAvailable($due, $start, $end, $trainId, $plan, $blocked, $holidays);
-                    if ($date) {
-                        $this->put($plan, $date, $trainId, 'C');
-                    }
-                }
-            } else {
-                $warnings[] = "Train {$trainId}: no previous C visit was found; C was not generated.";
-            }
-        }
-
-        $this->planAVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
-        $this->ensureDailyCoverage($past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        $this->planRoutineVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
 
         ksort($plan);
 
@@ -81,36 +54,96 @@ class MaintenanceScheduleGenerator
             'warnings' => array_values(array_unique($warnings)),
             'replaces_existing' => $existing->isNotEmpty(),
             'existing_count' => $existing->count(),
-            'rules' => ['a_target' => 15, 'a_min' => 13, 'a_max' => 17, 'max_a_per_day' => 2],
+            'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_a_per_day' => 2],
         ];
     }
 
-    private function planAVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
+    private function planRoutineVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
     {
-        $candidates = [];
         foreach ($trains as $trainId) {
-            if ($trainId === '04') {
-                continue;
-            }
-            $lastA = $this->lastDateFor($past->where('train_id', $trainId), ['A', 'A+C']);
-            if (! $lastA) {
-                $warnings[] = "Train {$trainId}: no previous A visit was found; A was not generated.";
+            $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
+            $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code))->values();
+            $lastVisit = $routinePast->last()?->schedule_date?->copy();
+            if (! $lastVisit) {
+                $warnings[] = "Train {$trainId}: no visit history was found; no schedule was invented.";
 
                 continue;
             }
-            foreach ($this->dueDates($lastA, self::A_TARGET, $start, $end, $holidays) as $due) {
-                $candidates[] = [$due, $trainId];
+
+            $lastB = $routinePast->filter(fn ($row) => in_array($this->baseCode($row->code), self::B_CYCLE, true))->last();
+            $lastBCode = $lastB ? $this->baseCode($lastB->code) : null;
+            $nextBDue = $lastB?->schedule_date?->copy()->addMonthsNoOverflow(3);
+            $lastC = $routinePast->filter(fn ($row) => $this->containsCode($row->code, 'C'))->last();
+            $nextCDue = $lastC?->schedule_date?->copy()->addDays(self::C_TARGET);
+            $combineC = $routinePast->contains(fn ($row) => strtoupper((string) $row->code) === 'A+C');
+
+            while ($lastVisit->copy()->addDays(self::A_MIN)->lte($end)) {
+                $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
+                $code = $this->nextVisitCode($target, $lastBCode, $nextBDue, $nextCDue, $combineC);
+                $date = $this->balancedVisitDate($lastVisit, $start, $end, $trainId, $code, $plan, $blocked, $holidays);
+                if (! $date) {
+                    if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
+                        $warnings[] = "Train {$trainId}: no slot keeps the visit gap between 13 and 17 days.";
+                    }
+                    break;
+                }
+
+                $this->put($plan, $date, $trainId, $code);
+                $lastVisit = $date->copy();
+                if (in_array($code, self::B_CYCLE, true)) {
+                    $lastBCode = $code;
+                    $nextBDue = $date->copy()->addMonthsNoOverflow(3);
+                }
+                if ($this->containsCode($code, 'C')) {
+                    $nextCDue = $date->copy()->addDays(self::C_TARGET);
+                }
+            }
+
+            if (! $lastB) {
+                $warnings[] = "Train {$trainId}: no B/G history was found; no B/G schedule was invented.";
+            }
+            if (! $lastC) {
+                $warnings[] = "Train {$trainId}: no C history was found; C was not generated.";
             }
         }
-        usort($candidates, fn ($a, $b) => $a[0]->timestamp <=> $b[0]->timestamp ?: strcmp($a[1], $b[1]));
-        foreach ($candidates as [$due, $trainId]) {
-            $date = $this->balancedADate($due, $start, $end, $trainId, $plan, $blocked, $holidays);
-            if ($date) {
-                $this->put($plan, $date, $trainId, 'A');
-            } else {
-                $warnings[] = "Train {$trainId}: no free A slot within the 13-17 day balance window.";
-            }
+    }
+
+    private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue, ?Carbon $nextCDue, bool $combineC): string
+    {
+        if ($lastBCode && $nextBDue && $nextBDue->lte($target->copy()->addDays(2))) {
+            $index = array_search($lastBCode, self::B_CYCLE, true);
+
+            return self::B_CYCLE[((int) $index + 1) % count(self::B_CYCLE)];
         }
+        if ($nextCDue && $nextCDue->lte($target->copy()->addDays(2))) {
+            return $combineC ? 'A+C' : 'C';
+        }
+
+        return 'A';
+    }
+
+    private function balancedVisitDate(Carbon $lastVisit, Carbon $start, Carbon $end, string $trainId, string $code, array $plan, array $blocked, array $holidays): ?Carbon
+    {
+        foreach ([15, 14, 16, 13, 17] as $gap) {
+            $candidate = $lastVisit->copy()->addDays($gap);
+            if (! $candidate->betweenIncluded($start, $end) || ! $this->isWorkingDay($candidate, $holidays)) {
+                continue;
+            }
+            $key = $candidate->toDateString();
+            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+                continue;
+            }
+            if ($code === 'A') {
+                $aCount = collect($plan[$key] ?? [])->filter(fn ($plannedCode) => $plannedCode === 'A')->count();
+                if ($aCount >= self::MAX_A_PER_DAY) {
+                    continue;
+                }
+            }
+
+            return $candidate;
+        }
+
+        return null;
     }
 
     private function planBCycle(string $trainId, int $trainIndex, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
@@ -392,6 +425,16 @@ class MaintenanceScheduleGenerator
         }
 
         return strtoupper($code);
+    }
+
+    private function containsCode(string $value, string $code): bool
+    {
+        return in_array($code, array_map('trim', explode('+', strtoupper($value))), true);
+    }
+
+    private function isNineYearCode(string $code): bool
+    {
+        return str_starts_with(strtoupper($code), '9Y');
     }
 
     private function put(array &$plan, Carbon $date, string $trainId, string $code): void

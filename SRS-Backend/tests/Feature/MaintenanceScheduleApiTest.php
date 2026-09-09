@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\MaintenanceCode;
+use App\Models\MaintenanceSchedule;
 use App\Models\Train;
 use App\Models\User;
+use App\Services\MaintenanceScheduleGenerator;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -47,6 +50,36 @@ class MaintenanceScheduleApiTest extends TestCase
         $this->postJson('/api/schedule/batch', ['changes' => [], 'meta' => []])->assertForbidden();
     }
 
+    public function test_generated_visit_types_share_the_same_thirteen_to_seventeen_day_cycle(): void
+    {
+        foreach (['A', 'B1', 'B2', 'C'] as $code) {
+            MaintenanceCode::updateOrCreate(
+                ['code' => $code],
+                ['name' => "Type {$code}", 'color_hex' => '#FFFFFF']
+            );
+        }
+        Train::updateOrCreate(['id' => 'T1'], ['name' => 'Test Train', 'display_order' => 999]);
+        MaintenanceSchedule::insert([
+            ['schedule_date' => '2026-07-05', 'train_id' => 'T1', 'code' => 'B1'],
+            ['schedule_date' => '2026-09-05', 'train_id' => 'T1', 'code' => 'C'],
+            ['schedule_date' => '2026-09-20', 'train_id' => 'T1', 'code' => 'A'],
+        ]);
+
+        $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
+        $visits = collect($preview['entries'])
+            ->map(fn ($entries, $date) => isset($entries['T1']) ? ['date' => $date, 'code' => $entries['T1']] : null)
+            ->filter()
+            ->values();
+
+        $this->assertSame('B2', $visits->first()['code']);
+        $dates = collect(['2026-09-20'])->concat($visits->pluck('date'))->map(fn ($date) => Carbon::parse($date));
+        for ($index = 1; $index < $dates->count(); $index++) {
+            $gap = $dates[$index - 1]->diffInDays($dates[$index]);
+            $this->assertGreaterThanOrEqual(13, $gap);
+            $this->assertLessThanOrEqual(17, $gap);
+        }
+    }
+
     private function seedOptions(): void
     {
         Train::updateOrCreate(['id' => '01'], ['name' => 'Train 01', 'display_order' => 1]);
@@ -58,8 +91,9 @@ class MaintenanceScheduleApiTest extends TestCase
     private function user(string $role): User
     {
         $token = Str::lower(Str::random(10));
+
         return User::create([
-            'name' => ucfirst($role) . ' Schedule ' . $token,
+            'name' => ucfirst($role).' Schedule '.$token,
             'email' => "schedule-{$token}@example.test",
             'password' => bcrypt('test-only'),
             'role' => $role,
