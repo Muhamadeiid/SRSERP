@@ -17,9 +17,11 @@ class MaintenanceScheduleGenerator
 
     private const A_MAX = 17;
 
-    private const C_TARGET = 30;
+    private const MAX_VISITS_PER_DAY = 2;
 
     private const MAX_A_PER_DAY = 2;
+
+    private const C_MIN_ROUTINE_GAP = 5;
 
     private const NINE_YEAR_WORKING_DAYS = 33;
 
@@ -45,6 +47,8 @@ class MaintenanceScheduleGenerator
         $blocked = $this->planNineYearWork($start, $end, $past, $trains, $holidays, $plan, $generatedMeta, $warnings);
 
         $this->planRoutineVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        $this->planMonthlyCVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        $this->assignTracks($plan, $generatedMeta);
 
         ksort($plan);
 
@@ -54,7 +58,7 @@ class MaintenanceScheduleGenerator
             'warnings' => array_values(array_unique($warnings)),
             'replaces_existing' => $existing->isNotEmpty(),
             'existing_count' => $existing->count(),
-            'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_a_per_day' => 2],
+            'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_visits_per_day' => 2, 'c_min_routine_gap' => 5],
         ];
     }
 
@@ -62,7 +66,7 @@ class MaintenanceScheduleGenerator
     {
         foreach ($trains as $trainId) {
             $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
-            $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code))->values();
+            $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')->values();
             $lastVisit = $routinePast->last()?->schedule_date?->copy();
             if (! $lastVisit) {
                 $warnings[] = "Train {$trainId}: no visit history was found; no schedule was invented.";
@@ -73,13 +77,9 @@ class MaintenanceScheduleGenerator
             $lastB = $routinePast->filter(fn ($row) => in_array($this->baseCode($row->code), self::B_CYCLE, true))->last();
             $lastBCode = $lastB ? $this->baseCode($lastB->code) : null;
             $nextBDue = $lastB?->schedule_date?->copy()->addMonthsNoOverflow(3);
-            $lastC = $routinePast->filter(fn ($row) => $this->containsCode($row->code, 'C'))->last();
-            $nextCDue = $lastC?->schedule_date?->copy()->addDays(self::C_TARGET);
-            $combineC = $routinePast->contains(fn ($row) => strtoupper((string) $row->code) === 'A+C');
-
             while ($lastVisit->copy()->addDays(self::A_MIN)->lte($end)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
-                $code = $this->nextVisitCode($target, $lastBCode, $nextBDue, $nextCDue, $combineC);
+                $code = $this->nextVisitCode($target, $lastBCode, $nextBDue);
                 $date = $this->balancedVisitDate($lastVisit, $start, $end, $trainId, $code, $plan, $blocked, $holidays);
                 if (! $date) {
                     if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
@@ -94,29 +94,20 @@ class MaintenanceScheduleGenerator
                     $lastBCode = $code;
                     $nextBDue = $date->copy()->addMonthsNoOverflow(3);
                 }
-                if ($this->containsCode($code, 'C')) {
-                    $nextCDue = $date->copy()->addDays(self::C_TARGET);
-                }
             }
 
             if (! $lastB) {
                 $warnings[] = "Train {$trainId}: no B/G history was found; no B/G schedule was invented.";
             }
-            if (! $lastC) {
-                $warnings[] = "Train {$trainId}: no C history was found; C was not generated.";
-            }
         }
     }
 
-    private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue, ?Carbon $nextCDue, bool $combineC): string
+    private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue): string
     {
         if ($lastBCode && $nextBDue && $nextBDue->lte($target->copy()->addDays(2))) {
             $index = array_search($lastBCode, self::B_CYCLE, true);
 
             return self::B_CYCLE[((int) $index + 1) % count(self::B_CYCLE)];
-        }
-        if ($nextCDue && $nextCDue->lte($target->copy()->addDays(2))) {
-            return $combineC ? 'A+C' : 'C';
         }
 
         return 'A';
@@ -130,20 +121,75 @@ class MaintenanceScheduleGenerator
                 continue;
             }
             $key = $candidate->toDateString();
-            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || count($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
                 continue;
-            }
-            if ($code === 'A') {
-                $aCount = collect($plan[$key] ?? [])->filter(fn ($plannedCode) => $plannedCode === 'A')->count();
-                if ($aCount >= self::MAX_A_PER_DAY) {
-                    continue;
-                }
             }
 
             return $candidate;
         }
 
         return null;
+    }
+
+    private function planMonthlyCVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
+    {
+        $workingDates = collect(CarbonPeriod::create($start, $end))
+            ->filter(fn ($date) => $this->isWorkingDay($date, $holidays))
+            ->values();
+
+        foreach ($trains as $index => $trainId) {
+            $preferredIndex = ($index * 7 + $start->month) % max(1, $workingDates->count());
+            $orderedDates = $workingDates->sortBy(fn ($date, $dateIndex) => abs($dateIndex - $preferredIndex));
+            $routineDates = $past->where('train_id', $trainId)
+                ->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
+                ->pluck('schedule_date')
+                ->map(fn ($date) => $date->copy());
+            foreach ($plan as $date => $entries) {
+                $code = $entries[$trainId] ?? null;
+                if ($code && ! $this->isNineYearCode($code) && $code !== 'C') {
+                    $routineDates->push(Carbon::parse($date));
+                }
+            }
+
+            $scheduled = false;
+            foreach ($orderedDates as $date) {
+                $key = $date->toDateString();
+                $hasC = collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C');
+                $tooClose = $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP);
+                if ($hasC || $tooClose || count($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+                    continue;
+                }
+
+                $this->put($plan, $date, $trainId, 'C');
+                $scheduled = true;
+                break;
+            }
+
+            if (! $scheduled) {
+                $warnings[] = "Train {$trainId}: no safe monthly C slot was available.";
+            }
+        }
+    }
+
+    private function assignTracks(array $plan, array &$meta): void
+    {
+        foreach ($plan as $date => $entries) {
+            $routineTrains = [];
+            foreach ($entries as $trainId => $code) {
+                if ($code === 'C') {
+                    $meta[$date]['k19'] = $trainId;
+                } elseif (! $this->isNineYearCode($code)) {
+                    $routineTrains[] = $trainId;
+                }
+            }
+
+            if (isset($routineTrains[0])) {
+                $meta[$date]['k6'] = $routineTrains[0];
+            }
+            if (isset($routineTrains[1])) {
+                $meta[$date]['k5'] = $routineTrains[1];
+            }
+        }
     }
 
     private function planBCycle(string $trainId, int $trainIndex, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void

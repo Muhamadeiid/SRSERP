@@ -71,12 +71,26 @@ class MaintenanceScheduleApiTest extends TestCase
             ->filter()
             ->values();
 
-        $this->assertSame('B2', $visits->first()['code']);
-        $dates = collect(['2026-09-20'])->concat($visits->pluck('date'))->map(fn ($date) => Carbon::parse($date));
+        $routine = $visits->reject(fn ($visit) => $visit['code'] === 'C')->values();
+        $cVisit = $visits->firstWhere('code', 'C');
+
+        $this->assertSame('B2', $routine->first()['code']);
+        $this->assertNotNull($cVisit);
+        $dates = collect(['2026-09-20'])->concat($routine->pluck('date'))->map(fn ($date) => Carbon::parse($date))->values();
         for ($index = 1; $index < $dates->count(); $index++) {
             $gap = $dates[$index - 1]->diffInDays($dates[$index]);
             $this->assertGreaterThanOrEqual(13, $gap);
             $this->assertLessThanOrEqual(17, $gap);
+        }
+
+        $cDate = Carbon::parse($cVisit['date']);
+        $this->assertGreaterThanOrEqual(5, $dates->min(fn ($date) => $date->diffInDays($cDate)));
+        $this->assertSame('T1', $preview['meta'][$cVisit['date']]['k19']);
+        foreach ($preview['entries'] as $date => $entries) {
+            $this->assertLessThanOrEqual(2, count($entries), "More than two trains were planned on {$date}.");
+        }
+        foreach ($routine as $visit) {
+            $this->assertSame('T1', $preview['meta'][$visit['date']]['k6']);
         }
     }
 
