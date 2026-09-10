@@ -205,6 +205,21 @@ class MaintenanceScheduleApiTest extends TestCase
         ), json_encode($preview['warnings']));
     }
 
+    public function test_next_month_uses_the_saved_previous_month_changes_as_history(): void
+    {
+        Train::updateOrCreate(['id' => 'X1'], ['name' => 'Cumulative Train', 'display_order' => 1]);
+        MaintenanceSchedule::create(['schedule_date' => '2026-10-20', 'train_id' => 'X1', 'code' => 'A']);
+
+        $november = app(MaintenanceScheduleGenerator::class)->preview(2026, 11);
+        $nextRoutineDate = collect($november['entries'])
+            ->search(fn ($entries) => isset($entries['X1']) && $entries['X1'] !== 'C' && ! str_starts_with($entries['X1'], '9Y'));
+
+        $this->assertNotFalse($nextRoutineDate);
+        $gap = Carbon::parse('2026-10-20')->diffInDays(Carbon::parse($nextRoutineDate));
+        $this->assertGreaterThanOrEqual(13, $gap);
+        $this->assertLessThanOrEqual(17, $gap);
+    }
+
     private function seedOptions(): void
     {
         Train::updateOrCreate(['id' => '01'], ['name' => 'Train 01', 'display_order' => 1]);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Loader2, Save, Sparkles, Upload } from 'lucide-react'
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Download, Loader2, Save, Sparkles, Upload } from 'lucide-react'
 import { generateMaintenanceSchedule, getMaintenanceSchedule, saveMaintenanceSchedule, uploadMaintenanceSchedule } from '../services/maintenanceService'
+import { exportMaintenanceSchedule } from '../utils/exportMaintenanceSchedule'
 
 const EMPTY_META = { k6: '', k5: '', c_col: '', k19: '', remark: '' }
 const META_COLUMNS = [['k6', 'K6', 70], ['k5', 'K5', 70], ['c_col', 'C', 70], ['k19', 'K19', 70], ['remark', 'Remark', 240]]
@@ -18,6 +19,7 @@ export default function MaintenanceSchedulePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [generationWarnings, setGenerationWarnings] = useState([])
   const [notice, setNotice] = useState(null)
   const [tableScale, setTableScale] = useState(1)
@@ -137,12 +139,23 @@ export default function MaintenanceSchedulePage() {
     finally { setGenerating(false) }
   }
 
+  const exportExcel = async () => {
+    if (!schedule) return
+    setExporting(true); setNotice(null)
+    try {
+      await exportMaintenanceSchedule({ schedule, entries, meta, year: cursor.year, month: cursor.month })
+      setNotice({ text: 'Excel schedule downloaded successfully.' })
+    } catch (error) { setNotice({ error: true, text: error.message || 'Could not create the Excel schedule.' }) }
+    finally { setExporting(false) }
+  }
+
   return <div className="min-h-full bg-neutral-50 p-4 lg:p-6">
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="flex items-center gap-2 text-2xl font-bold text-secondary"><CalendarDays className="h-6 w-6 text-primary" />PM Schedule</h1><p className="text-sm text-neutral-500">Monthly preventive maintenance plan by train</p></div>
       <div className="flex flex-wrap gap-2">
         <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={upload} />
         <button type="button" disabled={saving} onClick={() => fileRef.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50 disabled:opacity-50"><Upload className="h-4 w-4" />Upload Excel</button>
+        <button type="button" disabled={loading || exporting || !schedule} onClick={exportExcel} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50 disabled:opacity-50">{exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}Download Excel</button>
         <button type="button" disabled={saving || generating || loading} onClick={generate} className="inline-flex h-10 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-4 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50">{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Generate Draft</button>
         <button type="button" disabled={!dirtyCount || saving} onClick={save} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-bold text-white disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Changes {dirtyCount ? `(${dirtyCount})` : ''}</button>
       </div>
