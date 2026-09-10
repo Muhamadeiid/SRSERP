@@ -72,6 +72,7 @@ class MaintenanceScheduleGenerator
         $blocked = $this->planNineYearWork($start, $end, $past, $trains, $holidays, $plan, $generatedMeta, $warnings);
 
         $this->planRoutineVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        $this->ensureDailyCoverage($past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->planMonthlyCVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->assignTracks($plan, $generatedMeta);
 
@@ -89,14 +90,15 @@ class MaintenanceScheduleGenerator
 
     private function planRoutineVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
     {
-        usort($trains, function ($leftTrain, $rightTrain) use ($past, $start, $end) {
+        usort($trains, function ($leftTrain, $rightTrain) use ($past, $start) {
             $leftDue = $this->nextBDueForTrain($leftTrain, $past, $start);
             $rightDue = $this->nextBDueForTrain($rightTrain, $past, $start);
-            $leftPriority = $leftDue && $leftDue->betweenIncluded($start->copy()->subDays(8), $end->copy()->addDays(8)) ? 0 : 1;
-            $rightPriority = $rightDue && $rightDue->betweenIncluded($start->copy()->subDays(8), $end->copy()->addDays(8)) ? 0 : 1;
+            $leftRoutineDue = $this->nextRoutineDueForTrain($leftTrain, $past);
+            $rightRoutineDue = $this->nextRoutineDueForTrain($rightTrain, $past);
 
-            return $leftPriority <=> $rightPriority
-                ?: ($leftDue?->timestamp ?? PHP_INT_MAX) <=> ($rightDue?->timestamp ?? PHP_INT_MAX);
+            return ($leftRoutineDue?->timestamp ?? PHP_INT_MAX) <=> ($rightRoutineDue?->timestamp ?? PHP_INT_MAX)
+                ?: ($leftDue?->timestamp ?? PHP_INT_MAX) <=> ($rightDue?->timestamp ?? PHP_INT_MAX)
+                ?: strcmp((string) $leftTrain, (string) $rightTrain);
         });
 
         foreach ($trains as $trainId) {
@@ -193,6 +195,16 @@ class MaintenanceScheduleGenerator
         return isset($reference['date']) ? $reference['date']->copy()->addMonthsNoOverflow(3) : null;
     }
 
+    private function nextRoutineDueForTrain(string $trainId, Collection $past): ?Carbon
+    {
+        $last = $past->where('train_id', $trainId)
+            ->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
+            ->sortBy('schedule_date')
+            ->last();
+
+        return $last?->schedule_date?->copy()->addDays(self::VISIT_TARGET);
+    }
+
     private function nextVisitCode(Carbon $target, ?string $lastBCode, ?Carbon $nextBDue): string
     {
         if ($lastBCode && $nextBDue && abs($target->diffInDays($nextBDue, false)) <= 8) {
@@ -249,8 +261,15 @@ class MaintenanceScheduleGenerator
 
     private function balancedVisitDate(Carbon $lastVisit, Carbon $start, Carbon $end, string $trainId, string $code, array $plan, array $blocked, array $holidays): ?Carbon
     {
-        foreach ([15, 14, 16, 13, 17] as $gap) {
-            $candidate = $lastVisit->copy()->addDays($gap);
+        $candidates = collect([15, 14, 16, 13, 17])
+            ->map(fn ($gap) => ['gap' => $gap, 'date' => $lastVisit->copy()->addDays($gap)])
+            ->sortBy(fn ($item) => [
+                $this->routineVisitCount($plan[$item['date']->toDateString()] ?? []),
+                abs(self::VISIT_TARGET - $item['gap']),
+            ]);
+
+        foreach ($candidates as $item) {
+            $candidate = $item['date'];
             if (! $candidate->betweenIncluded($start, $end) || ! $this->isWorkingDay($candidate, $holidays)) {
                 continue;
             }
@@ -526,18 +545,21 @@ class MaintenanceScheduleGenerator
     {
         foreach (CarbonPeriod::create($start, $end) as $emptyDate) {
             $emptyKey = $emptyDate->toDateString();
-            if (! $this->isWorkingDay($emptyDate, $holidays) || ! empty($plan[$emptyKey])) {
+            if (! $this->isWorkingDay($emptyDate, $holidays)
+                || $this->routineVisitCount($plan[$emptyKey] ?? []) > 0
+                || $this->hasHeavyVisit($plan[$emptyKey] ?? [])) {
                 continue;
             }
 
             $moved = false;
-            foreach ([1, -1, 2, -2, 3, -3] as $offset) {
+            foreach ([1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7] as $offset) {
                 $source = $emptyDate->copy()->addDays($offset);
                 if (! $source->betweenIncluded($start, $end)) {
                     continue;
                 }
                 $sourceKey = $source->toDateString();
-                if (count($plan[$sourceKey] ?? []) < 2) {
+                if ($this->routineVisitCount($plan[$sourceKey] ?? []) < 2
+                    || $this->hasHeavyVisit($plan[$sourceKey] ?? [])) {
                     continue;
                 }
                 $aTrains = collect($plan[$sourceKey] ?? [])->filter(fn ($code) => $code === 'A')->keys();
@@ -555,37 +577,67 @@ class MaintenanceScheduleGenerator
                 }
             }
             if (! $moved) {
-                $warnings[] = "{$emptyKey}: no maintenance visit could be moved here without breaking the A balance.";
+                $trainIds = $past->pluck('train_id')->unique()->sort()->values();
+                foreach ($trainIds as $trainId) {
+                    if (! empty($blocked[$trainId][$emptyKey])
+                        || ! empty($plan[$emptyKey][$trainId])
+                        || ! $this->aMoveKeepsBalance($trainId, Carbon::parse('1900-01-01'), $emptyDate, $past, $plan)) {
+                        continue;
+                    }
+                    $this->put($plan, $emptyDate, $trainId, 'A');
+                    $moved = true;
+                    break;
+                }
+            }
+            if (! $moved) {
+                $warnings[] = "{$emptyKey}: no routine visit could be moved here without breaking the 13-to-17-day cycle.";
             }
         }
     }
 
     private function aMoveKeepsBalance(string $trainId, Carbon $source, Carbon $target, Collection $past, array $plan): bool
     {
-        $dates = $past->where('train_id', $trainId)
-            ->filter(fn ($row) => in_array('A', array_map('trim', explode('+', strtoupper((string) $row->code))), true))
-            ->pluck('schedule_date')
-            ->map(fn ($date) => $date->copy());
+        $visits = $past->where('train_id', $trainId)
+            ->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
+            ->map(fn ($row) => ['date' => $row->schedule_date->copy(), 'code' => $this->baseCode($row->code)]);
 
         foreach ($plan as $date => $entries) {
-            if (($entries[$trainId] ?? null) === 'A' && $date !== $source->toDateString()) {
-                $dates->push(Carbon::parse($date));
+            $code = $entries[$trainId] ?? null;
+            if ($code !== null
+                && ! $this->isNineYearCode($code)
+                && $code !== 'C'
+                && $date !== $source->toDateString()) {
+                $visits->push(['date' => Carbon::parse($date), 'code' => $this->baseCode($code)]);
             }
         }
-        $dates->push($target->copy());
-        $ordered = $dates->sort()->values();
-        $index = $ordered->search(fn ($date) => $date->isSameDay($target));
+        $visits->push(['date' => $target->copy(), 'code' => 'A']);
+        $ordered = $visits->sortBy(fn ($visit) => $visit['date']->timestamp)->values();
+
+        // A two-day G block is one maintenance event for cadence calculations.
+        $dates = collect();
+        foreach ($ordered as $visit) {
+            $previous = $dates->last();
+            if ($visit['code'] === 'G'
+                && $previous
+                && $previous['code'] === 'G'
+                && $previous['date']->copy()->addDay()->isSameDay($visit['date'])) {
+                continue;
+            }
+            $dates->push($visit);
+        }
+
+        $index = $dates->search(fn ($visit) => $visit['date']->isSameDay($target));
         if ($index === false) {
             return false;
         }
         if ($index > 0) {
-            $previousGap = $ordered[$index - 1]->diffInDays($target);
+            $previousGap = $dates[$index - 1]['date']->diffInDays($target);
             if ($previousGap < self::A_MIN || $previousGap > self::A_MAX) {
                 return false;
             }
         }
-        if ($index < $ordered->count() - 1) {
-            $nextGap = $target->diffInDays($ordered[$index + 1]);
+        if ($index < $dates->count() - 1) {
+            $nextGap = $target->diffInDays($dates[$index + 1]['date']);
             if ($nextGap < self::A_MIN || $nextGap > self::A_MAX) {
                 return false;
             }

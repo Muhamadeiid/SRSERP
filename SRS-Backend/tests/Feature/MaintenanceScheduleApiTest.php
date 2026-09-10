@@ -167,6 +167,44 @@ class MaintenanceScheduleApiTest extends TestCase
         $this->assertTrue($maintenanceDates->every(fn ($date) => Carbon::parse($date)->lt(Carbon::parse($overhaulDates->first()))));
     }
 
+    public function test_october_has_routine_maintenance_on_every_working_day_and_includes_train_19(): void
+    {
+        $trainIds = ['01', '02', '12', '04', '13', '03', '14', '07', '05', '06', '15', '09', '10', '16', '08', '11', '17', '18', '19', '20'];
+        $lastRoutineDates = [
+            '01' => '2026-09-15', '02' => '2026-09-14', '12' => '2026-09-23', '04' => '2026-09-23',
+            '13' => '2026-09-22', '03' => '2026-09-30', '14' => '2026-09-21', '07' => '2026-09-21',
+            '05' => '2026-09-17', '06' => '2026-09-27', '15' => '2026-09-27', '09' => '2026-09-09',
+            '10' => '2026-09-27', '16' => '2026-09-08', '08' => '2026-09-20', '11' => '2026-09-24',
+            '17' => '2026-09-26', '18' => '2026-09-26', '19' => '2026-09-19', '20' => '2026-09-16',
+        ];
+        foreach ($trainIds as $index => $trainId) {
+            Train::updateOrCreate(['id' => $trainId], ['name' => "Train {$trainId}", 'display_order' => $index]);
+            MaintenanceSchedule::create([
+                'schedule_date' => $lastRoutineDates[$trainId],
+                'train_id' => $trainId,
+                'code' => 'A',
+            ]);
+        }
+
+        $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
+        foreach (CarbonPeriod::create('2026-10-01', '2026-10-31') as $date) {
+            if ($date->isFriday()) {
+                continue;
+            }
+            $entries = $preview['entries'][$date->toDateString()] ?? [];
+            $routineCount = collect($entries)
+                ->reject(fn ($code) => $code === 'C' || str_starts_with($code, '9Y'))
+                ->count();
+            $this->assertGreaterThanOrEqual(1, $routineCount, "No routine maintenance on {$date->toDateString()}.");
+        }
+
+        $this->assertTrue(collect($preview['entries'])->contains(
+            fn ($entries) => isset($entries['19'])
+                && $entries['19'] !== 'C'
+                && ! str_starts_with($entries['19'], '9Y')
+        ), json_encode($preview['warnings']));
+    }
+
     private function seedOptions(): void
     {
         Train::updateOrCreate(['id' => '01'], ['name' => 'Train 01', 'display_order' => 1]);
