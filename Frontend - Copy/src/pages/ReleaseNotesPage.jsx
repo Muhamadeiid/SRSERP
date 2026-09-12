@@ -321,10 +321,19 @@ function FulfilModal({ note, specialist, onClose, onSaved }) {
     }
   }
 
-  const radio = (group, value, label) => <label key={value} className="flex items-center gap-2 text-sm">
-    <input type="radio" checked={form[group] === value} onChange={() => set(group, form[group] === value ? '' : value)} />
+  // ☐ / ☒ tick boxes styled after the paper form. Only one of PM/CM (and
+  // Plan/Over plan) can be checked at a time; clicking a ticked box unticks it.
+  const checkbox = (group, value, label) => <button
+    type="button" key={value}
+    onClick={() => set(group, form[group] === value ? '' : value)}
+    aria-pressed={form[group] === value}
+    className="flex items-center gap-2 text-sm text-secondary hover:text-primary"
+  >
+    <span className="flex h-4 w-4 items-center justify-center border border-black bg-white text-[11px] leading-none">
+      {form[group] === value ? '✕' : ''}
+    </span>
     {label}
-  </label>
+  </button>
 
   return <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/40 p-3" onMouseDown={e => e.target === e.currentTarget && onClose()}>
     <form onSubmit={submit} className="my-4 w-full max-w-6xl rounded-lg bg-white shadow-2xl">
@@ -347,8 +356,8 @@ function FulfilModal({ note, specialist, onClose, onSaved }) {
           <label><span className={labelClass}>Work order</span><input className={inputClass} maxLength={255} value={form.work_order} onChange={e => set('work_order', e.target.value)} /></label>
           <label><span className={labelClass}>Issue date</span><input type="date" className={inputClass} value={form.inventory_specialist_date} onChange={e => set('inventory_specialist_date', e.target.value)} /></label>
 
-          <div><span className={labelClass}>Type</span><div className="flex gap-4 pt-1">{radio('type', 'pm', 'PM')}{radio('type', 'cm', 'CM')}</div></div>
-          <div><span className={labelClass}>Status</span><div className="flex gap-4 pt-1">{radio('plan_status', 'plan', 'Plan')}{radio('plan_status', 'over_plan', 'Over plan')}</div></div>
+          <div><span className={labelClass}>Type</span><div className="flex gap-4 pt-1">{checkbox('type', 'pm', 'PM')}{checkbox('type', 'cm', 'CM')}</div></div>
+          <div><span className={labelClass}>Status</span><div className="flex gap-4 pt-1">{checkbox('plan_status', 'plan', 'Plan')}{checkbox('plan_status', 'over_plan', 'Over plan')}</div></div>
           <label className="md:col-span-2">
             <span className={labelClass}>Reason if not in plan</span>
             <input className={inputClass} maxLength={500} disabled={form.plan_status !== 'over_plan'} value={form.over_plan_reason} onChange={e => set('over_plan_reason', e.target.value)} />

@@ -20,8 +20,8 @@ const CONTENT_W = PAGE_W - MARGIN * 2   // 15218
 const CREAM = 'FFF2CC'   // header band: PRN / Date / Type / Status / Reason
 const MINT  = 'E2EFDA'   // green bands: Trainset, items header, signatures
 
-const black = { style: BorderStyle.SINGLE, size: 6, color: '000000' }
-const grey  = { style: BorderStyle.SINGLE, size: 4, color: 'A6A6A6' }
+const black = { style: BorderStyle.SINGLE, size: 10, color: '000000' }
+const grey  = { style: BorderStyle.SINGLE, size: 6, color: 'A6A6A6' }
 const borders = { top: black, bottom: black, left: black, right: black }
 const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
 // The letterhead band is open on three sides — only the rule under it prints.
@@ -251,8 +251,6 @@ export async function generateReleaseNote(note) {
     ],
   })] })
 
-  const gap = () => new Paragraph({ spacing: { before: 0, after: 0, line: 160 }, children: [] })
-
   const doc = new Document({ sections: [{
     properties: {
       page: {
@@ -262,7 +260,7 @@ export async function generateReleaseNote(note) {
     },
     headers: { default: header },
     footers: { default: footer },
-    children: [metaTable, assetTable, gap(), itemsTable, gap(), signTable],
+    children: [metaTable, assetTable, itemsTable, signTable],
   }] })
 
   const blob = await Packer.toBlob(doc)
