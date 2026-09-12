@@ -33,6 +33,7 @@ use App\Http\Controllers\InterventionShiftPlanController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\IncidentReportController;
+use App\Http\Controllers\ReleaseNoteController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
@@ -48,6 +49,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/incident-reports/{incidentReport}', [IncidentReportController::class, 'update']);
     Route::delete('/incident-reports/{incidentReport}', [IncidentReportController::class, 'destroy']);
     Route::get('/incident-reports/{incidentReport}/pictures/{slot}', [IncidentReportController::class, 'picture']);
+
+    // Release Notes (SRS-INV-P01-F06): anyone may raise one; the creator and
+    // reviewers (admin / depot manager) may edit or delete it afterwards.
+    Route::get('/release-notes/inventory-specialist', [ReleaseNoteController::class, 'inventorySpecialist']);
+    Route::get('/release-notes', [ReleaseNoteController::class, 'index']);
+    Route::post('/release-notes', [ReleaseNoteController::class, 'store']);
+    Route::get('/release-notes/{releaseNote}', [ReleaseNoteController::class, 'show']);
+    Route::put('/release-notes/{releaseNote}', [ReleaseNoteController::class, 'update']);
+    Route::delete('/release-notes/{releaseNote}', [ReleaseNoteController::class, 'destroy']);
 
     Route::get('/calendar/events', [CalendarEventController::class, 'index']);
     Route::get('/calendar/users', [CalendarEventController::class, 'users']);

@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
-  Package, RotateCcw, AlertTriangle, BarChart3,
+  Package, RotateCcw, AlertTriangle, BarChart3, FileOutput,
   ChevronLeft, ChevronRight, LogOut, Plus, Download, Menu,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
@@ -11,6 +11,8 @@ import NotificationBell from '../components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
   { label: 'Material Ledger', path: '/inventory',         icon: Package,       end: true },
+  // Lives outside the Inventory shell so every signed-in user can raise one.
+  { label: 'Release Notes',   path: '/release-notes',     icon: FileOutput            },
   { label: 'Rotable Parts',   path: '/inventory/rotable', icon: RotateCcw             },
   { label: 'Bad Items',       path: '/inventory/bad',     icon: AlertTriangle         },
   { label: 'Reports',         path: '/inventory/reports', icon: BarChart3             },

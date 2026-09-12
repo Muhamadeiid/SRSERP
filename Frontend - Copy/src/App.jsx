@@ -73,6 +73,7 @@ const MaintenanceTab       = lazyWithRetry(() => import('./pages/MaintenanceTab'
 const MaintenanceSchedulePage = lazyWithRetry(() => import('./pages/MaintenanceSchedulePage'))
 const FleetChecksPage      = lazyWithRetry(() => import('./pages/FleetChecksPage'))
 const WithdrawalsPage      = lazyWithRetry(() => import('./pages/WithdrawalsPage'))
+const ReleaseNotesPage     = lazyWithRetry(() => import('./pages/ReleaseNotesPage'))
 
 // HR tab components — each mounted at its own route
 const WorkforceTab      = lazyWithRetry(importWorkforce)
@@ -236,6 +237,8 @@ export default function App() {
           <Route path="/notification-settings" element={<NotificationPreferencesPage />} />
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/incident-reports" element={<IncidentReportsPage />} />
+          {/* Release Note (SRS-INV-P01-F06) — any authenticated user can raise one */}
+          <Route path="/release-notes" element={<ReleaseNotesPage />} />
           <Route path="/control"     element={<ComingSoon title="Control" />} />
           <Route path="/users"       element={
             <ProtectedRoute roles={['admin']} redirect="/">
