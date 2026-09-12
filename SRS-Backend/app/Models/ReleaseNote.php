@@ -57,6 +57,11 @@ class ReleaseNote extends Model
         return $this->belongsTo(Employee::class, 'inventory_specialist_employee_id');
     }
 
+    public function activities()
+    {
+        return $this->hasMany(ReleaseNoteActivity::class, 'release_note_id')->orderBy('id');
+    }
+
     /** PRN-EG1-YYYY-0001 — mirrors the IGI / PRF numbering scheme. */
     public static function generateNumber(?int $year = null): string
     {

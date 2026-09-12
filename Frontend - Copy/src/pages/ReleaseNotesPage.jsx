@@ -18,10 +18,15 @@ const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide tex
 const day = value => (value ? new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString('en-GB') : '—')
 
 const statusLabel = {
-  pending: 'Pending store', released: 'Released', rejected: 'Rejected', closed: 'Closed',
+  pending: 'Pending store',
+  ready_for_approval: 'Ready for approval',
+  released: 'Released',
+  rejected: 'Rejected',
+  closed: 'Closed',
 }
 const statusStyle = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  ready_for_approval: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   released: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   rejected: 'bg-red-50 text-red-700 border-red-200',
   closed: 'bg-neutral-100 text-neutral-600 border-neutral-200',
@@ -31,44 +36,126 @@ const stamp = value => (value
   ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : null)
 
+/** Human labels for the fields stored in an activity's details.field. */
+const FIELD_LABEL = {
+  item_name: 'Item name', unit: 'Unit', qty_requested: 'Qty requested', code: 'Code',
+  qty_released: 'Qty released', qty_returned: 'Qty returned', actual_qty: 'Actual Qty',
+  check_type: 'Check type', receiver_name: 'Receiver', receiver_title: 'Receiver title',
+  date: 'Date', trainset_asset_name: 'Trainset / Asset', work_order: 'Work order',
+  type: 'Type', plan_status: 'Status', over_plan_reason: 'Over-plan reason',
+  store_remark: 'Store note',
+}
+
+const val = v => (v === null || v === undefined || v === '' ? '—' : String(v))
+
+/** One line describing what happened, given an activity row from the API. */
+function describeActivity(activity) {
+  const details = activity.details || {}
+  switch (activity.kind) {
+    case 'created':       return 'raised this request'
+    case 'marked_ready':  return 'marked the note ready for approval'
+    case 'released':      return 'released the parts and signed the note'
+    case 'rejected':      return 'rejected the request'
+    case 'reopened':      return 'reopened the note for editing'
+    case 'closed':        return 'closed the note'
+    case 'item_added':    return `added item #${activity.item_no}`
+    case 'item_removed':  return `removed item #${activity.item_no}`
+    case 'edited': {
+      const label = FIELD_LABEL[details.field] || details.field
+      const scope = activity.item_no ? ` on item #${activity.item_no}` : ''
+      return `changed ${label}${scope}: ${val(details.before)} → ${val(details.after)}`
+    }
+    default: return activity.kind
+  }
+}
+
 /**
- * Where the request has got to, for the engineer who raised it: submitted →
- * with the store → released or rejected.
+ * The engineer's tracking view — where the request has got to, and every
+ * touch on the note so far: who edited what and when.
  */
 function RequestTracker({ note }) {
-  const decided = note.status === 'released' || note.status === 'rejected'
+  const activities = note.activities || []
+  const findAt = kind => stamp(activities.find(a => a.kind === kind)?.created_at)
+
+  const readyAt    = findAt('marked_ready')
+  const releasedAt = findAt('released')
+  const rejectedAt = findAt('rejected')
+
   const steps = [
     { label: 'Request submitted', at: stamp(note.created_at), done: true },
-    { label: 'With the store', at: null, done: true, current: note.status === 'pending' },
     {
-      label: note.status === 'rejected' ? 'Rejected by store' : 'Released by store',
-      at: stamp(note.decided_at),
-      done: decided,
+      label: 'Being prepared by the store',
+      at: null,
+      done: note.status !== 'pending',
+      current: note.status === 'pending',
+    },
+    {
+      label: 'Ready for approval',
+      at: readyAt,
+      done: ['ready_for_approval', 'released', 'closed'].includes(note.status) || Boolean(readyAt),
+      current: note.status === 'ready_for_approval',
+    },
+    {
+      label: note.status === 'rejected' ? 'Rejected' : 'Approved and released',
+      at: stamp(note.decided_at) || releasedAt || rejectedAt,
+      done: note.status === 'released' || note.status === 'rejected' || note.status === 'closed',
       failed: note.status === 'rejected',
     },
   ]
 
+  return <div className="space-y-3">
+    <div className="rounded-md border border-neutral-200 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <span className={labelClass}>Progress</span>
+        <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[note.status]}`}>{statusLabel[note.status]}</span>
+      </div>
+      <ol className="space-y-3">
+        {steps.map(step => <li key={step.label} className="flex gap-3">
+          <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+            step.failed && step.done ? 'bg-red-500'
+              : step.done ? 'bg-emerald-500'
+                : step.current ? 'bg-amber-400' : 'bg-neutral-200'}`} />
+          <div className="min-w-0">
+            <p className={`text-sm ${step.done || step.current ? 'font-semibold text-secondary' : 'text-neutral-400'}`}>{step.label}</p>
+            {step.at && <p className="text-xs text-neutral-500">{step.at}</p>}
+            {step.current && !step.at && <p className="text-xs text-neutral-500">
+              {note.status === 'pending' ? 'The store team has not touched it yet' : 'Waiting on approval'}
+            </p>}
+          </div>
+        </li>)}
+      </ol>
+      {note.store_remark && <p className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+        <strong className="text-secondary">Store note:</strong> {note.store_remark}
+      </p>}
+    </div>
+
+    {activities.length > 0 && <ActivityLog activities={activities} />}
+  </div>
+}
+
+/**
+ * Every change made to the note, with who did it and when. Visible to the
+ * requester and to anyone with view access, so nothing gets amended silently.
+ */
+function ActivityLog({ activities }) {
   return <div className="rounded-md border border-neutral-200 p-4">
     <div className="mb-3 flex items-center justify-between">
-      <span className={labelClass}>Progress</span>
-      <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[note.status]}`}>{statusLabel[note.status]}</span>
+      <span className={labelClass}>Change log</span>
+      <span className="text-xs text-neutral-400">{activities.length} entr{activities.length === 1 ? 'y' : 'ies'}</span>
     </div>
-    <ol className="space-y-3">
-      {steps.map(step => <li key={step.label} className="flex gap-3">
-        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-          step.failed && step.done ? 'bg-red-500'
-            : step.done ? 'bg-emerald-500'
-              : step.current ? 'bg-amber-400' : 'bg-neutral-200'}`} />
-        <div className="min-w-0">
-          <p className={`text-sm ${step.done || step.current ? 'font-semibold text-secondary' : 'text-neutral-400'}`}>{step.label}</p>
-          {step.at && <p className="text-xs text-neutral-500">{step.at}</p>}
-          {step.current && <p className="text-xs text-neutral-500">Waiting for the store keeper</p>}
+    <ol className="space-y-2">
+      {activities.map(activity => <li key={activity.id} className="flex gap-3 text-sm">
+        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300" />
+        <div className="min-w-0 flex-1">
+          <p className="text-secondary">
+            <strong>{activity.user?.name || 'Someone'}</strong>
+            {activity.user?.role && <span className="ml-1 text-[10px] uppercase tracking-wide text-neutral-400">({activity.user.role.replace('_', ' ')})</span>}
+            {' '}{describeActivity(activity)}
+          </p>
+          <p className="text-xs text-neutral-500">{stamp(activity.created_at)}</p>
         </div>
       </li>)}
     </ol>
-    {note.store_remark && <p className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-      <strong className="text-secondary">Store note:</strong> {note.store_remark}
-    </p>}
   </div>
 }
 
@@ -242,7 +329,12 @@ function RequestModal({ note, readOnly = false, onClose, onSaved }) {
 }
 
 /** Stage 2 — the store keeper completes and issues the note. */
-function FulfilModal({ note, specialist, onClose, onSaved }) {
+/**
+ * Stage 2 (store staff prepare) and stage 3 (Material Controller approves).
+ * The `canFulfil` prop decides which controls are shown — store staff cannot
+ * release or reject, they can only mark the note ready for approval.
+ */
+function FulfilModal({ note, specialist, canFulfil, onClose, onSaved }) {
   const [form, setForm] = useState(() => ({
     date: String(note.date || '').slice(0, 10),
     type: note.type || '',
@@ -423,6 +515,8 @@ function FulfilModal({ note, specialist, onClose, onSaved }) {
             {(specialist?.position || note.inventory_specialist_title) && ` · ${specialist?.position || note.inventory_specialist_title}`}
           </p>
         </div>
+
+        {(note.activities?.length ?? 0) > 0 && <ActivityLog activities={note.activities} />}
       </div>
 
       <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-neutral-200 bg-white px-5 py-4">
@@ -439,11 +533,17 @@ function FulfilModal({ note, specialist, onClose, onSaved }) {
         </label>
         <select className="rounded-md border border-neutral-200 px-3 py-2 text-sm" value={form.status} onChange={e => set('status', e.target.value)}>
           <option value="pending">Pending store</option>
-          <option value="released">Released</option>
-          <option value="rejected">Rejected</option>
-          <option value="closed">Closed</option>
+          <option value="ready_for_approval">Ready for approval</option>
+          {canFulfil && <option value="released">Released</option>}
+          {canFulfil && <option value="rejected">Rejected</option>}
+          {canFulfil && <option value="closed">Closed</option>}
         </select>
         <button type="button" onClick={onClose} className="rounded-md border border-neutral-200 px-4 py-2 text-sm font-semibold">Cancel</button>
+        {!canFulfil && form.status !== 'ready_for_approval' && <button
+          type="button"
+          onClick={() => set('status', 'ready_for_approval')}
+          className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+        >Mark ready for approval</button>}
         <button disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}Save
         </button>
@@ -455,7 +555,8 @@ function FulfilModal({ note, specialist, onClose, onSaved }) {
 export default function ReleaseNotesPage() {
   const user = useSelector(state => state.auth.user)
   const [notes, setNotes] = useState([])
-  const [canFulfil, setCanFulfil] = useState(false)
+  const [canFulfil, setCanFulfil]  = useState(false)
+  const [canPrepare, setCanPrepare] = useState(false)
   const [canView, setCanView]       = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -467,7 +568,12 @@ export default function ReleaseNotesPage() {
   const load = useCallback(() => {
     setLoading(true)
     getReleaseNotes()
-      .then(result => { setNotes(result.data); setCanFulfil(result.canFulfil); setCanView(result.canView) })
+      .then(result => {
+        setNotes(result.data)
+        setCanFulfil(result.canFulfil)
+        setCanPrepare(result.canPrepare)
+        setCanView(result.canView)
+      })
       .catch(() => setNotes([]))
       .finally(() => setLoading(false))
   }, [])
@@ -483,8 +589,11 @@ export default function ReleaseNotesPage() {
 
   const open = async note => {
     const { note: full } = await getReleaseNote(note.id)
-    if (canFulfil) setFulfilling(full)
-    else setRequesting(full)  // requester's tracker view — also serves store staff (read-only)
+    // Store staff and the Material Controller both work in the fulfilment
+    // modal; store staff just see fewer status controls. Engineers get the
+    // tracker view of their own note.
+    if (canPrepare) setFulfilling(full)
+    else setRequesting(full)
   }
   const download = async note => generateReleaseNote((await getReleaseNote(note.id)).note)
   const remove = async note => {
@@ -500,9 +609,11 @@ export default function ReleaseNotesPage() {
         <p className="text-sm text-neutral-500">
           {canFulfil
             ? 'All part requests across the depot · you approve and sign'
-            : canView
-              ? 'Every part request across the depot — read only'
-              : 'Your part requests and where they stand'} · SRS-INV-P01-F06
+            : canPrepare
+              ? 'Every part request across the depot · you prepare and send for approval'
+              : canView
+                ? 'Every part request across the depot — read only'
+                : 'Your part requests and where they stand'} · SRS-INV-P01-F06
         </p>
       </div>
       {!canView && <button onClick={() => setRequesting(null)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white">
@@ -518,6 +629,7 @@ export default function ReleaseNotesPage() {
       <select className={`${inputClass} w-52`} value={status} onChange={e => setStatus(e.target.value)}>
         <option value="all">All statuses</option>
         <option value="pending">Pending store</option>
+        <option value="ready_for_approval">Ready for approval</option>
         <option value="released">Released</option>
         <option value="rejected">Rejected</option>
         <option value="closed">Closed</option>
@@ -542,7 +654,9 @@ export default function ReleaseNotesPage() {
                 <td className="px-4 py-3">{note.items?.length ?? 0}</td>
                 <td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusStyle[note.status]}`}>{statusLabel[note.status]}</span></td>
                 <td className="px-4 py-3"><div className="flex gap-2">
-                  <button onClick={() => open(note)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">{canFulfil ? 'Fill in' : 'Open'}</button>
+                  <button onClick={() => open(note)} className="rounded-md border border-neutral-200 px-3 py-1.5 font-semibold hover:bg-neutral-100">
+                    {canFulfil ? 'Review' : canPrepare ? 'Prepare' : 'Open'}
+                  </button>
                   <button onClick={() => download(note)} title="Download Word" className="rounded-md border border-blue-200 p-2 text-blue-700 hover:bg-blue-50"><Download className="h-4 w-4" /></button>
                   {(canFulfil || note.created_by === user?.id) && <button onClick={() => remove(note)} title="Delete" className="rounded-md border border-red-200 p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>}
                 </div></td>
@@ -560,6 +674,7 @@ export default function ReleaseNotesPage() {
     {fulfilling && <FulfilModal
       note={fulfilling}
       specialist={specialist}
+      canFulfil={canFulfil}
       onClose={() => setFulfilling(null)}
       onSaved={() => { setFulfilling(null); load() }}
     />}

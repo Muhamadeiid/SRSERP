@@ -2,21 +2,24 @@ import api from './axios'
 
 /**
  * Returns the notes plus flags on what this user can do:
- *  - canFulfil: approve, sign, edit any note (admin / depot manager / Material Controller)
- *  - canView:   see every note in read-only mode (canFulfil + store_staff)
+ *  - canFulfil:  approve, sign, edit any note (admin / depot manager / Material Controller)
+ *  - canPrepare: edit items and mark ready for approval (store staff + fulfillers)
+ *  - canView:    see every note (canPrepare covers it)
  */
 export const getReleaseNotes = (params = {}) =>
   api.get('/release-notes', { params }).then(r => ({
-    data: r.data?.data ?? [],
-    canFulfil: Boolean(r.data?.can_fulfil),
-    canView: Boolean(r.data?.can_view),
+    data:       r.data?.data ?? [],
+    canFulfil:  Boolean(r.data?.can_fulfil),
+    canPrepare: Boolean(r.data?.can_prepare),
+    canView:    Boolean(r.data?.can_view),
   }))
 
 export const getReleaseNote = id =>
   api.get(`/release-notes/${id}`).then(r => ({
-    note: r.data?.data,
-    canFulfil: Boolean(r.data?.can_fulfil),
-    canView: Boolean(r.data?.can_view),
+    note:       r.data?.data,
+    canFulfil:  Boolean(r.data?.can_fulfil),
+    canPrepare: Boolean(r.data?.can_prepare),
+    canView:    Boolean(r.data?.can_view),
   }))
 
 export const createReleaseNote = payload =>
