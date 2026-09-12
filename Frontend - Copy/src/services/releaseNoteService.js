@@ -1,14 +1,23 @@
 import api from './axios'
 
-/** Returns the notes plus whether this user is allowed to fill in the store side. */
+/**
+ * Returns the notes plus flags on what this user can do:
+ *  - canFulfil: approve, sign, edit any note (admin / depot manager / Material Controller)
+ *  - canView:   see every note in read-only mode (canFulfil + store_staff)
+ */
 export const getReleaseNotes = (params = {}) =>
   api.get('/release-notes', { params }).then(r => ({
     data: r.data?.data ?? [],
     canFulfil: Boolean(r.data?.can_fulfil),
+    canView: Boolean(r.data?.can_view),
   }))
 
 export const getReleaseNote = id =>
-  api.get(`/release-notes/${id}`).then(r => r.data?.data)
+  api.get(`/release-notes/${id}`).then(r => ({
+    note: r.data?.data,
+    canFulfil: Boolean(r.data?.can_fulfil),
+    canView: Boolean(r.data?.can_view),
+  }))
 
 export const createReleaseNote = payload =>
   api.post('/release-notes', payload).then(r => r.data?.data)

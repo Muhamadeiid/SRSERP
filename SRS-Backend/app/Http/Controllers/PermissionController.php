@@ -16,7 +16,7 @@ class PermissionController extends Controller
     public function matrix()
     {
         $permissions = Permission::orderBy('group')->orderBy('key')->get();
-        $roles = ['admin','depot_manager','manager','hr','staff','ccp','procurement','ehs'];
+        $roles = ['admin','depot_manager','manager','hr','staff','ccp','procurement','ehs','store_staff'];
         $grants = DB::table('role_permissions')->get()
             ->groupBy('role')
             ->map(fn($rows) => $rows->pluck('permission_key')->all());

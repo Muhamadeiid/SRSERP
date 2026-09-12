@@ -128,10 +128,11 @@ function ReceiverPicker({ value, onPick }) {
 }
 
 /** Stage 1 — the requesting engineer lists what they need. */
-function RequestModal({ note, onClose, onSaved }) {
+function RequestModal({ note, readOnly = false, onClose, onSaved }) {
   const user = useSelector(state => state.auth.user)
-  // Once the store keeper has acted the request is a record, not a draft.
-  const locked = Boolean(note) && note.status !== 'pending'
+  // Store staff open every request in read-only mode; the requester's own
+  // pending draft is the only case that's still editable.
+  const locked = readOnly || (Boolean(note) && note.status !== 'pending')
   const [items, setItems] = useState(() => (note?.items?.length
     ? note.items.map(item => ({ ...emptyItem(), ...item, unit: item.unit || '' }))
     : [emptyItem()]))
@@ -455,6 +456,7 @@ export default function ReleaseNotesPage() {
   const user = useSelector(state => state.auth.user)
   const [notes, setNotes] = useState([])
   const [canFulfil, setCanFulfil] = useState(false)
+  const [canView, setCanView]       = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
@@ -465,7 +467,7 @@ export default function ReleaseNotesPage() {
   const load = useCallback(() => {
     setLoading(true)
     getReleaseNotes()
-      .then(result => { setNotes(result.data); setCanFulfil(result.canFulfil) })
+      .then(result => { setNotes(result.data); setCanFulfil(result.canFulfil); setCanView(result.canView) })
       .catch(() => setNotes([]))
       .finally(() => setLoading(false))
   }, [])
@@ -480,11 +482,11 @@ export default function ReleaseNotesPage() {
   ), [notes, search, status])
 
   const open = async note => {
-    const full = await getReleaseNote(note.id)
+    const { note: full } = await getReleaseNote(note.id)
     if (canFulfil) setFulfilling(full)
-    else setRequesting(full)
+    else setRequesting(full)  // requester's tracker view — also serves store staff (read-only)
   }
-  const download = async note => generateReleaseNote(await getReleaseNote(note.id))
+  const download = async note => generateReleaseNote((await getReleaseNote(note.id)).note)
   const remove = async note => {
     if (!window.confirm(`Delete release note ${note.prn_number}? This cannot be undone.`)) return
     await deleteReleaseNote(note.id)
@@ -496,12 +498,16 @@ export default function ReleaseNotesPage() {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-secondary"><FileOutput className="h-6 w-6 text-primary" />Release Notes</h1>
         <p className="text-sm text-neutral-500">
-          {canFulfil ? 'All part requests across the depot' : 'Your part requests and where they stand'} · SRS-INV-P01-F06
+          {canFulfil
+            ? 'All part requests across the depot · you approve and sign'
+            : canView
+              ? 'Every part request across the depot — read only'
+              : 'Your part requests and where they stand'} · SRS-INV-P01-F06
         </p>
       </div>
-      <button onClick={() => setRequesting(null)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white">
+      {!canView && <button onClick={() => setRequesting(null)} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-white">
         <Plus className="h-4 w-4" />Request parts
-      </button>
+      </button>}
     </div>
 
     <div className="mb-4 flex flex-wrap gap-3 rounded-lg border border-neutral-200 bg-white p-3">
@@ -547,6 +553,7 @@ export default function ReleaseNotesPage() {
 
     {requesting !== undefined && <RequestModal
       note={requesting}
+      readOnly={canView && !!requesting && requesting.created_by !== user?.id}
       onClose={() => setRequesting(undefined)}
       onSaved={() => { setRequesting(undefined); load() }}
     />}

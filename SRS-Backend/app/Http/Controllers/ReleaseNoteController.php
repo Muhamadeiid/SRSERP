@@ -29,7 +29,10 @@ class ReleaseNoteController extends Controller
         'items.receiver:id,name,position',
     ];
 
-    /** Store-side roles: they own stage 2 and may edit any note. */
+    /**
+     * Owns stage 2. Approves the request, signs the note, edits any note.
+     * That is: admin, depot manager, and the Material Controller employee.
+     */
     private function canFulfil($user): bool
     {
         if (in_array(strtolower((string) $user->role), ['admin', 'depot_manager'], true)) {
@@ -41,14 +44,26 @@ class ReleaseNoteController extends Controller
         return $specialist && (int) $specialist->user_id === (int) $user->id;
     }
 
+    /**
+     * Sees every note in read-only mode. Store staff — the Material
+     * Controller's team — need to know what has been asked for, but they
+     * cannot approve, sign, or edit anything.
+     */
+    private function canViewAll($user): bool
+    {
+        return $this->canFulfil($user)
+            || strtolower((string) $user->role) === 'store_staff';
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user  = auth()->user();
         $query = ReleaseNote::with(self::RELATIONS)->orderByDesc('id');
 
-        // The store keeper, admins and depot managers oversee every request;
-        // an engineer only ever sees the ones they raised themselves.
-        if (!$this->canFulfil($user)) {
+        // Store staff (and admin / depot manager / Material Controller)
+        // oversee every request; an engineer only ever sees the ones they
+        // raised themselves.
+        if (!$this->canViewAll($user)) {
             $query->where('created_by', $user->id);
         }
 
@@ -68,6 +83,7 @@ class ReleaseNoteController extends Controller
         return response()->json([
             'success'    => true,
             'can_fulfil' => $this->canFulfil($user),
+            'can_view'   => $this->canViewAll($user),
             'data'       => $query->limit((int) $request->input('per_page', 200))->get(),
         ]);
     }
@@ -77,7 +93,7 @@ class ReleaseNoteController extends Controller
         $user    = auth()->user();
         $fulfils = $this->canFulfil($user);
 
-        if (!$fulfils && $releaseNote->created_by !== $user->id) {
+        if (!$this->canViewAll($user) && $releaseNote->created_by !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
         }
 
@@ -86,6 +102,7 @@ class ReleaseNoteController extends Controller
         return response()->json([
             'success'    => true,
             'can_fulfil' => $fulfils,
+            'can_view'   => $this->canViewAll($user),
             'data'       => $releaseNote,
         ]);
     }
@@ -215,8 +232,10 @@ class ReleaseNoteController extends Controller
             }
         }
 
+        // The Material Controller is the store owner. Their name and
+        // e-signature are stamped on the note the moment they accept it.
         return Employee::active()
-            ->where('position', 'like', '%inventory%')
+            ->whereRaw('LOWER(position) LIKE ?', ['%material controller%'])
             ->orderBy('id')
             ->first($columns);
     }

@@ -17,6 +17,7 @@ const ROLE_CFG = {
   hr:            { label: 'HR',            bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-400' },
   staff:         { label: 'Staff',         bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-400'  },
   ccp:           { label: 'CCP',           bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-200',   dot: 'bg-cyan-400'   },
+  store_staff:   { label: 'Store Staff',   bg: 'bg-sky-50',    text: 'text-sky-700',    border: 'border-sky-200',    dot: 'bg-sky-400'    },
 }
 
 // ── Icons ────────────────────────────────────────────────────────────────────
