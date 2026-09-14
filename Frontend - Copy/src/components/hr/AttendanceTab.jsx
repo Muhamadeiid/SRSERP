@@ -7,7 +7,8 @@ import { getSettings } from '../../services/settingsService'
 import { useLookups } from '../../hooks/useLookups'
 import {
   Search, Upload, Download, RefreshCw, Printer,
-  Loader2, X, Pencil, Plus, CalendarDays, Save, ClipboardPaste
+  Loader2, X, Pencil, Plus, CalendarDays, Save, ClipboardPaste,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -904,6 +905,7 @@ export default function AttendanceTab() {
     return ['present', 'late', 'absent', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all'
   })
   const [overviewTotalWorkforce, setOverviewTotalWorkforce] = useState(0)
+  const [overviewSort, setOverviewSort] = useState({ key: null, direction: null })
 
   // ── Detail state ──────────────────────────────────────────────────────────
   const [employee,   setEmployee]   = useState(null)
@@ -1050,6 +1052,51 @@ export default function AttendanceTab() {
       (rec.employee?.position ?? '').toLowerCase().includes(q)
     )
   })
+
+  const toggleOverviewSort = key => {
+    setOverviewSort(current => {
+      if (current.key !== key) return { key, direction: 'asc' }
+      if (current.direction === 'asc') return { key, direction: 'desc' }
+      return { key: null, direction: null }
+    })
+  }
+
+  const overviewSortValue = (rec, key) => {
+    const emp = rec.employee ?? {}
+    if (key === 'employee') return emp.name ?? ''
+    if (key === 'ibs_code') return emp.ibs_code ?? ''
+    if (key === 'position') return emp.position ?? ''
+    if (key === 'location') return emp.work_location ?? ''
+    if (key === 'check_in') return rec.check_in ?? ''
+    if (key === 'check_out') return rec.check_out ?? ''
+    if (key === 'work_hours') return Number(rec.work_hours) || null
+    if (key === 'status') {
+      if (isCompanyPaidOnOverview(rec.employee_id)) return 'company paid'
+      if (isOnLeaveOnOverview(rec.employee_id)) return 'on leave'
+      return effectiveOverviewStatus(rec) ?? ''
+    }
+    return overviewRecs.indexOf(rec)
+  }
+
+  const displayedOverviewRecs = overviewSort.key ? [...filteredRecs].sort((left, right) => {
+    const leftValue = overviewSortValue(left, overviewSort.key)
+    const rightValue = overviewSortValue(right, overviewSort.key)
+    const leftEmpty = leftValue === '' || leftValue === null || leftValue === undefined
+    const rightEmpty = rightValue === '' || rightValue === null || rightValue === undefined
+    if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1
+    if (leftEmpty && rightEmpty) return overviewRecs.indexOf(left) - overviewRecs.indexOf(right)
+    const comparison = typeof leftValue === 'number' && typeof rightValue === 'number'
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' })
+    return (overviewSort.direction === 'desc' ? -comparison : comparison)
+      || overviewRecs.indexOf(left) - overviewRecs.indexOf(right)
+  }) : filteredRecs
+
+  const overviewColumns = [
+    ['index', '#'], ['employee', 'Employee'], ['ibs_code', 'IBS Code'], ['position', 'Position'],
+    ['location', 'Location'], ['check_in', 'Check In'], ['check_out', 'Check Out'],
+    ['work_hours', 'Work Hrs'], ['status', 'Status'],
+  ]
 
   // ── Detail data ───────────────────────────────────────────────────────────
   const rows = buildRows(startDate, endDate, records, employee, leaves, otrs, holidays, absenceDeductions, lateDeductions, attendancePolicy)
@@ -1357,13 +1404,23 @@ export default function AttendanceTab() {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-neutral-800 text-white">
-                      {['#','Employee','IBS Code','Position','Location','Check In','Check Out','Work Hrs','Status','',''].map((h,i) => (
-                        <th key={i} className="px-3 py-2.5 text-[10px] font-bold text-left whitespace-nowrap border-r border-neutral-700 last:border-0">{h}</th>
-                      ))}
+                      {overviewColumns.map(([key, label]) => {
+                        const active = overviewSort.key === key
+                        const SortIcon = active
+                          ? (overviewSort.direction === 'asc' ? ArrowUp : ArrowDown)
+                          : ArrowUpDown
+                        return <th key={key} aria-sort={active ? (overviewSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="p-0 text-[10px] font-bold text-left whitespace-nowrap border-r border-neutral-700">
+                          <button type="button" onClick={() => toggleOverviewSort(key)} className="flex w-full items-center gap-1.5 px-3 py-2.5 text-left hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary/70" title={`Sort by ${label}`}>
+                            <span>{label}</span><SortIcon className={`h-3 w-3 ${active ? 'text-primary-300' : 'text-neutral-500'}`} />
+                          </button>
+                        </th>
+                      })}
+                      <th className="px-3 py-2.5 border-r border-neutral-700"><span className="sr-only">Open</span></th>
+                      <th className="px-3 py-2.5"><span className="sr-only">Edit</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRecs.map((rec, i) => {
+                    {displayedOverviewRecs.map((rec, i) => {
                       const emp = rec.employee
                       const onLeaveInfo = fullDayOverviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
                       const isOnLeave   = !!onLeaveInfo
