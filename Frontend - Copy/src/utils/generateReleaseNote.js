@@ -108,19 +108,57 @@ async function bytesFromUrl(url) {
   }
 }
 
-/** "Sign.:" plus the signatory's stored e-signature when one exists. */
-function signatureCell(signatureBytes, width) {
-  const children = [p('Sign.:', { alignment: AlignmentType.LEFT, size: 17 })]
-  if (signatureBytes) {
-    children.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 0, after: 0 },
-      children: [new ImageRun({
-        data: signatureBytes, type: 'png', transformation: { width: 84, height: 26 },
-      })],
-    }))
+/**
+ * Load a signature and figure out its natural aspect ratio so the printed
+ * stamp doesn't get stretched into a rectangle. Runs in the browser only —
+ * headless environments (e.g. the test harness) skip the Image() step and
+ * fall back to a sensible default ratio.
+ */
+async function loadSignature(url) {
+  const bytes = await bytesFromUrl(url)
+  if (!bytes) return null
+
+  if (typeof Image === 'undefined' || typeof URL?.createObjectURL !== 'function') {
+    return { bytes, ratio: 3.5 }   // wide default, close to a typical signature
   }
-  return cell(children, { width })
+
+  try {
+    const blob = new Blob([bytes], { type: 'image/png' })
+    const objectUrl = URL.createObjectURL(blob)
+    const image = new Image()
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = reject
+      image.src = objectUrl
+    })
+    const ratio = image.naturalWidth > 0 && image.naturalHeight > 0
+      ? image.naturalWidth / image.naturalHeight
+      : 3.5
+    URL.revokeObjectURL(objectUrl)
+    return { bytes, ratio }
+  } catch {
+    return { bytes, ratio: 3.5 }
+  }
+}
+
+/**
+ * The signatory's cell: their e-signature image once it's been captured,
+ * otherwise a plain "Sign.:" placeholder for the paper form.
+ */
+function signatureCell(signature, width) {
+  if (!signature) {
+    return cell(p('Sign.:', { alignment: AlignmentType.LEFT, size: 17 }), { width })
+  }
+
+  const H = 34
+  const W = Math.max(40, Math.min(160, Math.round(H * signature.ratio)))
+  return cell(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 0 },
+    children: [new ImageRun({
+      data: signature.bytes, type: 'png', transformation: { width: W, height: H },
+    })],
+  }), { width })
 }
 
 export async function generateReleaseNote(note) {
@@ -130,8 +168,10 @@ export async function generateReleaseNote(note) {
 
   const [logo, requesterSign, specialistSign] = await Promise.all([
     bytesFromUrl('/logo.png'),
-    bytesFromUrl(requester?.e_signature),
-    bytesFromUrl(specialist?.e_signature),
+    loadSignature(requester?.e_signature),
+    // The store side's signature is only appropriate once the note has been
+    // released — that's the point where the Material Controller signs off.
+    note?.status === 'released' ? loadSignature(specialist?.e_signature) : Promise.resolve(null),
   ])
 
   // ── Page header: logo | "Release Note" ─────────────────────────────────────

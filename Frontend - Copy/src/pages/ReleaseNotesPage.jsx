@@ -10,7 +10,7 @@ import {
 import { searchEmployees } from '../services/employeeService'
 import { generateReleaseNote } from '../utils/generateReleaseNote'
 
-const UNITS = ['PCS', 'Set', 'Meter', 'Liter', 'KG', 'Box', 'Roll', 'Pair', 'Drum']
+const UNITS = ['PCS', 'EA', 'Set', 'Meter', 'Liter', 'KG', 'Box', 'Roll', 'Pair', 'Drum']
 
 const inputClass = 'w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
 const gridInput = 'w-full min-w-0 rounded border border-transparent bg-transparent px-2 py-1.5 text-sm outline-none hover:border-neutral-200 focus:border-primary focus:bg-white'
@@ -134,25 +134,55 @@ function RequestTracker({ note }) {
 }
 
 /**
- * Every change made to the note, with who did it and when. Visible to the
- * requester and to anyone with view access, so nothing gets amended silently.
+ * Every change made to the note, with who did it and when. Consecutive
+ * entries by the same person within the same second — the natural payload
+ * of one save — collapse into a single block so the log stays readable
+ * once there are dozens of edits.
  */
+function groupActivities(activities) {
+  const groups = []
+  for (const activity of activities) {
+    // Same user + same minute counts as one edit session.
+    const bucket = `${activity.user_id}-${String(activity.created_at).slice(0, 16)}`
+    const last = groups[groups.length - 1]
+    if (last && last.bucket === bucket) {
+      last.items.push(activity)
+    } else {
+      groups.push({
+        bucket,
+        user:  activity.user,
+        at:    activity.created_at,
+        items: [activity],
+      })
+    }
+  }
+  return groups
+}
+
 function ActivityLog({ activities }) {
+  const groups = groupActivities(activities)
+
   return <div className="rounded-md border border-neutral-200 p-4">
     <div className="mb-3 flex items-center justify-between">
       <span className={labelClass}>Change log</span>
       <span className="text-xs text-neutral-400">{activities.length} entr{activities.length === 1 ? 'y' : 'ies'}</span>
     </div>
-    <ol className="space-y-2">
-      {activities.map(activity => <li key={activity.id} className="flex gap-3 text-sm">
+    <ol className="space-y-3">
+      {groups.map((group, idx) => <li key={idx} className="flex gap-3 text-sm">
         <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300" />
         <div className="min-w-0 flex-1">
           <p className="text-secondary">
-            <strong>{activity.user?.name || 'Someone'}</strong>
-            {activity.user?.role && <span className="ml-1 text-[10px] uppercase tracking-wide text-neutral-400">({activity.user.role.replace('_', ' ')})</span>}
-            {' '}{describeActivity(activity)}
+            <strong>{group.user?.name || 'Someone'}</strong>
+            {group.user?.role && <span className="ml-1 text-[10px] uppercase tracking-wide text-neutral-400">({group.user.role.replace('_', ' ')})</span>}
+            {group.items.length === 1 && <> {describeActivity(group.items[0])}</>}
           </p>
-          <p className="text-xs text-neutral-500">{stamp(activity.created_at)}</p>
+          {group.items.length > 1 && <ul className="mt-1 space-y-0.5 text-xs text-neutral-600">
+            {group.items.map(activity => <li key={activity.id} className="flex gap-1.5">
+              <span className="text-neutral-300">·</span>
+              <span>{describeActivity(activity)}</span>
+            </li>)}
+          </ul>}
+          <p className="mt-0.5 text-xs text-neutral-500">{stamp(group.at)}</p>
         </div>
       </li>)}
     </ol>
@@ -383,6 +413,11 @@ function FulfilModal({ note, specialist, canFulfil, onClose, onSaved }) {
   }))
 
   const addRow = () => setForm(current => ({ ...current, items: [...current.items, emptyItem()] }))
+  /** Drops the row entirely — used when the store finds the item is not in stock. */
+  const removeRow = index => setForm(current => ({
+    ...current,
+    items: current.items.length > 1 ? current.items.filter((_, i) => i !== index) : [emptyItem()],
+  }))
 
   const submit = async event => {
     event.preventDefault()
@@ -458,24 +493,25 @@ function FulfilModal({ note, specialist, canFulfil, onClose, onSaved }) {
         </div>
 
         <div className="overflow-x-auto rounded-md border border-neutral-200">
-          <table className="w-full min-w-[1000px] text-sm">
+          <table className="w-full min-w-[1400px] text-sm">
             <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
               <tr>
                 <th className="w-8 px-2 py-2 text-left font-semibold">#</th>
                 <th className="w-32 px-2 py-2 text-left font-semibold">Code</th>
-                <th className="px-2 py-2 text-left font-semibold">Item name</th>
+                <th className="min-w-[260px] px-2 py-2 text-left font-semibold">Item name</th>
                 <th className="w-24 px-2 py-2 text-left font-semibold">Unit</th>
-                <th className="w-24 px-2 py-2 text-left font-semibold">Requested</th>
-                <th className="w-24 px-2 py-2 text-left font-semibold">Released</th>
-                <th className="w-24 px-2 py-2 text-left font-semibold">Returned</th>
-                <th className="w-24 px-2 py-2 text-left font-semibold">Actual</th>
+                <th className="w-20 px-2 py-2 text-left font-semibold">Requested</th>
+                <th className="w-20 px-2 py-2 text-left font-semibold">Released</th>
+                <th className="w-20 px-2 py-2 text-left font-semibold">Returned</th>
+                <th className="w-20 px-2 py-2 text-left font-semibold">Actual</th>
                 <th className="w-24 px-2 py-2 text-left font-semibold">Check type</th>
                 <th className="w-52 px-2 py-2 text-left font-semibold">Receiver</th>
                 <th className="w-40 px-2 py-2 text-left font-semibold">Title</th>
+                <th className="w-8" aria-label="Remove row" />
               </tr>
             </thead>
             <tbody>
-              {form.items.map((item, index) => <tr key={index} className="border-t border-neutral-100">
+              {form.items.map((item, index) => <tr key={index} className="group border-t border-neutral-100">
                 <td className="px-2 py-1 text-neutral-400">{index + 1}</td>
                 <td className="px-1 py-1"><input className={gridInput} maxLength={100} value={item.code} onChange={e => setItem(index, { code: e.target.value })} /></td>
                 <td className="px-1 py-1"><input className={gridInput} maxLength={500} value={item.item_name} onChange={e => setItem(index, { item_name: e.target.value })} /></td>
@@ -501,6 +537,16 @@ function FulfilModal({ note, specialist, canFulfil, onClose, onSaved }) {
                   />
                 </td>
                 <td className="px-1 py-1"><input className={gridInput} maxLength={255} value={item.receiver_title} onChange={e => setItem(index, { receiver_title: e.target.value })} /></td>
+                <td className="px-1 py-1 text-right">
+                  <button
+                    type="button"
+                    onClick={() => removeRow(index)}
+                    title="Remove this item — use when it isn't in stock"
+                    className="rounded p-1.5 text-neutral-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 focus:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>)}
             </tbody>
           </table>
