@@ -12,6 +12,7 @@ use App\Http\Controllers\LeaveBalanceController;
 use App\Http\Controllers\PrfController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\IgiController;
+use App\Http\Controllers\ProcurementRegistryController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\LookupController;
@@ -178,12 +179,32 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/pos',         [PurchaseOrderController::class, 'store']);
         Route::get('/pos/{po}',     [PurchaseOrderController::class, 'show']);
         Route::put('/pos/{po}',     [PurchaseOrderController::class, 'update']);
+        Route::post('/pos/{po}/submit-approval', [PurchaseOrderController::class, 'submitForApproval']);
+        Route::post('/pos/{po}/decision', [PurchaseOrderController::class, 'decide']);
 
         // Incoming Goods Inspection — Admin, Depot Manager, Purchasing only (gated in controller)
         Route::get('/igis',         [IgiController::class, 'index']);
         Route::post('/igis',        [IgiController::class, 'store']);
         Route::get('/igis/{igi}',   [IgiController::class, 'show']);
         Route::put('/igis/{igi}',   [IgiController::class, 'update']);
+        Route::post('/igis/{igi}/submit-approval', [IgiController::class, 'submitForApproval']);
+        Route::post('/igis/{igi}/decision', [IgiController::class, 'decide']);
+
+        // SOP records — supplier assessment/evaluation, quotations, budgets,
+        // rejected goods and the live PO/PR control sheet.
+        Route::get('/suppliers', [ProcurementRegistryController::class, 'suppliers']);
+        Route::post('/suppliers', [ProcurementRegistryController::class, 'storeSupplier']);
+        Route::put('/suppliers/{supplier}', [ProcurementRegistryController::class, 'updateSupplier']);
+        Route::post('/suppliers/{supplier}/evaluations', [ProcurementRegistryController::class, 'evaluateSupplier']);
+        Route::get('/prfs/{prf}/quotations', [ProcurementRegistryController::class, 'quotations']);
+        Route::post('/prfs/{prf}/quotations', [ProcurementRegistryController::class, 'storeQuotation']);
+        Route::get('/budgets', [ProcurementRegistryController::class, 'budgets']);
+        Route::post('/budgets', [ProcurementRegistryController::class, 'storeBudget']);
+        Route::post('/budgets/{budget}/decision', [ProcurementRegistryController::class, 'approveBudget']);
+        Route::get('/rejected-goods', [ProcurementRegistryController::class, 'rejectedGoods']);
+        Route::post('/rejected-goods', [ProcurementRegistryController::class, 'storeRejectedGood']);
+        Route::put('/rejected-goods/{rejectedGood}', [ProcurementRegistryController::class, 'updateRejectedGood']);
+        Route::get('/control-log', [ProcurementRegistryController::class, 'controlLog']);
     });
 
     // ── Employee search — all authenticated users (for leave request autocomplete)

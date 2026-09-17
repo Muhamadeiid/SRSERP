@@ -60,6 +60,7 @@ const PoNewPage         = lazyWithRetry(() => import('./pages/PoNewPage'))
 const PoDetail          = lazyWithRetry(() => import('./pages/PoDetail'))
 const IgiNewPage        = lazyWithRetry(() => import('./pages/IgiNewPage'))
 const IgiDetail         = lazyWithRetry(() => import('./pages/IgiDetail'))
+const ProcurementRecordsPage = lazyWithRetry(() => import('./pages/ProcurementRecordsPage'))
 const LeaveMasterList   = lazyWithRetry(() => import('./pages/LeaveMasterList'))
 const WeeklyLeaveReportPage = lazyWithRetry(() => import('./pages/WeeklyLeaveReportPage'))
 const ResignationsPage  = lazyWithRetry(() => import('./pages/ResignationsPage'))
@@ -96,7 +97,7 @@ const HR_FULL_DEPTS = []
 const DASH_ROLES    = ['admin', 'depot_manager']
 
 // Procurement full module: Admin, Depot Manager, Purchasing only
-const PROC_ROLES    = ['admin', 'depot_manager', 'purchasing']
+const PROC_ROLES    = ['admin', 'depot_manager', 'procurement', 'purchasing']
 
 // Everyone (all authenticated users — no roles prop = just needs to be logged in)
 
@@ -169,7 +170,7 @@ const RoutePreloader = () => {
       if (!isHRRoute) loaders.splice(1, 0, importWorkforce)
       loaders.push(importAttendance)
     }
-    if (['admin', 'depot_manager', 'purchasing'].includes(role)) {
+    if (['admin', 'depot_manager', 'procurement', 'purchasing'].includes(role)) {
       loaders.push(importProcLayout, importPrfDashboard)
     }
     if (['admin', 'depot_manager'].includes(role)) {
@@ -403,8 +404,13 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="igi/:id" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute redirect="/human-resources/leave">
               <IgiDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="records" element={
+            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+              <ProcurementRecordsPage />
             </ProtectedRoute>
           } />
           <Route path="notifications" element={<NotificationCenterPage />} />

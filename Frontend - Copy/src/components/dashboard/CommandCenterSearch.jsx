@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux'
 import { ArrowRight, Search, X } from 'lucide-react'
 
 const HR_FULL = ['admin', 'depot_manager', 'hr']
-const PROC_FULL = ['admin', 'depot_manager', 'purchasing']
+const PROC_FULL = ['admin', 'depot_manager', 'procurement', 'purchasing']
 const DASH_FULL = ['admin', 'depot_manager']
 
 const PAGES = [
@@ -33,6 +33,7 @@ const PAGES = [
 
   { label: 'New Purchase Request', group: 'Procurement', path: '/procurement/new', keywords: 'new prf purchase request طلب شراء' },
   { label: 'Procurement Dashboard', group: 'Procurement', path: '/procurement', keywords: 'procurement purchasing مشتريات', roles: PROC_FULL },
+  { label: 'Procurement SOP Records', group: 'Procurement', path: '/procurement/records', keywords: 'supplier vendor budget rejected goods quotation مورد مشتريات', roles: PROC_FULL },
   { label: 'PRF Master List', group: 'Procurement', path: '/procurement/master', keywords: 'prf purchase master requests', roles: PROC_FULL },
 
   { label: 'Maintenance', group: 'Maintenance', path: '/maintenance', keywords: 'maintenance jobs صيانة', maintenance: true },

@@ -23,12 +23,20 @@ class PurchaseOrder extends Model
         'receipt_location',
         'comments',
         'status',
+        'approval_status',
+        'sole_supplier',
+        'sole_supplier_justification',
+        'selected_quotation_id',
+        'payment_status',
+        'paid_at',
     ];
 
     protected $casts = [
         'date'            => 'date',
         'tax'             => 'float',
         'withholding_tax' => 'float',
+        'sole_supplier'    => 'boolean',
+        'paid_at'         => 'datetime',
     ];
 
     public function prf()
@@ -49,6 +57,16 @@ class PurchaseOrder extends Model
     public function igi()
     {
         return $this->hasOne(IncomingGoodsInspection::class, 'po_id');
+    }
+
+    public function approvals()
+    {
+        return $this->hasMany(PurchaseOrderApproval::class, 'po_id')->orderBy('acted_at');
+    }
+
+    public function selectedQuotation()
+    {
+        return $this->belongsTo(ProcurementQuotation::class, 'selected_quotation_id');
     }
 
     public static function generateNumber(?int $year = null): string

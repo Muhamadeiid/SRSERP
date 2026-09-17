@@ -29,6 +29,8 @@ export const getPos    = (params = {}) => {
 export const getPo     = (id)     => request(`/procurement/pos/${id}`)
 export const createPo  = (data)   => request('/procurement/pos',        { method: 'POST', body: JSON.stringify(data) })
 export const updatePo  = (id, data) => request(`/procurement/pos/${id}`, { method: 'PUT',  body: JSON.stringify(data) })
+export const submitPoApproval = id => request(`/procurement/pos/${id}/submit-approval`, { method: 'POST' })
+export const decidePo = (id, data) => request(`/procurement/pos/${id}/decision`, { method: 'POST', body: JSON.stringify(data) })
 
 export const PO_STATUS_LABELS = {
   draft:     'Draft',

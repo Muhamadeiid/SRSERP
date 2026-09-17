@@ -41,6 +41,16 @@ function para(children, alignment = AlignmentType.LEFT) {
   return new Paragraph({ children: Array.isArray(children) ? children : [children], alignment, spacing: { before: 0, after: 0 } })
 }
 
+function dataUriBytes(value) {
+  if (!value || typeof value !== 'string' || !value.includes(',')) return null
+  try {
+    const binary = atob(value.split(',')[1])
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    return bytes
+  } catch { return null }
+}
+
 function cell(children, opts = {}) {
   const { width, shade, borders = ALL_B, vAlign = VerticalAlign.CENTER, colSpan, rowSpan } = opts
   return new TableCell({
@@ -197,13 +207,17 @@ export async function generatePO(po) {
   })
 
   // ── Signatures row ───────────────────────────────────────────────────────
+  const approvedAt = stage => (po.approvals ?? []).find(a => a.stage === stage && a.action === 'approve')
   const sigLabels  = ['Requester', 'Procurement', 'Logistics Manager /', 'Depot Manager', 'MD']
+  const procApproval = approvedAt('procurement')
+  const depotApproval = approvedAt('depot_manager')
+  const managementApproval = approvedAt('managing_director')
   const sigValues  = [
-    po.prf?.requester?.name ?? '',
-    po.creator?.name ?? '',
-    '',
-    '',
-    '',
+    { name: po.prf?.requester?.name ?? '', signature: po.prf?.requester?.e_signature, date: po.created_at },
+    { name: procApproval?.approver?.name ?? '', signature: procApproval?.approver?.e_signature, date: procApproval?.acted_at },
+    { name: '', signature: null, date: null },
+    { name: depotApproval?.approver?.name ?? '', signature: depotApproval?.approver?.e_signature, date: depotApproval?.acted_at },
+    { name: managementApproval?.approver?.name ?? '', signature: managementApproval?.approver?.e_signature, date: managementApproval?.acted_at },
   ]
   const sigColW = Math.round(CONTENT_W / 5)
 
@@ -216,9 +230,13 @@ export async function generatePO(po) {
 
   const sigNameRow = new TableRow({
     height: { value: 380, rule: HeightRule.AT_LEAST },
-    children: sigValues.map((v, i) =>
-      cell([para([normal(v, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B })
-    ),
+    children: sigValues.map(v => {
+      const bytes = dataUriBytes(v.signature)
+      const content = []
+      if (bytes) content.push(new Paragraph({ children: [new ImageRun({ data: bytes, transformation: { width: 130, height: 45 } })], alignment: AlignmentType.CENTER, spacing: { before: 0, after: 0 } }))
+      content.push(para([normal(v.name, 15)], AlignmentType.CENTER))
+      return cell(content, { width: sigColW, borders: ALL_B })
+    }),
   })
 
   const prf_number = po.prf?.prf_number ?? ''
@@ -228,10 +246,7 @@ export async function generatePO(po) {
     height: { value: 380, rule: HeightRule.EXACT },
     children: [
       cell([para([normal(`PRF (${prf_number})`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
-      cell([para([normal(`/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
-      cell([para([normal(`/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
-      cell([para([normal(`/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
-      cell([para([normal(`/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
+      ...sigValues.slice(1).map(v => cell([para([normal(v.date ? fmtDate(v.date) : `/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B })),
     ],
   })
 

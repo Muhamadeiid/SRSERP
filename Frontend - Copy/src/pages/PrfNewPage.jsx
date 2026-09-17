@@ -24,7 +24,7 @@ export default function PrfNewPage() {
   const { user } = useSelector(s => s.auth)
   const navigate = useNavigate()
 
-  const canSetPrfNumber = user?.role === 'admin' || user?.role === 'purchasing'
+  const canSetPrfNumber = user?.role === 'admin' || ['procurement', 'purchasing'].includes(user?.role)
 
   const [form, setForm] = useState({
     prf_number: '',

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { Loader2, ArrowLeft, FileText, Printer, ClipboardCheck, Pencil, Check, X, FileSpreadsheet } from 'lucide-react'
-import { getPo, updatePo, PO_STATUS_LABELS, PO_STATUS_STYLES } from '../services/poService'
+import { decidePo, getPo, submitPoApproval, updatePo, PO_STATUS_LABELS, PO_STATUS_STYLES } from '../services/poService'
 import { IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
 
 const fmt      = (n) => (n == null ? '—' : Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -23,9 +23,9 @@ export default function PoDetail() {
   const [poNoDraft,   setPoNoDraft]   = useState('')
   const [savingNo,    setSavingNo]    = useState(false)
 
-  const canEdit       = ['admin', 'depot_manager', 'purchasing'].includes(user?.role)
+  const canEdit       = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
   const hasLinkedIgi  = !!po?.igi
-  const canCreateIgi  = canEdit && po?.status !== 'cancelled' && !hasLinkedIgi
+  const canCreateIgi  = canEdit && po?.status === 'received' && !hasLinkedIgi
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -71,6 +71,16 @@ export default function PoDetail() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const submitApproval = async () => {
+    setBusy(true)
+    try { const res=await submitPoApproval(id); setPo(res?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
+  }
+
+  const approvalDecision = async action => {
+    setBusy(true)
+    try { const res=await decidePo(id,{action}); setPo(res?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
   }
 
   const handleExcel = async () => {
@@ -156,6 +166,7 @@ export default function PoDetail() {
           <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${PO_STATUS_STYLES[po.status]}`}>
             {PO_STATUS_LABELS[po.status]}
           </span>
+          <span className="inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border bg-amber-50 text-amber-700 border-amber-200 capitalize">Approval: {(po.approval_status||'draft').replaceAll('_',' ')}</span>
           {hasLinkedIgi && (
             <button onClick={() => navigate(`/procurement/igi/${po.igi.id}`)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors ${IGI_STATUS_STYLES[po.igi.status]}`}>
@@ -278,18 +289,16 @@ export default function PoDetail() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
           {[
-            ['Requester',        po.prf?.requester?.name],
-            ['Procurement',      po.creator?.name],
-            ['Logistics Manager', null],
-            ['Depot Manager',    null],
-            ['MD',               null],
-          ].map(([label, name]) => (
+            ['Requester', po.prf?.requester?.name, po.prf?.requester?.e_signature, po.created_at],
+            ['Procurement', po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.acted_at],
+            ['Logistics Manager', null, null, null],
+            ['Depot Manager', po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.acted_at],
+            ['MD', po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.acted_at],
+          ].map(([label, name, signature, date]) => (
             <div key={label} className="px-4 py-6 text-center">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">{label}</p>
-              <div className="h-12 flex items-end justify-center border-b border-dashed border-neutral-200 mx-4 mb-2">
-                {name && <p className="text-[10px] text-neutral-400 pb-1">{name}</p>}
-              </div>
-              <p className="text-[10px] text-neutral-300">Signature &amp; Date</p>
+              <div className="h-14 flex items-center justify-center mx-2 mb-1">{signature && <img src={signature} alt={`${label} signature`} className="max-w-full max-h-full object-contain" />}</div>
+              <p className="text-[10px] text-neutral-500 truncate">{name || 'Pending'}</p><p className="text-[10px] text-neutral-300">{date ? fmtShort(date) : 'Signature & Date'}</p>
             </div>
           ))}
         </div>
@@ -300,12 +309,13 @@ export default function PoDetail() {
         <div className="bg-white rounded-2xl border border-neutral-100 p-5 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs font-bold text-secondary-700">Update Status</p>
           <div className="flex gap-2 flex-wrap">
-            {po.status === 'draft' && (
-              <button onClick={() => changeStatus('issued')} disabled={busy}
+            {['draft','rejected'].includes(po.approval_status) && (
+              <button onClick={submitApproval} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
-                Mark as Issued
+                Submit Approval Cycle
               </button>
             )}
+            {((po.approval_status==='pending_procurement' && ['admin','procurement','purchasing'].includes(user?.role)) || (po.approval_status==='pending_depot' && ['admin','depot_manager'].includes(user?.role)) || (po.approval_status==='pending_management' && user?.role==='admin')) && <><button onClick={()=>approvalDecision('approve')} disabled={busy} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg">Approve Stage</button><button onClick={()=>approvalDecision('reject')} disabled={busy} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg">Reject</button></>}
             {po.status === 'issued' && (
               <button onClick={() => changeStatus('received')} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50">

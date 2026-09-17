@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Prf;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseOrderApproval;
+use App\Models\ProcurementQuotation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +18,7 @@ class PurchaseOrderController extends Controller
     private function canAccess(): bool
     {
         $role = auth()->user()?->role;
-        return in_array($role, ['admin', 'depot_manager', 'purchasing'], true)
+        return in_array($role, ['admin', 'depot_manager', 'procurement', 'purchasing'], true)
             || auth()->user()?->isAdmin();
     }
 
@@ -29,7 +31,7 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        $query = PurchaseOrder::with(['prf:id,prf_number', 'creator:id,name', 'items', 'igi:id,igi_number,status,po_id'])
+        $query = PurchaseOrder::with(['prf:id,prf_number', 'creator:id,name', 'items', 'igi:id,igi_number,status,po_id', 'approvals.approver:id,name,e_signature', 'selectedQuotation.supplier'])
             ->orderByDesc('created_at');
 
         if ($request->filled('prf_id')) {
@@ -51,7 +53,7 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        $po->load(['prf.requester:id,name,e_signature', 'creator:id,name', 'items', 'igi:id,igi_number,status']);
+        $po->load(['prf.requester:id,name,e_signature', 'creator:id,name,e_signature', 'items', 'igi:id,igi_number,status', 'approvals.approver:id,name,e_signature', 'selectedQuotation.supplier']);
 
         return response()->json(['success' => true, 'data' => $po]);
     }
@@ -78,6 +80,9 @@ class PurchaseOrderController extends Controller
             'payment_terms'    => 'nullable|string|max:255',
             'receipt_location' => 'nullable|string|max:255',
             'comments'         => 'nullable|string|max:2000',
+            'sole_supplier'    => 'nullable|boolean',
+            'sole_supplier_justification' => 'nullable|string|max:3000',
+            'selected_quotation_id' => 'nullable|exists:procurement_quotations,id',
             'items'            => 'required|array|min:1',
             'items.*.prf_item_id'      => 'nullable|exists:prf_items,id',
             'items.*.item_description' => 'required|string|max:500',
@@ -127,6 +132,10 @@ class PurchaseOrderController extends Controller
                 'receipt_location' => $data['receipt_location'] ?? 'Company Warehouse',
                 'comments'         => $data['comments']         ?? 'Banking Transfer',
                 'status'           => 'draft',
+                'approval_status'  => 'draft',
+                'sole_supplier'    => $data['sole_supplier'] ?? false,
+                'sole_supplier_justification' => $data['sole_supplier_justification'] ?? null,
+                'selected_quotation_id' => $data['selected_quotation_id'] ?? null,
             ]);
 
             foreach ($data['items'] as $i => $row) {
@@ -178,6 +187,10 @@ class PurchaseOrderController extends Controller
             'receipt_location' => 'nullable|string|max:255',
             'comments'         => 'nullable|string|max:2000',
             'status'           => 'nullable|in:draft,issued,received,cancelled',
+            'sole_supplier'    => 'nullable|boolean',
+            'sole_supplier_justification' => 'nullable|string|max:3000',
+            'selected_quotation_id' => 'nullable|exists:procurement_quotations,id',
+            'payment_status'   => 'nullable|in:unpaid,processing,paid',
             'items'            => 'sometimes|array|min:1',
             'items.*.prf_item_id'      => 'nullable|exists:prf_items,id',
             'items.*.item_description' => 'required_with:items|string|max:500',
@@ -212,6 +225,11 @@ class PurchaseOrderController extends Controller
                 'receipt_location' => $data['receipt_location'] ?? null,
                 'comments'         => $data['comments']         ?? null,
                 'status'           => $data['status']           ?? null,
+                'sole_supplier'    => $data['sole_supplier']    ?? null,
+                'sole_supplier_justification' => $data['sole_supplier_justification'] ?? null,
+                'selected_quotation_id' => $data['selected_quotation_id'] ?? null,
+                'payment_status'   => $data['payment_status']   ?? null,
+                'paid_at'          => ($data['payment_status'] ?? null) === 'paid' ? now() : null,
             ], fn($v) => $v !== null));
 
             // When PO is cancelled, void the linked PRF number so it can be reused
@@ -252,6 +270,55 @@ class PurchaseOrderController extends Controller
                 'success' => true,
                 'data'    => $po->fresh(['prf.requester', 'creator', 'items']),
             ]);
+        });
+    }
+
+    public function submitForApproval(PurchaseOrder $po): JsonResponse
+    {
+        if (! $this->canAccess()) return response()->json(['message' => 'Unauthorized'], 403);
+        if ($po->approval_status !== 'draft' && $po->approval_status !== 'rejected') {
+            return response()->json(['message' => 'PO is already in the approval cycle'], 422);
+        }
+        $quotes = ProcurementQuotation::where('prf_id', $po->prf_id)->get();
+        if ($po->sole_supplier) {
+            if (!filled($po->sole_supplier_justification)) {
+                return response()->json(['message' => 'Sole supplier justification is required'], 422);
+            }
+        } elseif ($quotes->count() < 3) {
+            return response()->json(['message' => 'At least 3 supplier quotations are required'], 422);
+        }
+        if (!$po->selected_quotation_id || !$quotes->contains('id', $po->selected_quotation_id)) {
+            return response()->json(['message' => 'Select the approved quotation before submitting the PO'], 422);
+        }
+        $po->update(['approval_status' => 'pending_procurement']);
+        return response()->json(['success' => true, 'data' => $po->fresh(['approvals.approver','selectedQuotation.supplier'])]);
+    }
+
+    public function decide(Request $request, PurchaseOrder $po): JsonResponse
+    {
+        $user = auth()->user();
+        $data = $request->validate(['action' => 'required|in:approve,reject', 'comment' => 'nullable|string|max:2000']);
+        $stages = [
+            'pending_procurement' => ['stage'=>'procurement','next'=>'pending_depot','allowed'=>fn()=> $user->isAdmin() || in_array($user->role,['procurement','purchasing'],true)],
+            'pending_depot' => ['stage'=>'depot_manager','next'=>'pending_management','allowed'=>fn()=> $user->isAdmin() || $user->role==='depot_manager'],
+            'pending_management' => ['stage'=>'managing_director','next'=>'approved','allowed'=>fn()=> $user->isAdmin()],
+        ];
+        $stage = $stages[$po->approval_status] ?? null;
+        if (!$stage) return response()->json(['message'=>'PO is not awaiting approval'],422);
+        if (!$stage['allowed']()) return response()->json(['message'=>'You cannot approve this PO stage'],403);
+
+        return DB::transaction(function () use ($po,$user,$data,$stage) {
+            PurchaseOrderApproval::create([
+                'po_id'=>$po->id,'stage'=>$stage['stage'],'action'=>$data['action'],
+                'approver_id'=>$user->id,'comment'=>$data['comment'] ?? null,'acted_at'=>now(),
+            ]);
+            if ($data['action']==='reject') $po->update(['approval_status'=>'rejected']);
+            else {
+                $values=['approval_status'=>$stage['next']];
+                if ($stage['next']==='approved') $values['status']='issued';
+                $po->update($values);
+            }
+            return response()->json(['success'=>true,'data'=>$po->fresh(['approvals.approver:id,name,e_signature','selectedQuotation.supplier'])]);
         });
     }
 }

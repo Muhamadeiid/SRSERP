@@ -290,7 +290,7 @@ class PrfController extends Controller
     public function updateTrackingNo(Request $request, Prf $prf): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->isAdmin() && $user->role !== 'purchasing') {
+        if (!$user->isAdmin() && !in_array($user->role, ['procurement', 'purchasing'], true)) {
             return response()->json(['success' => false, 'message' => 'Only Procurement can edit the tracking number'], 403);
         }
 

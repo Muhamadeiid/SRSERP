@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   ChevronLeft, ChevronRight, LogOut, Menu,
-  FilePlus2, LayoutDashboard, FileSpreadsheet,
+  FilePlus2, LayoutDashboard, FileSpreadsheet, LibraryBig,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
@@ -11,12 +11,13 @@ import NotificationBell from '../components/notifications/NotificationBell'
 import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 // Full Procurement module access: Admin, Depot Manager, Purchasing
-const PROC_FULL_ROLES = ['admin', 'depot_manager', 'purchasing']
+const PROC_FULL_ROLES = ['admin', 'depot_manager', 'procurement', 'purchasing']
 
 const NAV = [
   { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },
   { label: 'New PRF',      path: '/procurement/new',    icon: FilePlus2 },
   { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet,             procOnly: true },
+  { label: 'SOP Records',  path: '/procurement/records', icon: LibraryBig,                  procOnly: true },
 ]
 
 export default function ProcurementLayout() {

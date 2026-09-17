@@ -18,6 +18,7 @@ class IncomingGoodsInspection extends Model
         'photos_notes',
         'photos',
         'status',
+        'approval_status',
     ];
 
     protected $casts = [
@@ -38,6 +39,11 @@ class IncomingGoodsInspection extends Model
     public function items()
     {
         return $this->hasMany(IgiItem::class, 'igi_id')->orderBy('no');
+    }
+
+    public function approvals()
+    {
+        return $this->hasMany(IncomingGoodsInspectionApproval::class, 'igi_id')->orderBy('acted_at');
     }
 
     public static function generateNumber(?int $year = null): string

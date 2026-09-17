@@ -180,7 +180,7 @@ export default function DashboardPage() {
     || user?.is_team_manager === '1'
   const isManager = role === 'manager' || role.endsWith('_manager') || isTeamManager
   const isHRFull   = ['admin', 'depot_manager', 'hr'].includes(role)
-  const isProcFull = ['admin', 'depot_manager', 'purchasing'].includes(role)
+  const isProcFull = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(role)
   const canSeeProc = isProcFull || role === 'ehs'
   const isDashFull = ['admin', 'depot_manager'].includes(role)
   const canSeeMaintenance = ['admin', 'depot_manager'].includes(role) || isManager

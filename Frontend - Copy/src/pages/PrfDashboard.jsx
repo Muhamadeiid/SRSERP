@@ -42,7 +42,7 @@ export default function PrfDashboard() {
   const [status,  setStatus]  = useState('all')
   const [search,  setSearch]  = useState('')
 
-  const canSeePOs = ['admin', 'depot_manager', 'purchasing'].includes(user?.role)
+  const canSeePOs = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)

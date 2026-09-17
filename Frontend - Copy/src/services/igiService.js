@@ -29,6 +29,8 @@ export const getIgis   = (params = {}) => {
 export const getIgi    = (id)       => request(`/procurement/igis/${id}`)
 export const createIgi = (data)     => request('/procurement/igis',         { method: 'POST', body: JSON.stringify(data) })
 export const updateIgi = (id, data) => request(`/procurement/igis/${id}`,   { method: 'PUT',  body: JSON.stringify(data) })
+export const submitIgiApproval = id => request(`/procurement/igis/${id}/submit-approval`, { method: 'POST' })
+export const decideIgi = (id, data) => request(`/procurement/igis/${id}/decision`, { method: 'POST', body: JSON.stringify(data) })
 
 export const IGI_STATUS_LABELS = {
   draft:     'Draft',

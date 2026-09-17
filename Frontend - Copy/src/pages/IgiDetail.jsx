@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
-import { Loader2, ArrowLeft, ClipboardCheck, Printer } from 'lucide-react'
-import { getIgi, updateIgi, IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
+import { Loader2, ArrowLeft, ClipboardCheck, Printer, X } from 'lucide-react'
+import { decideIgi, getIgi, submitIgiApproval, updateIgi, IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
+import { createRejectedGood } from '../services/procurementRegistryService'
 
 const fmtShort = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
@@ -21,8 +22,9 @@ export default function IgiDetail() {
   const [loading, setLoading] = useState(true)
   const [err,     setErr]     = useState('')
   const [busy,    setBusy]    = useState(false)
+  const [rejectForm, setRejectForm] = useState(null)
 
-  const canEdit = ['admin', 'depot_manager', 'purchasing'].includes(user?.role)
+  const canEdit = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -51,9 +53,24 @@ export default function IgiDetail() {
     }
   }
 
+  const submitApproval = async () => { setBusy(true); try { const res=await submitIgiApproval(id); setIgi(res?.data??null) } catch(e){alert(e.message)} finally{setBusy(false)} }
+  const decideApproval = async action => { setBusy(true); try { const res=await decideIgi(id,{action}); setIgi(res?.data??null) } catch(e){alert(e.message)} finally{setBusy(false)} }
+
   const handlePrint = async () => {
     const { generateIGI } = await import('../utils/generateIGI')
     return generateIGI(igi)
+  }
+
+  const saveRejection = async e => {
+    e.preventDefault(); setBusy(true)
+    try {
+      await createRejectedGood({
+        igi_id: Number(id), delivery_date: igi.date, item_description: rejectForm.item_description,
+        part_number: rejectForm.part_number || null, quantity_affected: Number(rejectForm.quantity_affected),
+        rejecting_date: new Date().toISOString().slice(0,10), reason: rejectForm.reason,
+      })
+      const res=await updateIgi(id,{status:'rejected'}); setIgi(res?.data ?? null); setRejectForm(null)
+    } catch(e2){ alert(e2.message) } finally { setBusy(false) }
   }
 
   if (loading) return (
@@ -100,6 +117,7 @@ export default function IgiDetail() {
           <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${IGI_STATUS_STYLES[igi.status]}`}>
             {IGI_STATUS_LABELS[igi.status]}
           </span>
+          <span className="inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border bg-amber-50 text-amber-700 border-amber-200 capitalize">Approval: {(igi.approval_status||'draft').replaceAll('_',' ')}</span>
           <button onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg transition-colors">
             <Printer className="w-3.5 h-3.5" /> Print (.docx)
@@ -201,43 +219,30 @@ export default function IgiDetail() {
         </div>
         <div className="grid grid-cols-3 md:grid-cols-6 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
           {[
-            ['Requester',        igi.po?.prf?.requester?.name],
-            ['Inventory (INV)',   null],
-            ['EHS',              null],
-            ['Quality Control',  null],
-            ['Procurement',      igi.creator?.name],
-            ['Management (D.M)', null],
-          ].map(([label, name]) => (
+            ['Requester','requester'],['Inventory (INV)','inventory'],['EHS','ehs'],['Quality Control','quality_control'],['Procurement','procurement'],['Management (D.M)','management'],
+          ].map(([label, stage]) => { const a=igi.approvals?.find(x=>x.stage===stage&&x.action==='approve'); return (
             <div key={label} className="px-4 py-6 text-center">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">{label}</p>
-              <div className="h-12 flex items-end justify-center border-b border-dashed border-neutral-200 mx-4 mb-2">
-                {name && <p className="text-[10px] text-neutral-400 pb-1">{name}</p>}
-              </div>
-              <p className="text-[10px] text-neutral-300">Signature &amp; Date</p>
+              <div className="h-14 flex items-center justify-center mx-2 mb-1">{a?.approver?.e_signature&&<img src={a.approver.e_signature} alt={`${label} signature`} className="max-w-full max-h-full object-contain"/>}</div><p className="text-[10px] text-neutral-500 truncate">{a?.approver?.name||'Pending'}</p><p className="text-[10px] text-neutral-300">{fmtShort(a?.acted_at)}</p>
             </div>
-          ))}
+          )})}
         </div>
       </div>
 
       {/* Status actions */}
-      {canEdit && igi.status !== 'approved' && igi.status !== 'rejected' && (
+      {user && igi.status !== 'approved' && igi.status !== 'rejected' && (
         <div className="bg-white rounded-2xl border border-neutral-100 p-5 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs font-bold text-secondary-700">Update Status</p>
           <div className="flex gap-2 flex-wrap">
-            {igi.status === 'draft' && (
-              <button onClick={() => changeStatus('submitted')} disabled={busy}
+            {canEdit && igi.approval_status === 'draft' && (
+              <button onClick={submitApproval} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
-                Mark as Submitted
+                Submit Signature Cycle
               </button>
             )}
-            {igi.status === 'submitted' && (
-              <button onClick={() => changeStatus('approved')} disabled={busy}
-                className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50">
-                Mark as Approved
-              </button>
-            )}
-            {igi.status !== 'rejected' && (
-              <button onClick={() => changeStatus('rejected')} disabled={busy}
+            {(() => { const d=(user?.department||'').toLowerCase(); const allowed=(igi.approval_status==='pending_requester'&&igi.po?.prf?.requester?.id===user?.id)||(igi.approval_status==='pending_inventory'&&(user?.role==='store_staff'||d.includes('inventory')||d.includes('store')))||(igi.approval_status==='pending_ehs'&&user?.role==='ehs')||(igi.approval_status==='pending_quality'&&(d.includes('quality')||d==='qc'))||(igi.approval_status==='pending_procurement'&&['procurement','purchasing'].includes(user?.role))||(igi.approval_status==='pending_management'&&user?.role==='depot_manager')||user?.role==='admin'; return allowed&&igi.approval_status?.startsWith('pending_') ? <><button onClick={()=>decideApproval('approve')} disabled={busy} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg">Approve & Sign</button><button onClick={()=>decideApproval('reject')} disabled={busy} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg">Reject Stage</button></>:null })()}
+            {canEdit && igi.status !== 'rejected' && (
+              <button onClick={() => { const item=(igi.items||[]).find(x=>x.compliant_po===false||x.compliant_technical===false||x.compliant_ehs===false) || (igi.items||[])[0]; setRejectForm({item_description:item?.description||'',part_number:item?.batch_no||'',quantity_affected:item?.qty_received||'',reason:item?.remarks||''}) }} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50">
                 Reject IGI
               </button>
@@ -245,6 +250,8 @@ export default function IgiDetail() {
           </div>
         </div>
       )}
+
+      {rejectForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveRejection} className="bg-white rounded-2xl p-6 w-full max-w-xl space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold text-secondary-700">Rejected Goods Form</h2><p className="text-xs text-neutral-400">SRS-PRC-P01-F08</p></div><button type="button" onClick={()=>setRejectForm(null)}><X/></button></div><select value={rejectForm.item_description} onChange={e=>{const item=(igi.items||[]).find(x=>x.description===e.target.value);setRejectForm({...rejectForm,item_description:e.target.value,part_number:item?.batch_no||'',quantity_affected:item?.qty_received||'',reason:item?.remarks||''})}} className="w-full border rounded-lg px-3 py-2 text-sm">{(igi.items||[]).map(x=><option key={x.id}>{x.description}</option>)}</select><div className="grid grid-cols-2 gap-3"><input value={rejectForm.part_number} onChange={e=>setRejectForm({...rejectForm,part_number:e.target.value})} placeholder="Part / Batch number" className="border rounded-lg px-3 py-2 text-sm"/><input required type="number" step="any" min="0.001" value={rejectForm.quantity_affected} onChange={e=>setRejectForm({...rejectForm,quantity_affected:e.target.value})} placeholder="Quantity affected" className="border rounded-lg px-3 py-2 text-sm"/></div><textarea required value={rejectForm.reason} onChange={e=>setRejectForm({...rejectForm,reason:e.target.value})} rows={6} placeholder="Reason for rejecting the goods" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold">Reject and Create F08</button></form></div>}
 
     </div>
   )

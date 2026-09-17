@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Loader2, Trash2, Plus, CheckCircle, X, ArrowLeft, FileText } from 'lucide-react'
 import { getPrf } from '../services/prfService'
 import { createPo } from '../services/poService'
+import { getQuotations } from '../services/procurementRegistryService'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
@@ -17,6 +18,7 @@ export default function PoNewPage() {
   const [saving,    setSaving]    = useState(false)
   const [submitted, setSubmitted] = useState(null)
   const [err,       setErr]       = useState('')
+  const [quotations,setQuotations]= useState([])
 
   const [form, setForm] = useState({
     po_number:        '',
@@ -31,6 +33,9 @@ export default function PoNewPage() {
     tax:              '',
     withholding_tax:  '',
     items:            [],
+    selected_quotation_id: '',
+    sole_supplier: false,
+    sole_supplier_justification: '',
   })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -39,8 +44,9 @@ export default function PoNewPage() {
   const loadPrf = useCallback(async () => {
     setLoadingPrf(true)
     try {
-      const res = await getPrf(prfId)
+      const [res, quoteRes] = await Promise.all([getPrf(prfId), getQuotations(prfId)])
       const data = res?.data
+      setQuotations(quoteRes?.data ?? [])
       setPrf(data)
       setForm(f => ({
         ...f,
@@ -55,6 +61,8 @@ export default function PoNewPage() {
           unit_price:       '',
           remark:           '',
         })),
+        selected_quotation_id: (quoteRes?.data ?? []).find(q => q.selected)?.id || '',
+        vendor: (quoteRes?.data ?? []).find(q => q.selected)?.supplier?.company_name || f.vendor,
       }))
     } catch (e) {
       setErr(e.message || 'Failed to load PRF')
@@ -107,6 +115,9 @@ export default function PoNewPage() {
         payment_terms:    form.payment_terms,
         receipt_location: form.receipt_location,
         comments:         form.comments,
+        selected_quotation_id: form.selected_quotation_id ? Number(form.selected_quotation_id) : null,
+        sole_supplier: form.sole_supplier,
+        sole_supplier_justification: form.sole_supplier_justification || null,
         items: items.map(it => ({
           prf_item_id:      it.prf_item_id || null,
           item_description: it.item_description,
@@ -204,6 +215,19 @@ export default function PoNewPage() {
               <p className="text-sm font-semibold text-secondary-700">Rotem SRS</p>
               <p className="text-xs text-neutral-400 mt-0.5">250 ST-Degla · 201060604163</p>
             </div>
+          </div>
+          <div className="border-t border-neutral-100 px-5 py-4 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex-1 min-w-[240px] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Selected Quotation
+                <select required value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5'}>
+                  <option value="">Select approved quotation</option>
+                  {quotations.map(q=><option key={q.id} value={q.id}>{q.supplier?.company_name} — EGP {fmt(Number(q.price_before_vat)+Number(q.vat||0))} — {q.lead_time_days ?? '—'} days</option>)}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>set('sole_supplier',e.target.checked)} /> Sole Supplier</label>
+            </div>
+            {!form.sole_supplier && quotations.length < 3 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">The SOP requires at least 3 quotations. Recorded now: {quotations.length}.</p>}
+            {form.sole_supplier && <textarea required value={form.sole_supplier_justification} onChange={e=>set('sole_supplier_justification',e.target.value)} placeholder="Sole supplier justification and market price benchmark" className={INPUT + ' resize-none'} rows={2} />}
           </div>
         </div>
 
@@ -374,7 +398,7 @@ export default function PoNewPage() {
         {/* Submit */}
         <div className="flex items-center justify-between bg-white border border-neutral-100 rounded-2xl px-5 py-4">
           <p className="text-[10px] text-neutral-400">
-            Doc No: <span className="text-red-500 font-bold">SRS-PRC-P01-F05</span>
+            Doc No: <span className="text-red-500 font-bold">SRS-PRC-P01-F07</span>
           </p>
           <button type="submit" disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-60">

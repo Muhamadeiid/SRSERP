@@ -3,12 +3,13 @@ import { useSelector } from 'react-redux'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Loader2, X, Check, Printer, ArrowLeft, FileText, MessageSquare,
-  CheckCircle, XCircle, Clock,
+  CheckCircle, XCircle, Clock, Plus,
 } from 'lucide-react'
 import {
   getPrf, approvePrf, rejectPrf, updatePrfNumber,
   PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
+import { createQuotation, getQuotations, getSuppliers } from '../services/procurementRegistryService'
 
 const fmtShort   = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtFullDay = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '—'
@@ -30,6 +31,9 @@ export default function PrfDetail() {
   const [busy,    setBusy]    = useState(false)
   const [comment, setComment] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [quotations, setQuotations] = useState([])
+  const [suppliers, setSuppliers] = useState([])
+  const [quoteForm, setQuoteForm] = useState(null)
 
   // Inline PRF-number editor (procurement / admin only)
   const [editingNumber, setEditingNumber] = useState(false)
@@ -40,8 +44,10 @@ export default function PrfDetail() {
     setLoading(true)
     setErr('')
     try {
-      const res = await getPrf(id)
+      const [res, quotes, vendors] = await Promise.all([getPrf(id), getQuotations(id).catch(()=>({data:[]})), getSuppliers({status:'approved'}).catch(()=>({data:[]}))])
       setPrf(res?.data ?? null)
+      setQuotations(quotes?.data ?? [])
+      setSuppliers(vendors?.data ?? [])
     } catch (e) {
       setErr(e.message || 'Failed to load PRF')
     } finally {
@@ -53,8 +59,8 @@ export default function PrfDetail() {
 
   const canAct           = prf && canActOnStage(user, prf.status)
   const isApproved       = prf?.status === 'approved'
-  const isProcurementUser = user?.role === 'purchasing' || user?.role === 'admin'
-  const canCreatePO      = isApproved && ['admin', 'depot_manager', 'purchasing'].includes(user?.role)
+  const isProcurementUser = ['procurement', 'purchasing', 'admin'].includes(user?.role)
+  const canCreatePO      = isApproved && ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
   const hasLinkedPO      = !!prf?.purchase_order
 
   const saveNumber = async () => {
@@ -113,6 +119,14 @@ export default function PrfDetail() {
   const handlePrint = async () => {
     const { generatePRF } = await import('../utils/generatePRF')
     return generatePRF(prf)
+  }
+
+  const saveQuote = async e => {
+    e.preventDefault(); setBusy(true)
+    try {
+      await createQuotation(id, { ...quoteForm, supplier_id:Number(quoteForm.supplier_id), lead_time_days:quoteForm.lead_time_days?Number(quoteForm.lead_time_days):null, price_before_vat:Number(quoteForm.price_before_vat||0), vat:Number(quoteForm.vat||0) })
+      setQuoteForm(null); await load()
+    } catch (e2) { alert(e2.message) } finally { setBusy(false) }
   }
 
   if (loading) {
@@ -244,6 +258,11 @@ export default function PrfDetail() {
           </div>
         )}
       </div>
+
+      {isProcurementUser && <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+        <div className="px-5 py-3 border-b bg-neutral-50 flex items-center justify-between"><div><p className="text-xs font-bold text-secondary-700">Quotation Comparison</p><p className="text-[10px] text-neutral-400">Minimum 3 quotations unless Sole Supplier is justified</p></div><button onClick={()=>setQuoteForm({supplier_id:'',reference:'',received_date:new Date().toISOString().slice(0,10),expiry_date:'',incoterm:'',lead_time_days:'',price_before_vat:'',vat:'',technical_compliant:true,ehs_compliant:true,selected:quotations.length===0,notes:''})} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold"><Plus className="w-3.5 h-3.5"/>Add Quote</button></div>
+        <div className="overflow-x-auto"><table className="w-full text-xs min-w-[800px]"><thead className="bg-neutral-50"><tr>{['Supplier','Reference','Received','Expiry','Incoterm','Lead Time','Before VAT','VAT','Technical','EHS','Selected'].map(h=><th key={h} className="px-3 py-2 text-left text-[10px] text-neutral-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{quotations.map(q=><tr key={q.id}><td className="px-3 py-2 font-bold">{q.supplier?.company_name}</td><td className="px-3 py-2">{q.reference||'—'}</td><td className="px-3 py-2">{fmtShort(q.received_date)}</td><td className="px-3 py-2">{fmtShort(q.expiry_date)}</td><td className="px-3 py-2">{q.incoterm||'—'}</td><td className="px-3 py-2">{q.lead_time_days??'—'} days</td><td className="px-3 py-2">EGP {Number(q.price_before_vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">EGP {Number(q.vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">{q.technical_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.ehs_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.selected?'✓':'—'}</td></tr>)}</tbody></table></div>
+      </div>}
 
       {/* Items table */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
@@ -410,6 +429,8 @@ export default function PrfDetail() {
           </div>
         </div>
       )}
+
+      {quoteForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveQuote} className="bg-white rounded-2xl p-6 w-full max-w-2xl space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold">Add Supplier Quotation</h2><p className="text-xs text-neutral-400">Quotation data required by SOP clause 6.2.2</p></div><button type="button" onClick={()=>setQuoteForm(null)}><X/></button></div><div className="grid sm:grid-cols-2 gap-3"><select required value={quoteForm.supplier_id} onChange={e=>setQuoteForm({...quoteForm,supplier_id:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"><option value="">Approved Supplier</option>{suppliers.map(s=><option value={s.id} key={s.id}>{s.company_name}</option>)}</select>{[['reference','Quotation reference'],['received_date','Received date'],['expiry_date','Expiry date'],['incoterm','Incoterm'],['lead_time_days','Lead time days'],['price_before_vat','Price before VAT'],['vat','VAT amount']].map(([k,p])=><input key={k} required={k==='price_before_vat'} type={k.includes('date')?'date':['lead_time_days','price_before_vat','vat'].includes(k)?'number':'text'} step="any" value={quoteForm[k]} placeholder={p} onChange={e=>setQuoteForm({...quoteForm,[k]:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"/>)}</div><div className="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" checked={quoteForm.technical_compliant} onChange={e=>setQuoteForm({...quoteForm,technical_compliant:e.target.checked})}/> Technical compliant</label><label><input type="checkbox" checked={quoteForm.ehs_compliant} onChange={e=>setQuoteForm({...quoteForm,ehs_compliant:e.target.checked})}/> EHS compliant</label><label><input type="checkbox" checked={quoteForm.selected} onChange={e=>setQuoteForm({...quoteForm,selected:e.target.checked})}/> Selected quote</label></div><textarea value={quoteForm.notes} onChange={e=>setQuoteForm({...quoteForm,notes:e.target.value})} placeholder="Packing, QC sheets, MSDS or other notes" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Save Quotation</button></form></div>}
     </div>
   )
 }
