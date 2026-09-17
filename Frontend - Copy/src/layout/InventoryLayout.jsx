@@ -8,6 +8,7 @@ import {
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
+import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 const NAV_ITEMS = [
   { label: 'Material Ledger', path: '/inventory',         icon: Package,       end: true },
@@ -161,6 +162,7 @@ export default function InventoryLayout() {
             <span className="opacity-40">/</span>
             <span className="text-neutral-500">Inventory Control</span>
           </div>
+          <CommandCenterSearch className="hidden lg:block w-full max-w-[360px]" />
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <NotificationBell />
             <div className="w-px h-6 bg-neutral-100" />

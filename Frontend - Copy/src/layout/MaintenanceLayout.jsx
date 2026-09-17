@@ -9,6 +9,7 @@ import {
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
+import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 const NAV_ITEMS = [
   { label: 'Dashboard',    path: '/maintenance',          icon: BarChart3,     end: true },
@@ -150,6 +151,8 @@ export default function MaintenanceLayout() {
             <span className="opacity-40">/</span>
             <span className="text-secondary-700 font-semibold break-words">{pageLabel}</span>
           </div>
+
+          <CommandCenterSearch className="hidden lg:block w-full max-w-[360px]" />
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             {/* Bell — NotificationBell owns its own panel, polling, outside-click. */}

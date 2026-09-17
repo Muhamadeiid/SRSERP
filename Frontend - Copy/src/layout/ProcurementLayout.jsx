@@ -8,6 +8,7 @@ import {
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
+import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 // Full Procurement module access: Admin, Depot Manager, Purchasing
 const PROC_FULL_ROLES = ['admin', 'depot_manager', 'purchasing']
@@ -115,6 +116,8 @@ export default function ProcurementLayout() {
             <span className="opacity-40">/</span>
             <span className="text-secondary-700 font-semibold">Procurement</span>
           </div>
+
+          <CommandCenterSearch className="hidden lg:block w-full max-w-[360px]" />
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
 

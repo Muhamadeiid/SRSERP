@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux'
 import { Menu } from 'lucide-react'
 import ProfileAvatar from '../profile/ProfileAvatar'
 import NotificationBell from '../notifications/NotificationBell'
+import CommandCenterSearch from './CommandCenterSearch'
 
 export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuClick }) {
   const { user }    = useSelector((s) => s.auth)
@@ -38,15 +39,7 @@ export default function TopBar({ sidebarW = '230px', isMobile = false, onMenuCli
         </button>
       )}
 
-      {/* Search */}
-      <div className="hidden sm:flex items-center gap-2 bg-neutral-50 rounded-lg px-3.5 h-9 flex-1 max-w-[480px]">
-        <span className="text-neutral-400 text-sm">🔍</span>
-        <input
-          type="text"
-          placeholder="Search Command Center..."
-          className="bg-transparent border-none outline-none text-sm text-secondary-700 placeholder:text-neutral-400 w-full"
-        />
-      </div>
+      <CommandCenterSearch className="hidden flex-1 sm:block max-w-[480px]" />
 
       {/* Right side */}
       <div className="flex items-center gap-2 sm:gap-5 ml-auto">

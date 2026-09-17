@@ -12,6 +12,7 @@ import {
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
+import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 // Roles that have full HR module access (workforce, attendance, assets, etc.)
 const HR_FULL_ROLES_NAV = ['admin', 'depot_manager', 'hr']
@@ -290,6 +291,8 @@ export default function HRLayout() {
             <span className="opacity-40">/</span>
             <span className="text-secondary-700 font-semibold break-words">{pageLabel}</span>
           </div>
+
+          <CommandCenterSearch className="hidden lg:block w-full max-w-[360px]" />
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
 
