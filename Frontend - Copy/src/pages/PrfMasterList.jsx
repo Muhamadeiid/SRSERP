@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Loader2, Search, Download, RefreshCw, FileSpreadsheet, ShoppingCart,
+  Search, Download, RefreshCw, FileSpreadsheet, ShoppingCart,
 } from 'lucide-react'
 import { saveAs } from 'file-saver'
 import { getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES, cleanPrfNumber } from '../services/prfService'
@@ -118,23 +118,25 @@ export default function PrfMasterList() {
   ]
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
+      {/* Page header — same pattern as the Operations Dashboard. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-extrabold text-secondary-700 flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-primary" />
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold leading-tight text-secondary-700 sm:text-[28px]">
+            <FileSpreadsheet className="h-6 w-6 text-primary" />
             Master List — PRFs
           </h1>
-          <p className="text-sm text-neutral-400 mt-0.5">Sorted by PRF number</p>
+          <p className="mt-1 text-sm text-neutral-400">Every purchase request in one place, sorted by number.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchAll}
-            className="p-2 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-neutral-400 transition-colors">
-            <RefreshCw className="w-4 h-4" />
+          <button onClick={fetchAll} disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-50 disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
           <button onClick={exportExcel} disabled={loading || rows.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50">
-            <Download className="w-3.5 h-3.5" /> Export Excel
+            className="flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-50">
+            <Download className="h-3.5 w-3.5" /> Export Excel
           </button>
         </div>
       </div>
@@ -144,7 +146,7 @@ export default function PrfMasterList() {
         <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 bg-white rounded-lg border border-neutral-200 p-0.5">
             {STATUS_OPTIONS.map(([key, label]) => (
-              <button key={key} onClick={() => setStatus(key)}
+              <button key={key} onClick={() => setStatus(key)} aria-pressed={status === key}
                 className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
                   status === key ? 'bg-primary text-white' : 'text-neutral-500 hover:bg-neutral-100'
                 }`}>
@@ -165,8 +167,17 @@ export default function PrfMasterList() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <div className="animate-pulse divide-y divide-neutral-50 px-4">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div key={index} className="grid grid-cols-6 gap-4 py-4">
+                <span className="h-3 rounded bg-neutral-100" />
+                <span className="h-3 rounded bg-neutral-100" />
+                <span className="hidden h-3 rounded bg-neutral-100 sm:block" />
+                <span className="hidden h-3 rounded bg-neutral-100 sm:block" />
+                <span className="hidden h-3 rounded bg-neutral-100 md:block" />
+                <span className="h-5 rounded-full bg-neutral-100" />
+              </div>
+            ))}
           </div>
         ) : err ? (
           <div className="py-12 text-center text-red-500 text-sm">{err}</div>
