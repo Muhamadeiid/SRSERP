@@ -17,7 +17,7 @@ const NAV = [
   { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },
   { label: 'New PRF',      path: '/procurement/new',    icon: FilePlus2 },
   { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet,             procOnly: true },
-  { label: 'SOP Records',  path: '/procurement/records', icon: LibraryBig,                  procOnly: true },
+  { label: 'Procurement Management', path: '/procurement/records', icon: LibraryBig,        procOnly: true },
 ]
 
 export default function ProcurementLayout() {
@@ -84,6 +84,18 @@ export default function ProcurementLayout() {
             </NavLink>
           ))}
         </nav>
+
+        {!collapsed && isProcFull && (
+          <button
+            type="button"
+            onClick={() => navigate('/procurement')}
+            className="mx-3 mb-3 rounded-2xl bg-secondary-700 p-3.5 text-left text-white shadow-lg shadow-secondary-700/10 transition-transform hover:-translate-y-0.5"
+          >
+            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200">Action Center</span>
+            <span className="mt-1.5 block text-xs font-bold leading-snug">Review approvals and receiving tasks</span>
+            <span className="mt-2 block text-[10px] text-white/60">Open procurement overview →</span>
+          </button>
+        )}
 
         {/* Bottom controls */}
         <div className="space-y-1 border-t border-neutral-100 p-2">

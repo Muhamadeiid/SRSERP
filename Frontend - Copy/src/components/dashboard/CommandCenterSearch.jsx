@@ -33,7 +33,7 @@ const PAGES = [
 
   { label: 'New Purchase Request', group: 'Procurement', path: '/procurement/new', keywords: 'new prf purchase request طلب شراء' },
   { label: 'Procurement Dashboard', group: 'Procurement', path: '/procurement', keywords: 'procurement purchasing مشتريات', roles: PROC_FULL },
-  { label: 'Procurement SOP Records', group: 'Procurement', path: '/procurement/records', keywords: 'supplier vendor budget rejected goods quotation مورد مشتريات', roles: PROC_FULL },
+  { label: 'Procurement Management', group: 'Procurement', path: '/procurement/records', keywords: 'supplier vendor budget rejected goods quotation records مورد مشتريات', roles: PROC_FULL },
   { label: 'PRF Master List', group: 'Procurement', path: '/procurement/master', keywords: 'prf purchase master requests', roles: PROC_FULL },
 
   { label: 'Maintenance', group: 'Maintenance', path: '/maintenance', keywords: 'maintenance jobs صيانة', maintenance: true },

@@ -97,7 +97,7 @@ export default function ProcurementRecordsPage() {
 
   return <div className="p-4 sm:p-6 space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-extrabold text-secondary-700">Procurement SOP Records</h1><p className="text-sm text-neutral-400 mt-1">Official forms F01–F09 and live traceability</p></div>
+      <div><h1 className="text-2xl font-extrabold text-secondary-700">Procurement Management</h1><p className="text-sm text-neutral-400 mt-1">Supplier management, purchasing controls and live traceability</p></div>
       <button onClick={load} className="p-2.5 rounded-xl border bg-white text-neutral-500"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
     </div>
     <div className="flex flex-wrap gap-2 border-b border-neutral-200">
