@@ -12,6 +12,9 @@ import {
 } from '../services/prfService'
 import { getPos } from '../services/poService'
 import { getSuppliers } from '../services/procurementRegistryService'
+import {
+  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts'
 
 const fmtShort = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
@@ -37,7 +40,6 @@ export default function PrfDashboard() {
   const [warning, setWarning] = useState('')
   const [status,  setStatus]  = useState('all')
   const [search,  setSearch]  = useState('')
-  const [hoveredMonth, setHoveredMonth] = useState(null)
 
   const canSeePOs = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
 
@@ -101,15 +103,19 @@ export default function PrfDashboard() {
     const date = new Date()
     date.setDate(1)
     date.setMonth(date.getMonth() - (5 - index))
-    const value = prfs.filter(p => {
+    const inMonth = prfs.filter(p => {
       const source = new Date(p.date || p.created_at)
       return source.getMonth() === date.getMonth() && source.getFullYear() === date.getFullYear()
-    }).length
-    return { label: date.toLocaleDateString('en', { month: 'short' }), value }
+    })
+    const approved = inMonth.filter(p => p.status === 'approved').length
+    return {
+      label:    date.toLocaleDateString('en', { month: 'short' }),
+      total:    inMonth.length,
+      approved,
+      pending:  Math.max(0, inMonth.length - approved),
+    }
   }), [prfs])
-  const chartMax = Math.max(1, ...monthBuckets.map(m => m.value))
-  const chartPoints = monthBuckets.map((m, index) => `${index * 20},${36 - (m.value / chartMax) * 30}`).join(' ')
-  const hasTrendData = monthBuckets.some(month => month.value > 0)
+  const hasTrendData = monthBuckets.some(month => month.total > 0)
 
   const supplierBreakdown = useMemo(() => {
     const supplierGroups = suppliers.reduce((groups, supplier) => {
@@ -235,31 +241,44 @@ export default function PrfDashboard() {
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><BarChart3 className="h-4 w-4" /></div>
           </div>
-          <div className="relative mt-5 rounded-2xl bg-neutral-50 px-4 pb-3 pt-5">
-            {loading ? <div className="h-44 animate-pulse rounded-xl bg-neutral-100" /> : hasTrendData ? <>
-              {hoveredMonth && <div role="status" aria-live="polite" className="pointer-events-none absolute top-3 z-10 -translate-x-1/2 rounded-lg bg-secondary-700 px-2.5 py-1.5 text-[10px] font-bold text-white shadow-lg" style={{ left: `${8 + hoveredMonth.index * 16.8}%` }}>{hoveredMonth.label}: {hoveredMonth.value} request{hoveredMonth.value === 1 ? '' : 's'}</div>}
-              <svg viewBox="0 0 100 42" className="h-44 w-full overflow-visible" preserveAspectRatio="none" aria-label="Purchase request trend" onMouseLeave={() => setHoveredMonth(null)}>
-                {[6, 16, 26, 36].map(y => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#e5e7eb" strokeWidth="0.35" strokeDasharray="2 2" />)}
-                <defs><linearGradient id="procurementTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#004A77" stopOpacity="0.24" /><stop offset="100%" stopColor="#004A77" stopOpacity="0" /></linearGradient></defs>
-                <polygon points={`0,40 ${chartPoints} 100,40`} fill="url(#procurementTrend)" />
-                <polyline points={chartPoints} fill="none" stroke="#004A77" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                {monthBuckets.map((month, index) => <g
-                  key={month.label}
-                  role="img"
-                  tabIndex={0}
-                  aria-label={`${month.label}: ${month.value} purchase request${month.value === 1 ? '' : 's'}`}
-                  onMouseEnter={() => setHoveredMonth({ ...month, index })}
-                  onFocus={() => setHoveredMonth({ ...month, index })}
-                  onBlur={() => setHoveredMonth(null)}
-                  className="cursor-pointer outline-none"
-                >
-                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="4" fill="transparent" />
-                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="2.6" fill="none" stroke="#004A77" strokeWidth="0.7" opacity={hoveredMonth?.index === index ? 1 : 0} />
-                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="1.4" fill="white" stroke="#004A77" strokeWidth="0.8" />
-                </g>)}
-              </svg>
-            </> : <div className="flex h-44 flex-col items-center justify-center text-center"><BarChart3 className="mb-3 h-8 w-8 text-neutral-300" /><p className="text-xs font-bold text-neutral-500">No purchase requests in the last six months</p><p className="mt-1 text-[10px] text-neutral-400">New requests will appear here automatically.</p></div>}
-            <div className="grid grid-cols-6 text-center text-[10px] font-bold text-neutral-400">{monthBuckets.map(m => <span key={m.label}>{m.label}</span>)}</div>
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-[11px] font-semibold text-neutral-500">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> Approved</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Pending</span>
+          </div>
+          <div className="mt-3 h-64">
+            {loading ? <div className="h-full animate-pulse rounded-xl bg-neutral-100" /> : hasTrendData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthBuckets} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="prfApproved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#004A77" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#004A77" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="prfPending" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.20} />
+                      <stop offset="100%" stopColor="#F59E0B" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#eef2f6" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} dy={6} />
+                  <YAxis width={28} allowDecimals={false} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ stroke: '#004A77', strokeDasharray: '3 3', strokeWidth: 1 }}
+                    contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: 8, padding: '8px 10px', boxShadow: '0 8px 24px rgba(15,23,42,0.18)' }}
+                    labelStyle={{ color: '#e5e7eb', fontSize: 11, fontWeight: 700, marginBottom: 4 }}
+                    itemStyle={{ color: '#f8fafc', fontSize: 11, padding: 0 }}
+                  />
+                  <Area type="monotone" dataKey="pending" name="Pending" stroke="#F59E0B" strokeWidth={2} fill="url(#prfPending)" activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} />
+                  <Area type="monotone" dataKey="approved" name="Approved" stroke="#004A77" strokeWidth={2.4} fill="url(#prfApproved)" activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <BarChart3 className="mb-3 h-8 w-8 text-neutral-300" />
+                <p className="text-xs font-bold text-neutral-500">No purchase requests in the last six months</p>
+                <p className="mt-1 text-[10px] text-neutral-400">New requests will appear here automatically.</p>
+              </div>
+            )}
           </div>
         </section>
 
