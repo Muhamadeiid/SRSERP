@@ -11,7 +11,7 @@ import NotificationBell from '../components/notifications/NotificationBell'
 import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 // Full Procurement module access: Admin, Depot Manager, Purchasing
-const PROC_FULL_ROLES = ['admin', 'depot_manager', 'procurement', 'purchasing']
+const PROC_FULL_ROLES = ['admin']
 
 const NAV = [
   { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },

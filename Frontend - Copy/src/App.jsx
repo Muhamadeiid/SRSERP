@@ -97,7 +97,8 @@ const HR_FULL_DEPTS = []
 const DASH_ROLES    = ['admin', 'depot_manager']
 
 // Procurement full module: Admin, Depot Manager, Purchasing only
-const PROC_ROLES    = ['admin', 'depot_manager', 'procurement', 'purchasing']
+// Procurement is temporarily restricted to the Super Admin account only.
+const PROC_ROLES    = ['admin']
 
 // Everyone (all authenticated users — no roles prop = just needs to be logged in)
 
@@ -170,7 +171,7 @@ const RoutePreloader = () => {
       if (!isHRRoute) loaders.splice(1, 0, importWorkforce)
       loaders.push(importAttendance)
     }
-    if (['admin', 'depot_manager', 'procurement', 'purchasing'].includes(role)) {
+    if (role === 'admin') {
       loaders.push(importProcLayout, importPrfDashboard)
     }
     if (['admin', 'depot_manager'].includes(role)) {
@@ -371,10 +372,9 @@ export default function App() {
           <Route path="notification-settings" element={<NotificationPreferencesPage />} />
         </Route>
 
-        {/* Procurement — any authenticated user can reach New PRF and PRF detail.
-            Dashboard, Master List, PO, IGI are restricted to PROC_ROLES inside. */}
+        {/* Procurement — temporarily restricted to Super Admin only. */}
         <Route path="/procurement" element={
-          <ProtectedRoute redirect="/login">
+          <ProtectedRoute roles={PROC_ROLES} redirect="/">
             <ProcurementLayout />
           </ProtectedRoute>
         }>
@@ -415,7 +415,7 @@ export default function App() {
           } />
           <Route path="notifications" element={<NotificationCenterPage />} />
           <Route path="notification-settings" element={<NotificationPreferencesPage />} />
-          {/* PRF detail and new PRF — all authenticated users (EHS, managers, staff, etc.) */}
+          {/* The parent route enforces Super Admin access for every child route. */}
           <Route path="new" element={<PrfNewPage />} />
           <Route path=":id" element={<PrfDetail  />} />
         </Route>
