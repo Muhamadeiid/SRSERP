@@ -30,7 +30,6 @@ export default defineConfig({
           if (id.includes('axios')) return 'vendor-http'
           if (id.includes('exceljs')) return 'office-excel'
           if (id.includes('docx') || id.includes('file-saver')) return 'office-word'
-          return 'vendor'
         },
       },
     },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { createElement, useState, useEffect, useCallback, useMemo } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -162,10 +162,10 @@ export default function PrfDashboard() {
           { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600' },
           { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-violet-50 text-violet-600' },
           { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600' },
-        ].map(({ label, value, note, icon: Icon, tone }) => (
+        ].map(({ label, value, note, icon, tone }) => (
           <div key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-5 w-5" /></div>
+              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}>{createElement(icon, { className: 'h-5 w-5' })}</div>
               <ArrowUpRight className="h-4 w-4 text-neutral-300 transition-colors group-hover:text-primary" />
             </div>
             <p className="mt-5 text-3xl font-extrabold leading-none text-secondary-700">{value}</p>
@@ -214,11 +214,11 @@ export default function PrfDashboard() {
                 iconClr: 'text-neutral-500',
                 hint:    'All purchase orders',
               },
-            ].map(({ label, value, icon: Icon, iconBg, iconClr, hint, urgent }) => (
+            ].map(({ label, value, icon, iconBg, iconClr, hint, urgent }) => (
               <div key={label}
                 className={`bg-white rounded-2xl border p-4 sm:p-5 flex items-center gap-3 ${urgent ? 'border-amber-300 ring-1 ring-amber-200' : 'border-neutral-100'}`}>
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                  <Icon className={`w-5 h-5 ${iconClr}`} />
+                  {createElement(icon, { className: `w-5 h-5 ${iconClr}` })}
                 </div>
                 <div className="min-w-0">
                   <p className={`text-2xl font-extrabold leading-none ${urgent ? 'text-amber-600' : 'text-secondary-700'}`}>{value}</p>
@@ -243,13 +243,26 @@ export default function PrfDashboard() {
           </div>
           <div className="relative mt-5 rounded-2xl bg-neutral-50 px-4 pb-3 pt-5">
             {loading ? <div className="h-44 animate-pulse rounded-xl bg-neutral-100" /> : hasTrendData ? <>
-              {hoveredMonth && <div className="pointer-events-none absolute top-3 z-10 -translate-x-1/2 rounded-lg bg-secondary-700 px-2.5 py-1.5 text-[10px] font-bold text-white shadow-lg" style={{ left: `${8 + hoveredMonth.index * 16.8}%` }}>{hoveredMonth.label}: {hoveredMonth.value} request{hoveredMonth.value === 1 ? '' : 's'}</div>}
+              {hoveredMonth && <div role="status" aria-live="polite" className="pointer-events-none absolute top-3 z-10 -translate-x-1/2 rounded-lg bg-secondary-700 px-2.5 py-1.5 text-[10px] font-bold text-white shadow-lg" style={{ left: `${8 + hoveredMonth.index * 16.8}%` }}>{hoveredMonth.label}: {hoveredMonth.value} request{hoveredMonth.value === 1 ? '' : 's'}</div>}
               <svg viewBox="0 0 100 42" className="h-44 w-full overflow-visible" preserveAspectRatio="none" aria-label="Purchase request trend" onMouseLeave={() => setHoveredMonth(null)}>
                 {[6, 16, 26, 36].map(y => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#e5e7eb" strokeWidth="0.35" strokeDasharray="2 2" />)}
                 <defs><linearGradient id="procurementTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#004A77" stopOpacity="0.24" /><stop offset="100%" stopColor="#004A77" stopOpacity="0" /></linearGradient></defs>
                 <polygon points={`0,40 ${chartPoints} 100,40`} fill="url(#procurementTrend)" />
                 <polyline points={chartPoints} fill="none" stroke="#004A77" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                {monthBuckets.map((month, index) => <g key={month.label} onMouseEnter={() => setHoveredMonth({ ...month, index })} className="cursor-pointer"><circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="4" fill="transparent" /><circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="1.4" fill="white" stroke="#004A77" strokeWidth="0.8" /></g>)}
+                {monthBuckets.map((month, index) => <g
+                  key={month.label}
+                  role="img"
+                  tabIndex={0}
+                  aria-label={`${month.label}: ${month.value} purchase request${month.value === 1 ? '' : 's'}`}
+                  onMouseEnter={() => setHoveredMonth({ ...month, index })}
+                  onFocus={() => setHoveredMonth({ ...month, index })}
+                  onBlur={() => setHoveredMonth(null)}
+                  className="cursor-pointer outline-none"
+                >
+                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="4" fill="transparent" />
+                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="2.6" fill="none" stroke="#67e8f9" strokeWidth="0.7" opacity={hoveredMonth?.index === index ? 1 : 0} />
+                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="1.4" fill="white" stroke="#004A77" strokeWidth="0.8" />
+                </g>)}
               </svg>
             </> : <div className="flex h-44 flex-col items-center justify-center text-center"><BarChart3 className="mb-3 h-8 w-8 text-neutral-300" /><p className="text-xs font-bold text-neutral-500">No purchase requests in the last six months</p><p className="mt-1 text-[10px] text-neutral-400">New requests will appear here automatically.</p></div>}
             <div className="grid grid-cols-6 text-center text-[10px] font-bold text-neutral-400">{monthBuckets.map(m => <span key={m.label}>{m.label}</span>)}</div>

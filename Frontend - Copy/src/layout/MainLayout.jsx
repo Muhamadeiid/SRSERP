@@ -14,7 +14,7 @@ export default function MainLayout() {
   if (isHRRoute) return <Outlet />
 
   return (
-    <div className="font-sans bg-neutral-50 min-h-screen overflow-x-hidden">
+    <div className="font-sans bg-neutral-50 min-h-screen min-h-[100dvh] overflow-x-hidden">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />
       <TopBar
         sidebarW={sidebarW}

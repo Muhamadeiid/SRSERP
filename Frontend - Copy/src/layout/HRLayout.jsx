@@ -142,7 +142,7 @@ export default function HRLayout() {
   const handleLogout = () => { dispatch(logout()); navigate('/login') }
 
   return (
-    <div className="font-sans bg-neutral-50 min-h-screen flex overflow-x-hidden">
+    <div className="font-sans bg-neutral-50 min-h-screen min-h-[100dvh] flex overflow-x-hidden">
 
       {isMobile && (
         <div
