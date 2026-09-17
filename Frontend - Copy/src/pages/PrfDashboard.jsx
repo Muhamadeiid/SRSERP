@@ -121,30 +121,24 @@ export default function PrfDashboard() {
   }, [suppliers])
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
 
-      {/* Vendora-inspired overview, adapted to the Rotem SRS design system. */}
-      <div className="relative overflow-hidden rounded-[28px] bg-secondary-700 px-5 py-6 sm:px-8 sm:py-7 text-white shadow-xl shadow-secondary-700/10">
-        <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/30 blur-3xl" />
-        <div className="absolute bottom-0 right-1/3 h-24 w-24 rounded-full bg-cyan-400/10 blur-2xl" />
-        <div className="relative flex flex-wrap items-center justify-between gap-5">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-200">
-              <span className="h-2 w-2 rounded-full bg-cyan-300" /> Live procurement overview
-            </div>
-            <h1 className="text-2xl font-extrabold leading-tight sm:text-[30px]">Procurement Dashboard</h1>
-            <p className="mt-2 max-w-xl text-sm text-white/60">A single operational view for requests, suppliers, orders and receiving controls.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <button onClick={fetchAll}
-            className="rounded-xl border border-white/15 bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20">
-            <RefreshCw className="w-4 h-4" />
+      {/* Page header — same pattern as the Operations Dashboard. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold leading-tight text-secondary-700 sm:text-[28px]">Procurement Dashboard</h1>
+          <p className="mt-1 text-sm text-neutral-400">A single operational view for requests, suppliers, orders and receiving controls.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={fetchAll} disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-50 disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
           <button onClick={() => navigate('/procurement/new')}
-            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-secondary-700 transition-colors hover:bg-cyan-50">
-            <Plus className="w-4 h-4" /> New PRF
+            className="flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-white hover:bg-primary/90">
+            <Plus className="w-3.5 h-3.5" /> New PRF
           </button>
-        </div>
         </div>
       </div>
 
@@ -152,25 +146,25 @@ export default function PrfDashboard() {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {loading ? Array.from({ length: 4 }, (_, index) => (
           <div key={index} className="animate-pulse rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm sm:p-5">
-            <div className="h-11 w-11 rounded-2xl bg-neutral-100" />
-            <div className="mt-5 h-8 w-14 rounded-lg bg-neutral-100" />
-            <div className="mt-3 h-3 w-28 rounded bg-neutral-100" />
-            <div className="mt-2 h-2.5 w-20 rounded bg-neutral-50" />
+            <div className="h-10 w-10 rounded-xl bg-neutral-100" />
+            <div className="mt-4 h-7 w-14 rounded-lg bg-neutral-100" />
+            <div className="mt-2 h-3 w-28 rounded bg-neutral-100" />
+            <div className="mt-1.5 h-2.5 w-20 rounded bg-neutral-50" />
           </div>
         )) : [
           { label: 'Purchase Requests', value: prfs.length, note: `${statValues.pending} still in workflow`, icon: ClipboardList, tone: 'bg-blue-50 text-blue-600' },
           { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600' },
-          { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-violet-50 text-violet-600' },
+          { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-primary/10 text-primary' },
           { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600' },
         ].map(({ label, value, note, icon, tone }) => (
-          <div key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+          <div key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}>{createElement(icon, { className: 'h-5 w-5' })}</div>
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>{createElement(icon, { className: 'h-5 w-5' })}</div>
               <ArrowUpRight className="h-4 w-4 text-neutral-300 transition-colors group-hover:text-primary" />
             </div>
-            <p className="mt-5 text-3xl font-extrabold leading-none text-secondary-700">{value}</p>
-            <p className="mt-2 text-xs font-bold text-secondary-700">{label}</p>
-            <p className="mt-1 text-[11px] text-neutral-400">{note}</p>
+            <p className="mt-4 text-2xl font-extrabold leading-none text-secondary-700">{value}</p>
+            <p className="mt-1.5 text-xs font-bold text-secondary-700">{label}</p>
+            <p className="mt-0.5 text-[11px] text-neutral-400">{note}</p>
           </div>
         ))}
       </div>
@@ -260,7 +254,7 @@ export default function PrfDashboard() {
                   className="cursor-pointer outline-none"
                 >
                   <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="4" fill="transparent" />
-                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="2.6" fill="none" stroke="#67e8f9" strokeWidth="0.7" opacity={hoveredMonth?.index === index ? 1 : 0} />
+                  <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="2.6" fill="none" stroke="#004A77" strokeWidth="0.7" opacity={hoveredMonth?.index === index ? 1 : 0} />
                   <circle cx={index * 20} cy={36 - (month.value / chartMax) * 30} r="1.4" fill="white" stroke="#004A77" strokeWidth="0.8" />
                 </g>)}
               </svg>
@@ -279,7 +273,7 @@ export default function PrfDashboard() {
               const percent = suppliers.length ? Math.round((value / suppliers.length) * 100) : 0
               return <div key={label}>
                 <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px]"><span className="truncate font-semibold text-secondary-700">{label}</span><span className="font-bold text-neutral-400">{value}</span></div>
-                <div className="h-2 overflow-hidden rounded-full bg-neutral-100"><div className={`h-full rounded-full ${['bg-primary', 'bg-cyan-500', 'bg-violet-500', 'bg-amber-500'][index]}`} style={{ width: `${percent}%` }} /></div>
+                <div className="h-2 overflow-hidden rounded-full bg-neutral-100"><div className={`h-full rounded-full ${['bg-primary', 'bg-amber-500', 'bg-emerald-500', 'bg-neutral-400'][index]}`} style={{ width: `${percent}%` }} /></div>
               </div>
             })}
           </div>
