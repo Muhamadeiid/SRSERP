@@ -12,7 +12,7 @@ import { useLookups } from '../hooks/useLookups'
 import {
   getLeaveRequests, getLeaveRequest, createLeaveRequest,
   managerApproveLeave, hrApproveLeave, approveLeave, rejectLeave, cancelLeave, rescheduleLeave,
-  approveLeaveCancellation, rejectLeaveCancellation, getLeaveMedicalAttachment,
+  approveLeaveCancellation, cancelApprovedLeave, rejectLeaveCancellation, getLeaveMedicalAttachment,
   requestLeaveAmendment, approveLeaveAmendment, rejectLeaveAmendment,
   updateLeaveTrackingNo, archiveLeaveRequest, unarchiveLeaveRequest, updateLeaveDetails,
 } from '../services/leaveService'
@@ -2281,7 +2281,7 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, onApproveCancellation, onRejectCancellation, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, onRequestCancellation, onCancelApproved, onApproveCancellation, onRejectCancellation, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
   const { departments } = useLookups()
   const resolveDept = (raw) => {
     if (!raw) return ''
@@ -2379,6 +2379,10 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     && currentUserId != null
     && String(req.user_id) === String(currentUserId)
     && !['admin', 'depot_manager', 'hr', 'manager'].includes(userRole)
+  const canCancelApproved = req.can_cancel_approved
+    ?? (req.status === 'approved' && isDepotAdmin)
+  const canRequestCancellation = req.can_request_cancellation
+    ?? (req.status === 'approved' && canHrApprove && !isDepotAdmin)
   const hasNoDirectManager = req.manager_step_can_be_skipped
     ?? (!req.employee?.user_manager_id && !req.employee?.direct_manager_id)
   const awaitingHrApproval = req.can_approve_hr
@@ -2386,7 +2390,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     || (req.status === 'pending' && hasNoDirectManager)
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
-    && (canHrApprove || isDepotAdmin)
+    && (isDirectManager || canHrApprove || isDepotAdmin)
   const canEditOtr = !isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
     && (isDirectManager || canHrApprove || isDepotAdmin)
@@ -2827,6 +2831,24 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </button>
             )}
 
+            {canCancelApproved && (
+              <button onClick={() => onCancelApproved(req.id)}
+                title={`Cancel Fully Approved ${isLRF ? 'Leave' : 'Overtime'}`} aria-label={`Cancel Fully Approved ${isLRF ? 'Leave' : 'Overtime'}`}
+                className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold">
+                <Ban className="w-4 h-4" />
+                <span>Cancel Approved {isLRF ? 'Leave' : 'Overtime'}</span>
+              </button>
+            )}
+
+            {canRequestCancellation && (
+              <button onClick={() => onRequestCancellation(req.id)}
+                title="Request Cancellation" aria-label="Request Cancellation"
+                className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold">
+                <Ban className="w-4 h-4" />
+                <span>Request Cancellation</span>
+              </button>
+            )}
+
             {canRequestAmendment && (
               <button onClick={() => setShowAmendment(true)}
                 className="w-full sm:w-auto min-h-[44px] px-4 flex items-center justify-center gap-2 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-sm font-semibold">
@@ -3080,7 +3102,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     if (request.status === 'pending' || request.status === 'manager_approved') return 'hr'
     if (request.status === 'hr_approved') return 'depot'
     if (request.status === 'cancellation_pending') return 'depot'
-    if (request.status === 'amendment_pending') return 'depot'
+    if (request.status === 'amendment_pending') return 'amendment'
     return null
   }
   const approvalStages = [
@@ -3088,6 +3110,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     ['manager', 'Direct Manager'],
     ['hr', 'HR'],
     ['depot', 'Depot Manager'],
+    ['amendment', 'Amendments'],
   ]
   const pendingForStage = approvalStage === 'all'
     ? pending
@@ -3200,8 +3223,20 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           </button>
         )}
         {['pending','manager_approved','hr_approved','approved'].includes(r.status) && r.user_id === user?.id && !['admin','depot_manager','hr','manager'].includes(user?.role) && (
-          <button onClick={() => setCancelModal({ id: r.id, status: r.status })}
+          <button onClick={() => setCancelModal({ id: r.id, status: r.status, type: r.type })}
             className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-300 hover:text-neutral-500 transition-colors" title={r.status === 'approved' ? 'Request Cancellation' : 'Cancel'}>
+            <Ban className="w-4 h-4" />
+          </button>
+        )}
+        {(r.can_cancel_approved ?? (r.status === 'approved' && isDepotAdmin)) && (
+          <button onClick={() => setCancelModal({ id: r.id, status: r.status, type: r.type, direct: true })}
+            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" title={`Cancel Fully Approved ${r.type === 'lrf' ? 'Leave' : 'Overtime'}`}>
+            <Ban className="w-4 h-4" />
+          </button>
+        )}
+        {(r.can_request_cancellation ?? (r.status === 'approved' && isHrApprover && !isDepotAdmin)) && (
+          <button onClick={() => setCancelModal({ id: r.id, status: r.status, type: r.type, hrRequest: true })}
+            className="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors" title="Request Cancellation from Depot Manager">
             <Ban className="w-4 h-4" />
           </button>
         )}
@@ -3373,8 +3408,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
 
   const handleCancel = async () => {
     if (!cancelModal) return
+    if ((cancelModal.direct || cancelModal.hrRequest) && cancelReason.trim().length < 3) return
     try {
-      await cancelLeave(cancelModal.id, cancelReason)
+      const response = cancelModal.direct
+        ? await cancelApprovedLeave(cancelModal.id, cancelReason.trim())
+        : await cancelLeave(cancelModal.id, cancelReason)
+      if (cancelModal.direct && response?.message) alert(response.message)
       setCancelModal(null)
       setCancelReason('')
       setViewReq(null)
@@ -3905,7 +3944,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           onApprove={handleApprove}
           onReject={(id) => { setRejectModal({ id }); setViewReq(null) }}
           onReschedule={(id) => { setRescheduleModal({ id }); setViewReq(null) }}
-          onCancel={(id) => { setCancelModal({ id, status: viewReq.status }); setViewReq(null) }}
+          onCancel={(id) => { setCancelModal({ id, status: viewReq.status, type: viewReq.type }); setViewReq(null) }}
+          onRequestCancellation={(id) => { setCancelModal({ id, status: 'approved', type: viewReq.type, hrRequest: true }); setViewReq(null) }}
+          onCancelApproved={(id) => { setCancelModal({ id, status: 'approved', type: viewReq.type, direct: true }); setViewReq(null) }}
           onApproveCancellation={handleApproveCancellation}
           onRejectCancellation={(id) => { setCancellationRejectModal({ id }); setViewReq(null) }}
           userRole={user?.role}
@@ -3988,9 +4029,13 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                 <Ban className="w-5 h-5 text-neutral-500" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-bold text-secondary-700">{cancelModal.status === 'approved' ? 'Request Cancellation' : 'Cancel Request'}</p>
+                <p className="text-sm font-bold text-secondary-700">{cancelModal.direct ? `Cancel Fully Approved ${cancelModal.type === 'lrf' ? 'Leave' : 'Overtime'}` : (cancelModal.status === 'approved' ? 'Request Cancellation' : 'Cancel Request')}</p>
                 <p className="text-xs text-neutral-400">
-                  {cancelModal.status === 'approved'
+                  {cancelModal.direct
+                    ? (cancelModal.type === 'lrf'
+                      ? 'The leave will be cancelled immediately, its balance will be released, and attendance can be recorded for its dates.'
+                      : 'The overtime request will be cancelled immediately.')
+                    : cancelModal.status === 'approved'
                     ? 'The request remains approved until the Depot Manager makes a final decision.'
                     : 'This request has not reached final approval and will be cancelled immediately.'}
                 </p>
@@ -3998,7 +4043,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <button onClick={() => { setCancelModal(null); setCancelReason('') }} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400 shrink-0"><X className="w-4 h-4" /></button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Reason (optional)</label>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1">Reason {(cancelModal.direct || cancelModal.hrRequest) ? '(required)' : '(optional)'}</label>
               <textarea
                 value={cancelReason}
                 onChange={e => setCancelReason(e.target.value)}
@@ -4009,8 +4054,10 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setCancelModal(null); setCancelReason('') }} className="px-4 py-2 text-sm font-semibold text-neutral-500 hover:bg-neutral-100 rounded-lg transition-all">Close</button>
-              <button onClick={handleCancel} className="px-5 py-2 text-sm font-bold text-white bg-neutral-600 hover:bg-neutral-700 rounded-lg transition-all">
-                {cancelModal.status === 'approved' ? 'Submit Cancellation Request' : 'Confirm Cancel'}
+              <button onClick={handleCancel} disabled={(cancelModal.direct || cancelModal.hrRequest) && cancelReason.trim().length < 3} className="px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                {cancelModal.direct
+                  ? (cancelModal.type === 'lrf' ? 'Cancel Leave & Release Balance' : 'Cancel Overtime Request')
+                  : (cancelModal.status === 'approved' ? 'Submit Cancellation Request' : 'Confirm Cancel')}
               </button>
             </div>
           </div>

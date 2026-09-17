@@ -782,18 +782,26 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $isOwner = $leaveRequest->user_id === $user->id;
         $isApproverAccount = in_array($user->role, ['admin', 'depot_manager', 'hr', 'manager'], true);
+        $isHrCancellationRequester = $leaveRequest->status === 'approved'
+            && $user->role !== 'admin'
+            && $user->role !== 'depot_manager'
+            && ($user->role === 'hr' || $user->hasPermission('leaves.approve_hr'));
 
-        if (!$isOwner || $isApproverAccount) {
+        if ((!$isOwner || $isApproverAccount) && !$isHrCancellationRequester) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the staff account that submitted this request can withdraw it. Approvers must reject it instead.',
+                'message' => 'Only the submitting employee may withdraw a request. HR may request cancellation of a fully approved leave.',
             ], 403);
         }
         if (in_array($leaveRequest->status, ['cancelled', 'rejected', 'rescheduled', 'cancellation_pending', 'amendment_pending'], true)) {
             return response()->json(['success' => false, 'message' => 'Cannot cancel this request'], 422);
         }
 
-        $request->validate(['reason' => 'nullable|string|max:2000']);
+        $request->validate([
+            'reason' => $isHrCancellationRequester
+                ? 'required|string|min:3|max:2000'
+                : 'nullable|string|max:2000',
+        ]);
 
         // Final approval stays effective until Depot/Admin accepts the cancellation.
         if ($leaveRequest->status === 'approved') {
@@ -808,7 +816,7 @@ class LeaveRequestController extends Controller
             ]);
 
             $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
-            $message = "{$leaveRequest->employee_name} requested cancellation of {$typeLabel} ({$leaveRequest->tracking_no}).";
+            $message = "{$user->name} requested cancellation of {$typeLabel} ({$leaveRequest->tracking_no}) for {$leaveRequest->employee_name}.";
             Notification::notifyRole(
                 'depot_manager',
                 $leaveRequest->type . '_cancellation_requested',
@@ -883,6 +891,87 @@ class LeaveRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cancellation approved',
+            'data' => $leaveRequest->fresh(['canceller:id,name']),
+        ]);
+    }
+
+    /** Depot Manager / Super Admin directly cancels a fully-approved LRF or OTR. */
+    public function cancelApproved(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless(
+            in_array($user->role, ['admin', 'depot_manager'], true),
+            403,
+            'Only Super Admin or Depot Manager can cancel a fully approved leave.'
+        );
+
+        $validated = $request->validate([
+            'reason' => 'required|string|min:3|max:2000',
+        ]);
+
+        [$leaveRequest, $balanceRestored] = DB::transaction(function () use ($leaveRequest, $user, $validated) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            if ($locked->status !== 'approved') {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a fully approved leave or overtime request can be cancelled directly.',
+                ]);
+            }
+
+            $balanceRestored = false;
+            if (
+                $locked->balance_deducted_at
+                && $locked->employee_id
+                && (float) $locked->days > 0
+                && !$locked->company_paid
+                && in_array($locked->leave_type, ['annual', 'casual', 'sick', 'early'], true)
+            ) {
+                $balance = LeaveBalance::where('employee_id', $locked->employee_id)->lockForUpdate()->first();
+                if ($balance) {
+                    $balance->restore($locked->leave_type, (float) $locked->days);
+                    $balanceRestored = true;
+                }
+            }
+
+            $locked->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'cancelled_by' => $user->id,
+                'cancellation_reason' => $validated['reason'],
+                'requested_cancellation_at' => null,
+                'requested_cancellation_by' => null,
+                'cancellation_rejected_at' => null,
+                'cancellation_rejected_by' => null,
+                'cancellation_rejection_reason' => null,
+            ]);
+
+            return [$locked, $balanceRestored];
+        });
+
+        $tracking = $leaveRequest->tracking_no ?: "#{$leaveRequest->id}";
+        $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        $body = "{$typeLabel} ({$tracking}) for {$leaveRequest->employee_name} was cancelled by {$user->name}.";
+        $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
+        if ($leaveRequest->user_id) {
+            Notification::notifyUser(
+                $leaveRequest->user_id,
+                $leaveRequest->type . '_cancelled',
+                "Fully Approved {$typeLabel} Cancelled",
+                $body,
+                $data,
+                true,
+                ['priority' => 'warn']
+            );
+        }
+        Notification::notifyRole('hr', $leaveRequest->type . '_cancelled', "Fully Approved {$typeLabel} Cancelled", $body, $data);
+
+        return response()->json([
+            'success' => true,
+            'message' => $balanceRestored
+                ? 'Leave cancelled and deducted balance restored. Attendance can now be recorded.'
+                : ($leaveRequest->type === 'lrf'
+                    ? 'Leave cancelled. Reserved balance is available again and attendance can now be recorded.'
+                    : 'Overtime request cancelled.'),
+            'balance_restored' => $balanceRestored,
             'data' => $leaveRequest->fresh(['canceller:id,name']),
         ]);
     }
@@ -1245,6 +1334,14 @@ class LeaveRequestController extends Controller
             $request->setAttribute(
                 'can_approve_cancellation',
                 $isDepotAdmin && $request->status === 'cancellation_pending'
+            );
+            $request->setAttribute(
+                'can_cancel_approved',
+                $isDepotAdmin && $request->status === 'approved'
+            );
+            $request->setAttribute(
+                'can_request_cancellation',
+                !$isDepotAdmin && $isHr && $request->status === 'approved'
             );
             $request->setAttribute(
                 'can_approve_amendment',

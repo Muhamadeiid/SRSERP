@@ -93,6 +93,7 @@ export const updateLeaveDetails  = (id, data = {}) => mutate(`/leave-requests/${
 export const rejectLeave         = (id, reason)  => mutate(`/leave-requests/${id}/reject`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const cancelLeave         = (id, reason)  => mutate(`/leave-requests/${id}/cancel`,          { method: 'POST', body: JSON.stringify({ reason }) })
 export const approveLeaveCancellation = (id) => mutate(`/leave-requests/${id}/approve-cancellation`, { method: 'POST' })
+export const cancelApprovedLeave = (id, reason) => mutate(`/leave-requests/${id}/cancel-approved`, { method: 'POST', body: JSON.stringify({ reason }) })
 export const rejectLeaveCancellation = (id, reason) => mutate(`/leave-requests/${id}/reject-cancellation`, { method: 'POST', body: JSON.stringify({ reason }) })
 export const requestLeaveAmendment = (id, data) => mutate(`/leave-requests/${id}/request-amendment`, { method: 'POST', body: JSON.stringify(data) })
 export const approveLeaveAmendment = (id) => mutate(`/leave-requests/${id}/approve-amendment`, { method: 'POST' })
