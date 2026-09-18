@@ -2,8 +2,7 @@ import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle, ArrowRight, Award, CakeSlice, CalendarDays, CheckCircle2,
-  ClipboardList, Clock3, FilePlus2, Loader2, RefreshCw, Search, ShieldCheck,
-  ShoppingCart, UserCheck, Users,
+  Clock3, Loader2, RefreshCw, Search, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
 import { useLookups } from '../../hooks/useLookups'
@@ -49,75 +48,14 @@ function StatusBadge({ status }) {
     pending: ['Pending', 'bg-amber-50 text-amber-700'],
     manager_approved: ['Waiting HR', 'bg-sky-50 text-sky-700'],
     hr_approved: ['Waiting Depot', 'bg-violet-50 text-violet-700'],
-    pending_procurement: ['Waiting Procurement', 'bg-amber-50 text-amber-700'],
-    pending_ehs: ['Waiting EHS', 'bg-sky-50 text-sky-700'],
-    pending_depot: ['Waiting Depot', 'bg-violet-50 text-violet-700'],
     cancelled: ['Cancelled', 'bg-neutral-100 text-neutral-500'],
   }[status] || [String(status || '').replaceAll('_', ' '), 'bg-neutral-100 text-neutral-600']
   return <span className={`rounded-full px-2 py-1 text-[9px] font-bold capitalize ${meta[1]}`}>{meta[0]}</span>
 }
 
-function ProcurementOverview({ requests, loading, navigate }) {
-  const totals = useMemo(() => ({
-    all: requests.length,
-    pending: requests.filter(item => String(item.status || '').startsWith('pending')).length,
-    approved: requests.filter(item => item.status === 'approved').length,
-    rejected: requests.filter(item => item.status === 'rejected').length,
-  }), [requests])
-  const recent = useMemo(() => [...requests]
-    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
-    .slice(0, 4), [requests])
-
-  return (
-    <section className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 bg-violet-50/40 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-md border border-violet-100 bg-violet-50 text-violet-700"><ShoppingCart className="h-4 w-4" /></span>
-          <div><h2 className="text-sm font-bold text-secondary-700">Procurement</h2><p className="text-[10px] text-neutral-400">Purchase requests and approval pipeline</p></div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => navigate('/procurement/new')} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 text-[10px] font-bold text-violet-700 hover:bg-violet-50"><FilePlus2 className="h-3.5 w-3.5" /> New PRF</button>
-          <button type="button" onClick={() => navigate('/procurement')} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-violet-700 px-3 text-[10px] font-bold text-white hover:bg-violet-800">Open Module <ArrowRight className="h-3.5 w-3.5" /></button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 border-b border-neutral-100 lg:grid-cols-4">
-        {[
-          ['Total PRFs', totals.all, 'text-secondary-700'],
-          ['In Workflow', totals.pending, 'text-amber-600'],
-          ['Approved', totals.approved, 'text-emerald-600'],
-          ['Rejected', totals.rejected, 'text-red-600'],
-        ].map(([label, value, color], index) => (
-          <button type="button" key={label} onClick={() => navigate('/procurement/master')} className={`px-4 py-4 text-left hover:bg-neutral-50 ${index % 2 === 0 ? 'border-r' : ''} ${index < 2 ? 'border-b lg:border-b-0' : ''} lg:border-r lg:last:border-r-0 border-neutral-100`}>
-            <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">{label}</p>
-            <p className={`mt-1 text-2xl font-extrabold ${color}`}>{loading ? '...' : value}</p>
-          </button>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-[1fr_auto]">
-        <div className="divide-y divide-neutral-100">
-          {recent.length ? recent.map(item => (
-            <button type="button" key={item.id} onClick={() => navigate(`/procurement/${item.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-violet-50 text-violet-700"><ClipboardList className="h-4 w-4" /></span>
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{item.prf_number || `PRF #${item.id}`}</strong><span className="mt-0.5 block truncate text-[10px] text-neutral-400">{item.requester?.name || '—'} · {item.items?.length || 0} item(s)</span></span>
-              <StatusBadge status={item.status} />
-            </button>
-          )) : <div className="px-4 py-8 text-center text-xs text-neutral-400">No purchase requests yet</div>}
-        </div>
-        <div className="flex min-w-[190px] flex-row gap-2 border-t border-neutral-100 p-3 lg:flex-col lg:border-l lg:border-t-0">
-          <button type="button" onClick={() => navigate('/procurement/master')} className="flex flex-1 items-center justify-between rounded-md border border-neutral-200 px-3 py-2 text-left text-[10px] font-bold text-secondary-700 hover:bg-neutral-50">Master List <ArrowRight className="h-3.5 w-3.5" /></button>
-          <button type="button" onClick={() => navigate('/procurement/records')} className="flex flex-1 items-center justify-between rounded-md border border-neutral-200 px-3 py-2 text-left text-[10px] font-bold text-secondary-700 hover:bg-neutral-50">Suppliers &amp; Control <ArrowRight className="h-3.5 w-3.5" /></button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
 export default function HRDashboardView({
   user, loading, empStats, employees, requests, notifications: _notifications, todayAttendance,
-  maintenanceTasks, procurementRequests = [], onRefresh, fullHrAccess = false,
-  fullProcurementAccess = false, birthdayEmployees = [],
+  maintenanceTasks, onRefresh, fullHrAccess = false, birthdayEmployees = [],
 }) {
   const navigate = useNavigate()
   const { departments } = useLookups()
@@ -220,8 +158,6 @@ export default function HRDashboardView({
         <KpiCard title="Absent Today" value={absent} sub={`${percentage(absent)}% marked absent today`} tone="red" icon={AlertCircle} loading={loading} onClick={() => navigate('/human-resources/attendance?status=absent')} />
         <KpiCard title="Today Leave" value={leaveToday} sub={`${percentage(leaveToday)}% on approved leave`} tone="amber" icon={CalendarDays} loading={loading} onClick={() => navigate('/human-resources/attendance?status=leave')} />
       </section>}
-
-      {fullProcurementAccess && <ProcurementOverview requests={procurementRequests} loading={loading} navigate={navigate} />}
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         {fullHrAccess && <div className="rounded-md border border-neutral-200 bg-white shadow-sm xl:col-span-8">

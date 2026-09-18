@@ -83,6 +83,7 @@ const CertificationsTab = lazyWithRetry(() => import('./components/hr/Certificat
 const DisciplinaryTab   = lazyWithRetry(() => import('./components/hr/DisciplinaryTab'))
 const AssetsTab         = lazyWithRetry(() => import('./components/hr/AssetsTab'))
 const OrgChartTab       = lazyWithRetry(() => import('./components/hr/OrgChartTab'))
+const HrDashboardTab    = lazyWithRetry(() => import('./components/hr/HrDashboardTab'))
 const SettingsPage      = lazyWithRetry(() => import('./pages/SettingsPage'))
 const NotificationPreferencesPage = lazyWithRetry(() => import('./pages/NotificationPreferencesPage'))
 const NotificationCenterPage = lazyWithRetry(() => import('./pages/NotificationCenterPage'))
@@ -299,6 +300,13 @@ export default function App() {
           <Route index element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
               <WorkforceTab />
+            </ProtectedRoute>
+          } />
+
+          {/* HR Dashboard — module-scoped detailed overview */}
+          <Route path="dashboard" element={
+            <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
+              <HrDashboardTab />
             </ProtectedRoute>
           } />
 

@@ -1,62 +1,141 @@
-// src/components/dashboard/ModuleCard.jsx
+import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Loader2 } from 'lucide-react'
 
-const STATUS_STYLES = {
-  "Coming Soon": "bg-orange-50 text-orange-500",
-  "Live":        "bg-green-50  text-green-600",
-};
-
-export default function ModuleCard({ icon, title, description, badge, badgeLabel, stats = [], onClick, highlight = false }) {
-  const isLive = badge === "Live";
+/**
+ * Shared module summary card used on the Operations Dashboard.
+ *
+ * Each department (HR, Procurement, Maintenance, Material Control) reuses the
+ * same card so the root dashboard reads as one system: identical header rhythm,
+ * KPI band, and recent-items list, distinguished only by icon and content.
+ *
+ * Props:
+ *   icon           — lucide icon component for the header tile
+ *   title, subtitle — header text
+ *   href           — where the whole card header links to (Open Module)
+ *   primaryAction  — optional secondary CTA in the header (e.g. "New PRF")
+ *   kpis           — [{ label, value, tone?: 'green'|'amber'|'red'|'primary', onClick? }]
+ *   recent         — [{ id, title, sub, badge, href }]
+ *   emptyRecent    — copy shown when the recent list is empty
+ *   loading        — swaps KPI values and rows for a skeleton
+ */
+export default function ModuleCard({
+  icon: Icon, title, subtitle,
+  href, primaryAction,
+  kpis = [], recent = [], emptyRecent = 'Nothing to show yet',
+  loading = false,
+  className = '',
+}) {
+  const navigate = useNavigate()
 
   return (
-    <div
-      onClick={isLive ? onClick : undefined}
-      className={`
-        relative bg-white rounded-xl border p-6 flex flex-col gap-4 transition-all duration-200
-        ${isLive ? "border-primary/20 cursor-pointer hover:shadow-md hover:border-primary/40" : "border-neutral-100 cursor-default opacity-90"}
-        ${highlight ? "ring-2 ring-primary/20" : ""}
-      `}
-    >
-      {/* ── Badge ── */}
-      <div className="absolute top-4 right-4">
-        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${STATUS_STYLES[badge] ?? "bg-neutral-100 text-neutral-500"}`}>
-          <span className={`w-1.5 h-1.5 rounded-full inline-block ${isLive ? "bg-green-500" : "bg-orange-400"}`} />
-          {isLive ? `Live — ${badgeLabel}` : badge}
-        </span>
-      </div>
-
-      {/* ── Icon ── */}
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl
-        ${isLive ? "bg-primary-50 text-primary" : "bg-neutral-50 text-neutral-400"}
-      `}>
-        {icon}
-      </div>
-
-      {/* ── Content ── */}
-      <div>
-        <h3 className="font-bold text-[15px] text-secondary-700 mb-1.5">{title}</h3>
-        <p className="text-sm text-neutral-400 leading-relaxed">{description}</p>
-      </div>
-
-      {/* ── Divider ── */}
-      <div className="border-t border-neutral-100" />
-
-      {/* ── Stats + Arrow ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-5">
-          {stats.map((s, i) => (
-            <div key={i}>
-              <p className="text-xl font-extrabold text-secondary-700 leading-none">{s.value}</p>
-              <p className="text-[11px] text-neutral-400 uppercase tracking-widest mt-0.5">{s.label}</p>
-            </div>
-          ))}
+    <section className={`flex flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white shadow-sm ${className}`}>
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-bold text-secondary-700">{title}</h2>
+            {subtitle && <p className="truncate text-[10px] text-neutral-400">{subtitle}</p>}
+          </div>
         </div>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
-          ${isLive ? "bg-primary text-white" : "bg-neutral-100 text-neutral-400"}
-        `}>
-          →
+        <div className="flex items-center gap-2">
+          {primaryAction && (
+            <button
+              type="button"
+              onClick={() => navigate(primaryAction.href)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-[10px] font-bold text-secondary-700 hover:bg-neutral-50"
+            >
+              {primaryAction.icon && <primaryAction.icon className="h-3.5 w-3.5" />}
+              {primaryAction.label}
+            </button>
+          )}
+          {href && (
+            <button
+              type="button"
+              onClick={() => navigate(href)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[10px] font-bold text-white hover:bg-primary/90"
+            >
+              Open <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
+      </header>
+
+      {kpis.length > 0 && (
+        // md-grid columns are pinned to a fixed set of classnames so Tailwind's
+        // JIT actually picks them up — dynamic md:grid-cols-${n} would purge.
+        <div className={`grid grid-cols-2 border-b border-neutral-100 ${KPI_MD_COLS[Math.min(kpis.length, 4)] || 'md:grid-cols-4'}`}>
+          {kpis.map((kpi, index) => {
+            const tone = KPI_TONES[kpi.tone] || KPI_TONES.default
+            const Base = kpi.onClick ? 'button' : 'div'
+            return (
+              <Base
+                key={kpi.label}
+                type={kpi.onClick ? 'button' : undefined}
+                onClick={kpi.onClick}
+                className={`
+                  px-4 py-3 text-left transition-colors
+                  ${kpi.onClick ? 'hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25' : ''}
+                  ${index % 2 === 0 ? 'border-r border-neutral-100' : ''}
+                  ${index < 2 ? 'border-b border-neutral-100 md:border-b-0' : ''}
+                  md:border-r md:last:border-r-0
+                `}
+              >
+                <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">{kpi.label}</p>
+                <p className={`mt-1 text-2xl font-extrabold leading-none ${tone}`}>
+                  {loading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-neutral-100" /> : kpi.value}
+                </p>
+                {kpi.sub && <p className="mt-1 truncate text-[10px] text-neutral-400">{kpi.sub}</p>}
+              </Base>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="flex-1 divide-y divide-neutral-100">
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-4 w-4 animate-spin text-neutral-300" />
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-neutral-400">{emptyRecent}</div>
+        ) : recent.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => item.href && navigate(item.href)}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/25"
+          >
+            {item.icon && (
+              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${item.iconTone || 'bg-neutral-100 text-neutral-500'}`}>
+                <item.icon className="h-4 w-4" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-xs text-secondary-700">{item.title}</strong>
+              {item.sub && <span className="mt-0.5 block truncate text-[10px] text-neutral-400">{item.sub}</span>}
+            </span>
+            {item.badge}
+          </button>
+        ))}
       </div>
-    </div>
-  );
+    </section>
+  )
+}
+
+const KPI_TONES = {
+  default: 'text-secondary-700',
+  primary: 'text-primary',
+  green:   'text-emerald-600',
+  amber:   'text-amber-600',
+  red:     'text-red-600',
+  blue:    'text-blue-600',
+}
+
+const KPI_MD_COLS = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-4',
 }

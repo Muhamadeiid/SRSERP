@@ -7,7 +7,7 @@ import {
   AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
   LogOut, FileText, Package, Settings,
   GitBranch, Menu, FilePlus2, FileSpreadsheet, UserMinus, CalendarDays,
-  ClipboardList, Briefcase,
+  ClipboardList, Briefcase, LayoutDashboard,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
@@ -22,6 +22,13 @@ const HR_FULL_ROLES_NAV = ['admin', 'depot_manager', 'hr']
 // roles array   → visible to these specific roles
 // neither       → visible to all authenticated users
 const NAV_GROUPS = [
+  {
+    // HR-scoped overview — the detailed dashboard the module carries.
+    key: 'overview', label: 'Overview', icon: LayoutDashboard, hrOnly: true,
+    items: [
+      { label: 'HR Dashboard', path: '/human-resources/dashboard', icon: LayoutDashboard, hrOnly: true },
+    ],
+  },
   {
     key: 'workforce', label: 'Workforce', icon: Users, hrOnly: true,
     items: [

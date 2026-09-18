@@ -13,7 +13,7 @@ import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
 import { getMaintenanceTasks }          from '../services/maintenanceService'
-import HRDashboardView                  from '../components/dashboard/HRDashboardView'
+import OperationsDashboardView          from '../components/dashboard/OperationsDashboardView'
 import UserAvatar                       from '../components/profile/UserAvatar'
 
 // ── time formatter ──────────────────────────────────────────────
@@ -307,20 +307,19 @@ export default function DashboardPage() {
   // still scopes its records to the current user's role and permissions.
   if (user) {
     return (
-      <HRDashboardView
+      <OperationsDashboardView
         user={user}
         loading={loading}
         empStats={empStats}
-        employees={employees}
-        requests={reqs}
-        notifications={notifs}
         todayAttendance={todayAttendance}
-        maintenanceTasks={maintenanceTasks}
         procurementRequests={prfs}
+        maintenanceTasks={maintenanceTasks}
+        birthdays={birthdays}
         onRefresh={fetchAll}
         fullHrAccess={isHRFull}
         fullProcurementAccess={canSeeProc}
-        birthdayEmployees={birthdays}
+        fullMaintenanceAccess={canSeeMaintenance}
+        fullMaterialAccess={isDashFull}
       />
     )
   }
