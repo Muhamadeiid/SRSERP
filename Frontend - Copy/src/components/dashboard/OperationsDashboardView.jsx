@@ -34,7 +34,9 @@ export default function OperationsDashboardView({
   const [today] = useState(() => Date.now())
 
   // ── HR summary ─────────────────────────────────────────────────────────────
-  const totalEmployees = empStats?.total_employees ?? 0
+  // The current employees/stats endpoint returns `total`; keep the legacy key
+  // as a fallback so the overview works with both backend response shapes.
+  const totalEmployees = empStats?.total ?? empStats?.total_employees ?? 0
   const presentToday = useMemo(() => new Set(
     todayAttendance.filter(row => row.check_in || row.check_out).map(row => String(row.employee_id))
   ).size, [todayAttendance])
@@ -276,4 +278,3 @@ const TASK_BADGE = {
   medium:   'bg-amber-50 text-amber-700 border border-amber-200',
   low:      'bg-neutral-100 text-neutral-600 border border-neutral-200',
 }
-
