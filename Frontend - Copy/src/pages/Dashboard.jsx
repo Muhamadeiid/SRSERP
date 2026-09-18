@@ -312,6 +312,7 @@ export default function DashboardPage() {
         loading={loading}
         empStats={empStats}
         todayAttendance={todayAttendance}
+        leaveRequests={reqs}
         procurementRequests={prfs}
         maintenanceTasks={maintenanceTasks}
         birthdays={birthdays}

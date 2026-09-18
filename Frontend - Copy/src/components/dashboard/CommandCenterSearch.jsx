@@ -16,7 +16,8 @@ const PAGES = [
 
   { label: 'Leave Requests', group: 'Human Resources', path: '/human-resources/leave', keywords: 'lrf leave vacation اجازات طلب اجازة' },
   { label: 'Overtime Requests', group: 'Human Resources', path: '/human-resources/overtime', keywords: 'otr overtime extra hours اضافي اوفر تايم' },
-  { label: 'Workforce', group: 'Human Resources', path: '/human-resources', keywords: 'employees staff ibs punch الموظفين القوى العاملة', roles: HR_FULL },
+  { label: 'HR Dashboard', group: 'Human Resources', path: '/human-resources', keywords: 'hr dashboard overview attendance leaves اعياد ميلاد', roles: HR_FULL },
+  { label: 'Workforce', group: 'Human Resources', path: '/human-resources/employees', keywords: 'employees staff ibs punch الموظفين القوى العاملة', roles: HR_FULL },
   { label: 'Organization Chart', group: 'Human Resources', path: '/human-resources/org-chart', keywords: 'org managers hierarchy الهيكل التنظيمي', roles: HR_FULL },
   { label: 'Resignations', group: 'Human Resources', path: '/human-resources/resignations', keywords: 'ex employees resignation استقالات', roles: HR_FULL },
   { label: 'Leave Master List', group: 'Human Resources', path: '/human-resources/leave-master', keywords: 'leave history master سجل الاجازات', roles: HR_FULL },
