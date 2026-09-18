@@ -316,8 +316,10 @@ export default function DashboardPage() {
         notifications={notifs}
         todayAttendance={todayAttendance}
         maintenanceTasks={maintenanceTasks}
+        procurementRequests={prfs}
         onRefresh={fetchAll}
         fullHrAccess={isHRFull}
+        fullProcurementAccess={canSeeProc}
         birthdayEmployees={birthdays}
       />
     )
