@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useSearchParams } from 'react-router-dom'
 import { Building2, Calculator, ClipboardX, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Search, Star, X } from 'lucide-react'
 import {
   createBudget, createSupplier, decideBudget, evaluateSupplier,
@@ -43,8 +44,10 @@ function Badge({ value }) {
 }
 
 export default function ProcurementRecordsPage() {
+  const [searchParams] = useSearchParams()
   const { user } = useSelector(s => s.auth)
-  const [tab, setTab] = useState('suppliers')
+  const requestedTab = searchParams.get('tab')
+  const [tab, setTab] = useState(['suppliers', 'budgets', 'rejected', 'log'].includes(requestedTab) ? requestedTab : 'suppliers')
   const [data, setData] = useState({ suppliers: [], budgets: [], rejected: [], log: [] })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
