@@ -192,6 +192,40 @@ export default function OperationsDashboardView({
         />}
       </div>
 
+      {/* Cross-department widgets — visible to any signed-in user. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="rounded-2xl border border-neutral-100 bg-white shadow-sm">
+          <header className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+            <span className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-md bg-pink-50 text-pink-600">
+                <CakeSlice className="h-4 w-4" />
+              </span>
+              <span>
+                <h2 className="text-sm font-bold text-secondary-700">Birthdays</h2>
+                <p className="text-[10px] text-neutral-400">Today &amp; tomorrow</p>
+              </span>
+            </span>
+            <span className="rounded-full bg-pink-50 px-2 py-1 text-[9px] font-bold text-pink-600">{birthdays.length}</span>
+          </header>
+          <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+            {birthdays.length ? birthdays.map(person => (
+              <div key={person.id} className="flex items-start gap-2.5 rounded-md border border-pink-100 bg-pink-50/40 p-3">
+                <UserAvatar user={person.user} name={person.name} />
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-xs text-secondary-700">{person.name}</strong>
+                  <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{person.position || 'Employee'}</span>
+                  <span className="mt-1 block text-[10px] font-bold text-pink-600">{person.date_label}</span>
+                </span>
+              </div>
+            )) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}
+          </div>
+        </section>
+
+        <div className="lg:col-span-2">
+          <CalendarDashboardWidget />
+        </div>
+      </div>
+
       <footer className="flex items-center justify-between border-t border-neutral-100 pt-3 text-[10px] text-neutral-400">
         <span className="flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Live data · scoped to your account
@@ -203,6 +237,17 @@ export default function OperationsDashboardView({
 }
 
 // ── Small helpers ────────────────────────────────────────────────────────────
+
+const LEAVE_STATUS_LABEL = {
+  pending: 'Pending',
+  manager_approved: 'Waiting HR',
+  hr_approved: 'Waiting Depot',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  cancellation_pending: 'Cancellation pending',
+  cancelled: 'Cancelled',
+  rescheduled: 'Rescheduled',
+}
 
 const PRF_STATUS_META = {
   pending_procurement: ['Waiting Procurement', 'bg-amber-50 text-amber-700'],
