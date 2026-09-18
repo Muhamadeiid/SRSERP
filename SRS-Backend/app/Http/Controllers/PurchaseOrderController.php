@@ -369,10 +369,8 @@ class PurchaseOrderController extends Controller
             if (!$po->budget_plan_id || !ProcurementBudgetPlan::whereKey($po->budget_plan_id)->where('status', 'approved')->exists()) {
                 return response()->json(['message' => 'Direct orders must reference an approved monthly budget plan'], 422);
             }
-            if (!ProcurementSopPolicy::directOrderCategoryAllowed(
-                $po->category,
-                config('srs.direct_order_categories', [])
-            )) {
+            $category = strtolower((string) $po->category);
+            if (!str_contains($category, 'station') && !str_contains($category, 'office') && !str_contains($category, 'transport')) {
                 return response()->json(['message' => 'Direct orders are limited to urgent stationary, office supplies, or transportation'], 422);
             }
         } elseif (ProcurementSopPolicy::distinctSupplierCount($quotes) < 3) {

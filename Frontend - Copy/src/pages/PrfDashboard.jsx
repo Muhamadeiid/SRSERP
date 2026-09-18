@@ -126,10 +126,6 @@ export default function PrfDashboard() {
     return Object.entries(supplierGroups).sort((a, b) => b[1] - a[1]).slice(0, 4)
   }, [suppliers])
 
-  const scrollToSection = useCallback((id) => {
-    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-  }, [])
-
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
 
@@ -162,17 +158,12 @@ export default function PrfDashboard() {
             <div className="mt-1.5 h-2.5 w-20 rounded bg-neutral-50" />
           </div>
         )) : [
-          { label: 'Purchase Requests', value: prfs.length, note: `${statValues.pending} still in workflow`, icon: ClipboardList, tone: 'bg-blue-50 text-blue-600', action: () => navigate('/procurement/master') },
-          { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600', action: () => navigate('/procurement/records?tab=log') },
-          { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-primary/10 text-primary', action: () => navigate('/procurement/records?tab=suppliers') },
-          { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600', action: () => scrollToSection(myPending.length ? 'pending-actions' : 'purchase-requests') },
-        ].map(({ label, value, note, icon, tone, action }) => (
-          <button
-            key={label}
-            type="button"
-            onClick={action}
-            className="group w-full rounded-2xl border border-neutral-100 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 sm:p-5"
-          >
+          { label: 'Purchase Requests', value: prfs.length, note: `${statValues.pending} still in workflow`, icon: ClipboardList, tone: 'bg-blue-50 text-blue-600' },
+          { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600' },
+          { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-primary/10 text-primary' },
+          { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600' },
+        ].map(({ label, value, note, icon, tone }) => (
+          <div key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>{createElement(icon, { className: 'h-5 w-5' })}</div>
               <ArrowUpRight className="h-4 w-4 text-neutral-300 transition-colors group-hover:text-primary" />
@@ -180,7 +171,7 @@ export default function PrfDashboard() {
             <p className="mt-4 text-2xl font-extrabold leading-none text-secondary-700">{value}</p>
             <p className="mt-1.5 text-xs font-bold text-secondary-700">{label}</p>
             <p className="mt-0.5 text-[11px] text-neutral-400">{note}</p>
-          </button>
+          </div>
         ))}
       </div>
 
@@ -224,12 +215,8 @@ export default function PrfDashboard() {
                 hint:    'All purchase orders',
               },
             ].map(({ label, value, icon, iconBg, iconClr, hint, urgent }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => (label === 'Needs IGI' && value > 0 ? scrollToSection('needs-igi') : navigate('/procurement/records?tab=log'))}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 flex items-center gap-3 text-left w-full transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 ${urgent ? 'border-amber-300 ring-1 ring-amber-200' : 'border-neutral-100'}`}
-              >
+              <div key={label}
+                className={`bg-white rounded-2xl border p-4 sm:p-5 flex items-center gap-3 ${urgent ? 'border-amber-300 ring-1 ring-amber-200' : 'border-neutral-100'}`}>
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
                   {createElement(icon, { className: `w-5 h-5 ${iconClr}` })}
                 </div>
@@ -238,7 +225,7 @@ export default function PrfDashboard() {
                   <p className="text-[11px] font-medium text-neutral-400 mt-0.5">{label}</p>
                   <p className="text-[10px] text-neutral-300 mt-0.5 hidden sm:block">{hint}</p>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -317,7 +304,7 @@ export default function PrfDashboard() {
 
       {/* Needs IGI banner */}
       {canSeePOs && posNeedIgi.length > 0 && (
-        <div id="needs-igi" className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
           <p className="text-xs font-bold text-amber-700 mb-2 flex items-center gap-2">
             <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
             {posNeedIgi.length} PO{posNeedIgi.length > 1 ? 's' : ''} received — awaiting IGI creation
@@ -341,7 +328,7 @@ export default function PrfDashboard() {
 
       {/* Pending action banner */}
       {myPending.length > 0 && (
-        <div id="pending-actions" className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
           <p className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-2">
             <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
             {myPending.length} request(s) awaiting your approval
@@ -364,7 +351,7 @@ export default function PrfDashboard() {
       )}
 
       {/* Filters + List */}
-      <div id="purchase-requests" className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
 
         {warning && <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-700">{warning} Core purchase requests remain available.</div>}
 

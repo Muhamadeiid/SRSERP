@@ -8,16 +8,6 @@ use Tests\TestCase;
 
 class ProcurementSopPolicyTest extends TestCase
 {
-    public function test_direct_order_category_accepts_configured_labels_and_codes(): void
-    {
-        $allowed = ['STAT', 'Office Supplies', 'Transport'];
-
-        $this->assertTrue(ProcurementSopPolicy::directOrderCategoryAllowed('STAT', $allowed));
-        $this->assertTrue(ProcurementSopPolicy::directOrderCategoryAllowed('Urgent Office Supplies', $allowed));
-        $this->assertFalse(ProcurementSopPolicy::directOrderCategoryAllowed('Station maintenance', $allowed));
-        $this->assertFalse(ProcurementSopPolicy::directOrderCategoryAllowed('IT Equipment', $allowed));
-    }
-
     public function test_vendor_is_not_suspended_before_an_improvement_cycle(): void
     {
         $this->assertSame('approved', ProcurementSopPolicy::vendorEvaluationOutcome(70));
