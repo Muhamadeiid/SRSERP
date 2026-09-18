@@ -18,17 +18,27 @@ class ProcurementSopReminders extends Command
 
         if ($today->day >= 15 && $today->day <= 20) {
             $period = $today->copy()->addMonth()->format('Y-m');
-            User::where('is_active', true)->pluck('id')->each(function ($userId) use ($period) {
-                Notification::notifyUser(
-                    $userId,
-                    'procurement_monthly_prf_reminder',
-                    'Submit next month purchase requirements',
-                    'Please submit required materials through the Purchase Request Form before the monthly budget is prepared.',
-                    ['path' => '/purchase-request/new'],
-                    false,
-                    ['category' => 'report', 'dedupe_key' => "procurement-prf-reminder-{$period}"]
-                );
-            });
+            $dedupeKey = "procurement-prf-reminder-{$period}";
+            $activeUsersCount = User::where('is_active', true)->count();
+            $notifiedUsersCount = Notification::where('dedupe_key', $dedupeKey)
+                ->distinct('user_id')
+                ->count('user_id');
+
+            if ($notifiedUsersCount < $activeUsersCount) {
+                User::where('is_active', true)
+                    ->whereNotIn('id', Notification::where('dedupe_key', $dedupeKey)->select('user_id'))
+                    ->pluck('id')->each(function ($userId) use ($dedupeKey) {
+                        Notification::notifyUser(
+                            $userId,
+                            'procurement_monthly_prf_reminder',
+                            'Submit next month purchase requirements',
+                            'Please submit required materials through the Purchase Request Form before the monthly budget is prepared.',
+                            ['path' => '/purchase-request/new'],
+                            false,
+                            ['category' => 'report', 'dedupe_key' => $dedupeKey]
+                        );
+                    });
+            }
         }
 
         $dueSuppliers = ProcurementSupplier::whereNotNull('next_evaluation_at')
