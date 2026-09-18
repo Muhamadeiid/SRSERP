@@ -184,7 +184,7 @@ class Notification extends Model
         } elseif (! empty($data['resignation_request_id'])) {
             $data['path'] = '/human-resources/resignations?ticket=' . $data['resignation_request_id'];
         } elseif (! empty($data['prf_id'])) {
-            $data['path'] = '/procurement/' . $data['prf_id'];
+            $data['path'] = '/purchase-request/' . $data['prf_id'];
         }
 
         return $data;

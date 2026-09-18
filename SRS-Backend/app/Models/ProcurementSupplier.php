@@ -18,6 +18,10 @@ class ProcurementSupplier extends Model
         'ehs_compliant' => 'boolean',
         'last_evaluated_at' => 'datetime',
         'next_evaluation_at' => 'datetime',
+        'improvement_requested_at' => 'datetime',
+        'improvement_due_at' => 'datetime',
+        'is_contractor' => 'boolean',
+        'ohs_instructions_acknowledged_at' => 'datetime',
     ];
 
     public function preparer() { return $this->belongsTo(User::class, 'prepared_by'); }

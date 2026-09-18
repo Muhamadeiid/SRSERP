@@ -85,6 +85,17 @@ class PrfController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function show(Prf $prf): JsonResponse
     {
+        $user = auth()->user();
+        $canViewAll = $user->isAdmin()
+            || in_array($user->role, ['procurement', 'purchasing', 'ehs', 'depot_manager'], true)
+            || $user->hasPermission('procurement.access')
+            || $user->hasPermission('prf.approve_procurement')
+            || $user->hasPermission('prf.approve_ehs')
+            || $user->hasPermission('prf.approve_depot');
+        if (!$canViewAll && $prf->requested_by !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You cannot view this purchase request'], 403);
+        }
+
         $prf->load([
             'requester:id,name,email,role,e_signature',
             'items',

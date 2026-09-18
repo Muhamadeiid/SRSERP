@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Loader2, Trash2, Plus, CheckCircle, X, ArrowLeft, FileText } from 'lucide-react'
 import { getPrf } from '../services/prfService'
 import { createPo } from '../services/poService'
-import { getQuotations } from '../services/procurementRegistryService'
+import { getBudgets, getQuotations } from '../services/procurementRegistryService'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
@@ -19,6 +19,7 @@ export default function PoNewPage() {
   const [submitted, setSubmitted] = useState(null)
   const [err,       setErr]       = useState('')
   const [quotations,setQuotations]= useState([])
+  const [budgets, setBudgets] = useState([])
 
   const [form, setForm] = useState({
     po_number:        '',
@@ -36,6 +37,9 @@ export default function PoNewPage() {
     selected_quotation_id: '',
     sole_supplier: false,
     sole_supplier_justification: '',
+    direct_order: false,
+    direct_order_reason: '',
+    budget_plan_id: '',
   })
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -44,9 +48,10 @@ export default function PoNewPage() {
   const loadPrf = useCallback(async () => {
     setLoadingPrf(true)
     try {
-      const [res, quoteRes] = await Promise.all([getPrf(prfId), getQuotations(prfId)])
+      const [res, quoteRes, budgetRes] = await Promise.all([getPrf(prfId), getQuotations(prfId), getBudgets()])
       const data = res?.data
       setQuotations(quoteRes?.data ?? [])
+      setBudgets((budgetRes?.data ?? []).filter(b => b.status === 'approved'))
       setPrf(data)
       setForm(f => ({
         ...f,
@@ -118,6 +123,9 @@ export default function PoNewPage() {
         selected_quotation_id: form.selected_quotation_id ? Number(form.selected_quotation_id) : null,
         sole_supplier: form.sole_supplier,
         sole_supplier_justification: form.sole_supplier_justification || null,
+        direct_order: form.direct_order,
+        direct_order_reason: form.direct_order_reason || null,
+        budget_plan_id: form.budget_plan_id ? Number(form.budget_plan_id) : null,
         items: items.map(it => ({
           prf_item_id:      it.prf_item_id || null,
           item_description: it.item_description,
@@ -224,10 +232,12 @@ export default function PoNewPage() {
                   {quotations.map(q=><option key={q.id} value={q.id}>{q.supplier?.company_name} — EGP {fmt(Number(q.price_before_vat)+Number(q.vat||0))} — {q.lead_time_days ?? '—'} days</option>)}
                 </select>
               </label>
-              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>set('sole_supplier',e.target.checked)} /> Sole Supplier</label>
+              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>setForm(f=>({...f,sole_supplier:e.target.checked,direct_order:e.target.checked?false:f.direct_order}))} /> Sole Supplier</label>
+              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.direct_order} onChange={e=>setForm(f=>({...f,direct_order:e.target.checked,sole_supplier:e.target.checked?false:f.sole_supplier}))} /> Urgent Direct Order</label>
             </div>
-            {!form.sole_supplier && quotations.length < 3 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">The SOP requires at least 3 quotations. Recorded now: {quotations.length}.</p>}
+            {!form.sole_supplier && !form.direct_order && new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size < 3 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">The SOP requires quotations from 3 different approved suppliers. Recorded now: {new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size} supplier(s).</p>}
             {form.sole_supplier && <textarea required value={form.sole_supplier_justification} onChange={e=>set('sole_supplier_justification',e.target.value)} placeholder="Sole supplier justification and market price benchmark" className={INPUT + ' resize-none'} rows={2} />}
+            {form.direct_order && <div className="grid gap-3 sm:grid-cols-2"><select required value={form.budget_plan_id} onChange={e=>set('budget_plan_id',e.target.value)} className={INPUT}><option value="">Select approved monthly budget</option>{budgets.map(b=><option key={b.id} value={b.id}>{String(b.month).padStart(2,'0')}/{b.year} — EGP {fmt(b.grand_total)}</option>)}</select><textarea required value={form.direct_order_reason} onChange={e=>set('direct_order_reason',e.target.value)} placeholder="Urgency and approved-budget justification (stationary, office supplies, or transportation only)" className={INPUT + ' resize-none'} rows={2} /></div>}
           </div>
         </div>
 

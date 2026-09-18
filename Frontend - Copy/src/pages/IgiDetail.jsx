@@ -25,6 +25,10 @@ export default function IgiDetail() {
   const [rejectForm, setRejectForm] = useState(null)
 
   const canEdit = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
+  const userDepartment = String(user?.department || '').toLowerCase()
+  const canConfirmLabels = ['admin', 'procurement', 'purchasing', 'store_staff'].includes(user?.role)
+    || userDepartment.includes('inventory') || userDepartment.includes('store')
+  const canReject = canEdit || igi?.po?.prf?.requester?.id === user?.id
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -41,20 +45,9 @@ export default function IgiDetail() {
 
   useEffect(() => { load() }, [load])
 
-  const changeStatus = async (status) => {
-    setBusy(true)
-    try {
-      const res = await updateIgi(id, { status })
-      setIgi(res?.data ?? null)
-    } catch (e) {
-      alert(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const submitApproval = async () => { setBusy(true); try { const res=await submitIgiApproval(id); setIgi(res?.data??null) } catch(e){alert(e.message)} finally{setBusy(false)} }
   const decideApproval = async action => { setBusy(true); try { const res=await decideIgi(id,{action}); setIgi(res?.data??null) } catch(e){alert(e.message)} finally{setBusy(false)} }
+  const confirmLabels = async () => { setBusy(true); try { const res=await updateIgi(id,{labels_applied_at:new Date().toISOString()}); setIgi(res?.data??null) } catch(e){alert(e.message)} finally{setBusy(false)} }
 
   const handlePrint = async () => {
     const { generateIGI } = await import('../utils/generateIGI')
@@ -69,7 +62,8 @@ export default function IgiDetail() {
         part_number: rejectForm.part_number || null, quantity_affected: Number(rejectForm.quantity_affected),
         rejecting_date: new Date().toISOString().slice(0,10), reason: rejectForm.reason,
       })
-      const res=await updateIgi(id,{status:'rejected'}); setIgi(res?.data ?? null); setRejectForm(null)
+      setRejectForm(null)
+      await load()
     } catch(e2){ alert(e2.message) } finally { setBusy(false) }
   }
 
@@ -240,8 +234,13 @@ export default function IgiDetail() {
                 Submit Signature Cycle
               </button>
             )}
+            {canConfirmLabels && igi.approval_status?.startsWith('pending_') && !igi.labels_applied_at && (
+              <button onClick={confirmLabels} disabled={busy} className="px-4 py-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                Confirm IGI Labels Applied
+              </button>
+            )}
             {(() => { const d=(user?.department||'').toLowerCase(); const allowed=(igi.approval_status==='pending_requester'&&igi.po?.prf?.requester?.id===user?.id)||(igi.approval_status==='pending_inventory'&&(user?.role==='store_staff'||d.includes('inventory')||d.includes('store')))||(igi.approval_status==='pending_ehs'&&user?.role==='ehs')||(igi.approval_status==='pending_quality'&&(d.includes('quality')||d==='qc'))||(igi.approval_status==='pending_procurement'&&['procurement','purchasing'].includes(user?.role))||(igi.approval_status==='pending_management'&&user?.role==='depot_manager')||user?.role==='admin'; return allowed&&igi.approval_status?.startsWith('pending_') ? <><button onClick={()=>decideApproval('approve')} disabled={busy} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg">Approve & Sign</button><button onClick={()=>decideApproval('reject')} disabled={busy} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg">Reject Stage</button></>:null })()}
-            {canEdit && igi.status !== 'rejected' && (
+            {canReject && igi.status !== 'rejected' && (
               <button onClick={() => { const item=(igi.items||[]).find(x=>x.compliant_po===false||x.compliant_technical===false||x.compliant_ehs===false) || (igi.items||[])[0]; setRejectForm({item_description:item?.description||'',part_number:item?.batch_no||'',quantity_affected:item?.qty_received||'',reason:item?.remarks||''}) }} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50">
                 Reject IGI

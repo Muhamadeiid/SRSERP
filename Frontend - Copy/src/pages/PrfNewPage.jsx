@@ -122,7 +122,7 @@ export default function PrfNewPage() {
       const res = await createPrf(payload)
       setSubmitted(res?.data ?? null)
       setTimeout(() => {
-        navigate(`/procurement/${res?.data?.id}`)
+        navigate(`/purchase-request/${res?.data?.id}`)
       }, 900)
     } catch (e2) {
       setErr(e2.message || 'Failed to submit PRF')

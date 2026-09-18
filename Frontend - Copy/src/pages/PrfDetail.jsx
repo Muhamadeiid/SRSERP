@@ -60,6 +60,7 @@ export default function PrfDetail() {
   const canAct           = prf && canActOnStage(user, prf.status)
   const isApproved       = prf?.status === 'approved'
   const isProcurementUser = ['procurement', 'purchasing', 'admin'].includes(user?.role)
+  const backPath         = user?.role === 'admin' ? '/procurement' : '/'
   const canCreatePO      = isApproved && ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
   const hasLinkedPO      = !!prf?.purchase_order
 
@@ -124,7 +125,15 @@ export default function PrfDetail() {
   const saveQuote = async e => {
     e.preventDefault(); setBusy(true)
     try {
-      await createQuotation(id, { ...quoteForm, supplier_id:Number(quoteForm.supplier_id), lead_time_days:quoteForm.lead_time_days?Number(quoteForm.lead_time_days):null, price_before_vat:Number(quoteForm.price_before_vat||0), vat:Number(quoteForm.vat||0) })
+      await createQuotation(id, {
+        ...quoteForm,
+        supplier_id:Number(quoteForm.supplier_id),
+        lead_time_days:quoteForm.lead_time_days?Number(quoteForm.lead_time_days):null,
+        available_quantity:quoteForm.available_quantity?Number(quoteForm.available_quantity):null,
+        minimum_order_quantity:quoteForm.minimum_order_quantity?Number(quoteForm.minimum_order_quantity):null,
+        price_before_vat:Number(quoteForm.price_before_vat||0),
+        vat:Number(quoteForm.vat||0),
+      })
       setQuoteForm(null); await load()
     } catch (e2) { alert(e2.message) } finally { setBusy(false) }
   }
@@ -142,7 +151,7 @@ export default function PrfDetail() {
       <div className="p-6 max-w-3xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
           <p className="text-sm font-bold text-red-700">{err || 'PRF not found'}</p>
-          <button onClick={() => navigate('/procurement')} className="mt-3 text-xs font-bold text-primary hover:underline">
+          <button onClick={() => navigate(backPath)} className="mt-3 text-xs font-bold text-primary hover:underline">
             ← Back to Dashboard
           </button>
         </div>
@@ -156,7 +165,7 @@ export default function PrfDetail() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button onClick={() => navigate('/procurement')}
+          <button onClick={() => navigate(backPath)}
             className="p-2 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-neutral-400 transition-colors shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -260,8 +269,8 @@ export default function PrfDetail() {
       </div>
 
       {isProcurementUser && <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
-        <div className="px-5 py-3 border-b bg-neutral-50 flex items-center justify-between"><div><p className="text-xs font-bold text-secondary-700">Quotation Comparison</p><p className="text-[10px] text-neutral-400">Minimum 3 quotations unless Sole Supplier is justified</p></div><button onClick={()=>setQuoteForm({supplier_id:'',reference:'',received_date:new Date().toISOString().slice(0,10),expiry_date:'',incoterm:'',lead_time_days:'',price_before_vat:'',vat:'',technical_compliant:true,ehs_compliant:true,selected:quotations.length===0,notes:''})} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold"><Plus className="w-3.5 h-3.5"/>Add Quote</button></div>
-        <div className="overflow-x-auto"><table className="w-full text-xs min-w-[800px]"><thead className="bg-neutral-50"><tr>{['Supplier','Reference','Received','Expiry','Incoterm','Lead Time','Before VAT','VAT','Technical','EHS','Selected'].map(h=><th key={h} className="px-3 py-2 text-left text-[10px] text-neutral-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{quotations.map(q=><tr key={q.id}><td className="px-3 py-2 font-bold">{q.supplier?.company_name}</td><td className="px-3 py-2">{q.reference||'—'}</td><td className="px-3 py-2">{fmtShort(q.received_date)}</td><td className="px-3 py-2">{fmtShort(q.expiry_date)}</td><td className="px-3 py-2">{q.incoterm||'—'}</td><td className="px-3 py-2">{q.lead_time_days??'—'} days</td><td className="px-3 py-2">EGP {Number(q.price_before_vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">EGP {Number(q.vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">{q.technical_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.ehs_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.selected?'✓':'—'}</td></tr>)}</tbody></table></div>
+        <div className="px-5 py-3 border-b bg-neutral-50 flex items-center justify-between"><div><p className="text-xs font-bold text-secondary-700">Quotation Comparison</p><p className="text-[10px] text-neutral-400">Minimum 3 different approved suppliers unless an exception is justified</p></div><button onClick={()=>setQuoteForm({supplier_id:'',reference:'',requested_date:new Date().toISOString().slice(0,10),received_date:new Date().toISOString().slice(0,10),expiry_date:'',incoterm:'',lead_time_days:'',available_quantity:'',minimum_order_quantity:'',price_before_vat:'',vat:'',technical_compliant:true,ehs_compliant:true,selected:quotations.length===0,notes:'',supporting_documents:''})} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold"><Plus className="w-3.5 h-3.5"/>Add Quote</button></div>
+        <div className="overflow-x-auto"><table className="w-full text-xs min-w-[900px]"><thead className="bg-neutral-50"><tr>{['Supplier','Reference','Requested','Received','Response','Expiry','Incoterm','Lead Time','Before VAT','VAT','Technical','EHS','Selected'].map(h=><th key={h} className="px-3 py-2 text-left text-[10px] text-neutral-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{quotations.map(q=>{const responseDays=q.requested_date&&q.received_date?Math.ceil((new Date(q.received_date)-new Date(q.requested_date))/86400000):null;return <tr key={q.id}><td className="px-3 py-2 font-bold">{q.supplier?.company_name}</td><td className="px-3 py-2">{q.reference||'—'}</td><td className="px-3 py-2">{fmtShort(q.requested_date)}</td><td className="px-3 py-2">{fmtShort(q.received_date)}</td><td className={`px-3 py-2 font-bold ${responseDays>7?'text-red-600':'text-green-600'}`}>{responseDays==null?'—':`${responseDays} days`}</td><td className="px-3 py-2">{fmtShort(q.expiry_date)}</td><td className="px-3 py-2">{q.incoterm||'—'}</td><td className="px-3 py-2">{q.lead_time_days??'—'} days</td><td className="px-3 py-2">EGP {Number(q.price_before_vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">EGP {Number(q.vat||0).toLocaleString('en-EG')}</td><td className="px-3 py-2">{q.technical_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.ehs_compliant?'Yes':'No'}</td><td className="px-3 py-2">{q.selected?'✓':'—'}</td></tr>})}</tbody></table></div>
       </div>}
 
       {/* Items table */}
@@ -430,7 +439,7 @@ export default function PrfDetail() {
         </div>
       )}
 
-      {quoteForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveQuote} className="bg-white rounded-2xl p-6 w-full max-w-2xl space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold">Add Supplier Quotation</h2><p className="text-xs text-neutral-400">Quotation data required by SOP clause 6.2.2</p></div><button type="button" onClick={()=>setQuoteForm(null)}><X/></button></div><div className="grid sm:grid-cols-2 gap-3"><select required value={quoteForm.supplier_id} onChange={e=>setQuoteForm({...quoteForm,supplier_id:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"><option value="">Approved Supplier</option>{suppliers.map(s=><option value={s.id} key={s.id}>{s.company_name}</option>)}</select>{[['reference','Quotation reference'],['received_date','Received date'],['expiry_date','Expiry date'],['incoterm','Incoterm'],['lead_time_days','Lead time days'],['price_before_vat','Price before VAT'],['vat','VAT amount']].map(([k,p])=><input key={k} required={k==='price_before_vat'} type={k.includes('date')?'date':['lead_time_days','price_before_vat','vat'].includes(k)?'number':'text'} step="any" value={quoteForm[k]} placeholder={p} onChange={e=>setQuoteForm({...quoteForm,[k]:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"/>)}</div><div className="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" checked={quoteForm.technical_compliant} onChange={e=>setQuoteForm({...quoteForm,technical_compliant:e.target.checked})}/> Technical compliant</label><label><input type="checkbox" checked={quoteForm.ehs_compliant} onChange={e=>setQuoteForm({...quoteForm,ehs_compliant:e.target.checked})}/> EHS compliant</label><label><input type="checkbox" checked={quoteForm.selected} onChange={e=>setQuoteForm({...quoteForm,selected:e.target.checked})}/> Selected quote</label></div><textarea value={quoteForm.notes} onChange={e=>setQuoteForm({...quoteForm,notes:e.target.value})} placeholder="Packing, QC sheets, MSDS or other notes" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Save Quotation</button></form></div>}
+      {quoteForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveQuote} className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold">Add Supplier Quotation</h2><p className="text-xs text-neutral-400">Quotation data required by SOP clause 6.2.2</p></div><button type="button" onClick={()=>setQuoteForm(null)}><X/></button></div><div className="grid sm:grid-cols-2 gap-3"><select required value={quoteForm.supplier_id} onChange={e=>setQuoteForm({...quoteForm,supplier_id:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"><option value="">Approved Supplier</option>{suppliers.map(s=><option value={s.id} key={s.id}>{s.company_name}</option>)}</select>{[['reference','Quotation reference'],['requested_date','Requested date'],['received_date','Received date'],['expiry_date','Expiry date'],['incoterm','Incoterm'],['lead_time_days','Lead time days'],['available_quantity','Available quantity'],['minimum_order_quantity','Minimum order quantity'],['price_before_vat','Price before VAT'],['vat','VAT amount']].map(([k,p])=><input key={k} required={k==='price_before_vat'} type={k.includes('date')?'date':['lead_time_days','available_quantity','minimum_order_quantity','price_before_vat','vat'].includes(k)?'number':'text'} step="any" value={quoteForm[k]} placeholder={p} onChange={e=>setQuoteForm({...quoteForm,[k]:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"/>)}</div><div className="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" checked={quoteForm.technical_compliant} onChange={e=>setQuoteForm({...quoteForm,technical_compliant:e.target.checked})}/> Technical compliant</label><label><input type="checkbox" checked={quoteForm.ehs_compliant} onChange={e=>setQuoteForm({...quoteForm,ehs_compliant:e.target.checked})}/> EHS compliant</label><label><input type="checkbox" checked={quoteForm.selected} onChange={e=>setQuoteForm({...quoteForm,selected:e.target.checked})}/> Selected quote</label></div><textarea value={quoteForm.supporting_documents} onChange={e=>setQuoteForm({...quoteForm,supporting_documents:e.target.value})} placeholder="Datasheets, QC sheets, validation tests, MSDS, manufacturing / shelf-life and packing references" className="w-full border rounded-lg p-3 text-sm"/><textarea value={quoteForm.notes} onChange={e=>setQuoteForm({...quoteForm,notes:e.target.value})} placeholder="Additional notes" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Save Quotation</button></form></div>}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../store/slices/authSlice";
-import { ChevronDown, ChevronLeft, ChevronRight, FileOutput, FileWarning } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, FileOutput, FileWarning, ShoppingCart } from "lucide-react";
 
 export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCollapsedProp, isMobile = false } = {}) {
   const [collapsedLocal, setCollapsedLocal] = useState(false);
@@ -78,6 +78,13 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
       ),
+    },
+    {
+      label: "Purchase Request",
+      path: "/purchase-request/new",
+      show: true,
+      group: "services",
+      icon: <ShoppingCart className="w-[18px] h-[18px] shrink-0" />,
     },
     {
       label: "Leave Requests",

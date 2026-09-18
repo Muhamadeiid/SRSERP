@@ -22,8 +22,13 @@ export default function PoDetail() {
   const [editingNo,   setEditingNo]   = useState(false)
   const [poNoDraft,   setPoNoDraft]   = useState('')
   const [savingNo,    setSavingNo]    = useState(false)
+  const [dispatchForm,setDispatchForm]= useState(null)
+  const [paymentForm, setPaymentForm] = useState(null)
 
-  const canEdit       = ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
+  const canEdit       = ['admin', 'procurement', 'purchasing'].includes(user?.role)
+  const canApproveStage = (po?.approval_status === 'pending_procurement' && ['admin','procurement','purchasing'].includes(user?.role))
+    || (po?.approval_status === 'pending_depot' && ['admin','depot_manager'].includes(user?.role))
+    || (po?.approval_status === 'pending_management' && user?.role === 'admin')
   const hasLinkedIgi  = !!po?.igi
   const canCreateIgi  = canEdit && po?.status === 'received' && !hasLinkedIgi
 
@@ -81,6 +86,22 @@ export default function PoDetail() {
   const approvalDecision = async action => {
     setBusy(true)
     try { const res=await decidePo(id,{action}); setPo(res?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
+  }
+
+  const saveDispatch = async e => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const res = await updatePo(id, dispatchForm)
+      setPo(res?.data ?? null); setDispatchForm(null)
+    } catch (e2) { alert(e2.message) } finally { setBusy(false) }
+  }
+
+  const savePayment = async e => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const res = await updatePo(id, { ...paymentForm, payment_status: 'paid' })
+      setPo(res?.data ?? null); setPaymentForm(null)
+    } catch (e2) { alert(e2.message) } finally { setBusy(false) }
   }
 
   const handleExcel = async () => {
@@ -305,7 +326,7 @@ export default function PoDetail() {
       </div>
 
       {/* Status actions */}
-      {canEdit && po.status !== 'cancelled' && po.status !== 'received' && (
+      {(canEdit || canApproveStage) && po.status !== 'cancelled' && po.status !== 'received' && (
         <div className="bg-white rounded-2xl border border-neutral-100 p-5 flex flex-wrap items-center justify-between gap-4">
           <p className="text-xs font-bold text-secondary-700">Update Status</p>
           <div className="flex gap-2 flex-wrap">
@@ -315,20 +336,37 @@ export default function PoDetail() {
                 Submit Approval Cycle
               </button>
             )}
-            {((po.approval_status==='pending_procurement' && ['admin','procurement','purchasing'].includes(user?.role)) || (po.approval_status==='pending_depot' && ['admin','depot_manager'].includes(user?.role)) || (po.approval_status==='pending_management' && user?.role==='admin')) && <><button onClick={()=>approvalDecision('approve')} disabled={busy} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg">Approve Stage</button><button onClick={()=>approvalDecision('reject')} disabled={busy} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg">Reject</button></>}
-            {po.status === 'issued' && (
+            {canApproveStage && <><button onClick={()=>approvalDecision('approve')} disabled={busy} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg">Approve Stage</button><button onClick={()=>approvalDecision('reject')} disabled={busy} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg">Reject</button></>}
+            {po.status === 'issued' && !po.dispatched_at && (
+              <button onClick={() => setDispatchForm({dispatched_at:new Date().toISOString(),dispatched_to:po.vendor||'',dispatch_reference:''})} disabled={busy}
+                className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors disabled:opacity-50">
+                Record Vendor Dispatch
+              </button>
+            )}
+            {po.status === 'issued' && po.dispatched_at && (
               <button onClick={() => changeStatus('received')} disabled={busy}
                 className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50">
                 Mark as Received
               </button>
             )}
-            <button onClick={() => changeStatus('cancelled')} disabled={busy}
+            {canEdit && <button onClick={() => changeStatus('cancelled')} disabled={busy}
               className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50">
               Cancel PO
-            </button>
+            </button>}
           </div>
         </div>
       )}
+
+      {canEdit && po.status === 'received' && po.payment_status !== 'paid' && (
+        <div className="bg-white rounded-2xl border border-neutral-100 p-5 flex flex-wrap items-center justify-between gap-4">
+          <div><p className="text-xs font-bold text-secondary-700">Supplier Payment</p><p className="text-[10px] text-neutral-400 mt-1">Record the agreed payment method and transaction reference.</p></div>
+          <button onClick={() => setPaymentForm({payment_method:'bank_transfer',payment_reference:''})} className="px-4 py-2 text-xs font-bold text-white bg-primary rounded-lg">Record Payment</button>
+        </div>
+      )}
+
+      {dispatchForm && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"><form onSubmit={saveDispatch} className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6"><div className="flex items-center justify-between"><div><h2 className="font-extrabold text-secondary-700">Issue PO to Vendor</h2><p className="text-xs text-neutral-400">Creates the dispatch audit record required by the SOP.</p></div><button type="button" onClick={()=>setDispatchForm(null)}><X className="h-5 w-5"/></button></div><input required value={dispatchForm.dispatched_to} onChange={e=>setDispatchForm({...dispatchForm,dispatched_to:e.target.value})} placeholder="Vendor / recipient" className="w-full rounded-lg border px-3 py-2 text-sm"/><input required value={dispatchForm.dispatch_reference} onChange={e=>setDispatchForm({...dispatchForm,dispatch_reference:e.target.value})} placeholder="Email, courier, or dispatch reference" className="w-full rounded-lg border px-3 py-2 text-sm"/><button disabled={busy} className="w-full rounded-xl bg-primary py-3 font-bold text-white">Confirm Dispatch</button></form></div>}
+
+      {paymentForm && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"><form onSubmit={savePayment} className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6"><div className="flex items-center justify-between"><div><h2 className="font-extrabold text-secondary-700">Record Supplier Payment</h2><p className="text-xs text-neutral-400">Payment is recorded only after receiving the goods.</p></div><button type="button" onClick={()=>setPaymentForm(null)}><X className="h-5 w-5"/></button></div><select value={paymentForm.payment_method} onChange={e=>setPaymentForm({...paymentForm,payment_method:e.target.value})} className="w-full rounded-lg border px-3 py-2 text-sm"><option value="bank_transfer">Bank transfer</option><option value="check">Check</option><option value="cash">Cash</option></select><input required value={paymentForm.payment_reference} onChange={e=>setPaymentForm({...paymentForm,payment_reference:e.target.value})} placeholder="Transaction / check / receipt reference" className="w-full rounded-lg border px-3 py-2 text-sm"/><button disabled={busy} className="w-full rounded-xl bg-primary py-3 font-bold text-white">Confirm Payment</button></form></div>}
 
     </div>
   )

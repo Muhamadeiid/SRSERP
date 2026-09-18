@@ -19,11 +19,15 @@ class IncomingGoodsInspection extends Model
         'photos',
         'status',
         'approval_status',
+        'labels_applied_at',
+        'supplier_delivery_counted_at',
     ];
 
     protected $casts = [
         'date'   => 'date',
         'photos' => 'array',
+        'labels_applied_at' => 'datetime',
+        'supplier_delivery_counted_at' => 'datetime',
     ];
 
     public function po()

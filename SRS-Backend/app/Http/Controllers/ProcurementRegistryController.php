@@ -8,10 +8,12 @@ use App\Models\ProcurementRejectedGood;
 use App\Models\ProcurementSupplier;
 use App\Models\ProcurementVendorEvaluation;
 use App\Models\Prf;
+use App\Models\IncomingGoodsInspection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Services\ProcurementSopPolicy;
 
 class ProcurementRegistryController extends Controller
 {
@@ -56,6 +58,8 @@ class ProcurementRegistryController extends Controller
             'phone_email' => 'nullable|string|max:255', 'locations_count' => 'nullable|integer|min:0',
             'specialties' => 'nullable|string|max:2000', 'origin' => 'nullable|string|max:255',
             'contact_number' => 'nullable|string|max:100',
+            'is_contractor' => 'nullable|boolean', 'ohs_instructions_acknowledged_at' => 'nullable|date',
+            'ohs_acknowledgement_reference' => 'nullable|string|max:255',
             'valid_commercial_registration' => 'required|boolean', 'valid_tax_registration' => 'required|boolean',
             'technical_support_available' => 'required|boolean', 'timely_competitive_quotations' => 'required|boolean',
             'clear_payment_lead_time' => 'required|boolean', 'clear_warranty_terms' => 'required|boolean',
@@ -70,6 +74,10 @@ class ProcurementRegistryController extends Controller
                 'timely_competitive_quotations','clear_payment_lead_time','clear_warranty_terms','ehs_compliant',
             ];
             $approved = collect($criteria)->every(fn ($key) => (bool) $data[$key]);
+            if (!empty($data['is_contractor'])) {
+                $approved = $approved && filled($data['ohs_instructions_acknowledged_at'] ?? null)
+                    && filled($data['ohs_acknowledgement_reference'] ?? null);
+            }
             $next = ((int) ProcurementSupplier::lockForUpdate()->max('id')) + 1;
             $supplier = ProcurementSupplier::create($data + [
                 'supplier_number' => 'NSA-EG1-' . now()->format('Y') . '-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT),
@@ -88,11 +96,26 @@ class ProcurementRegistryController extends Controller
             'phone_email' => 'nullable|string|max:255', 'locations_count' => 'nullable|integer|min:0',
             'specialties' => 'nullable|string|max:2000', 'origin' => 'nullable|string|max:255',
             'contact_number' => 'nullable|string|max:100', 'status' => 'nullable|in:pending,approved,re_evaluation,suspended',
+            'is_contractor' => 'sometimes|boolean', 'ohs_instructions_acknowledged_at' => 'nullable|date',
+            'ohs_acknowledgement_reference' => 'nullable|string|max:255',
             'valid_commercial_registration' => 'sometimes|boolean', 'valid_tax_registration' => 'sometimes|boolean',
             'technical_support_available' => 'sometimes|boolean', 'timely_competitive_quotations' => 'sometimes|boolean',
             'clear_payment_lead_time' => 'sometimes|boolean', 'clear_warranty_terms' => 'sometimes|boolean',
             'ehs_compliant' => 'sometimes|boolean', 'successful_deliveries' => 'sometimes|integer|min:0',
         ]);
+        if (($allowed['status'] ?? null) === 'approved') {
+            $candidate = array_merge($supplier->toArray(), $allowed);
+            $criteria = [
+                'valid_commercial_registration','valid_tax_registration','technical_support_available',
+                'timely_competitive_quotations','clear_payment_lead_time','clear_warranty_terms','ehs_compliant',
+            ];
+            $eligible = collect($criteria)->every(fn ($key) => !empty($candidate[$key]));
+            if (!empty($candidate['is_contractor'])) {
+                $eligible = $eligible && filled($candidate['ohs_instructions_acknowledged_at'] ?? null)
+                    && filled($candidate['ohs_acknowledgement_reference'] ?? null);
+            }
+            if (!$eligible) return response()->json(['message' => 'Supplier eligibility and contractor OH&S requirements must be complete before approval'], 422);
+        }
         $supplier->update($allowed);
         return response()->json(['success' => true, 'data' => $supplier->fresh(['preparer:id,name,e_signature','evaluations'])]);
     }
@@ -106,12 +129,18 @@ class ProcurementRegistryController extends Controller
         if ($supplier->successful_deliveries < 3) {
             return response()->json(['message' => 'Vendor evaluation starts after 3 successful deliveries'], 422);
         }
+        if ($supplier->last_evaluated_at && $supplier->next_evaluation_at && $supplier->next_evaluation_at->isAfter(now()->addDays(7))) {
+            return response()->json(['message' => 'The next vendor evaluation is not due yet'], 422);
+        }
         $ratings = $data['ratings'];
         $total = array_sum($ratings);
         $percentage = 0;
         foreach (self::WEIGHTS as $key => $weight) $percentage += ($ratings[$key] / 5) * $weight;
         $percentage = round($percentage, 2);
-        $outcome = $percentage >= 70 ? 'approved' : ($percentage >= 65 ? 're_evaluation' : 'suspended');
+        $previous = $supplier->evaluations()->first();
+        // SOP: a weak result first triggers an improvement/re-evaluation cycle.
+        // Suspension is only applied when a subsequent score is still below 65%.
+        $outcome = ProcurementSopPolicy::vendorEvaluationOutcome($percentage, $previous?->percentage);
 
         return DB::transaction(function () use ($supplier, $data, $ratings, $total, $percentage, $outcome) {
             $next = ((int) ProcurementVendorEvaluation::lockForUpdate()->max('id')) + 1;
@@ -121,9 +150,13 @@ class ProcurementRegistryController extends Controller
                 'ratings' => $ratings, 'grand_total' => $total, 'percentage' => $percentage,
                 'outcome' => $outcome, 'notes' => $data['notes'] ?? null, 'prepared_by' => auth()->id(),
             ]);
+            $needsImprovement = $outcome === 're_evaluation';
             $supplier->update([
                 'latest_performance_percentage' => $percentage, 'status' => $outcome,
-                'last_evaluated_at' => now(), 'next_evaluation_at' => now()->addMonths(6),
+                'last_evaluated_at' => now(),
+                'next_evaluation_at' => $needsImprovement ? now()->addDays(30) : now()->addMonths(6),
+                'improvement_requested_at' => $needsImprovement ? now() : null,
+                'improvement_due_at' => $needsImprovement ? now()->addDays(30) : null,
             ]);
             return response()->json(['success' => true, 'data' => $evaluation->load('preparer:id,name,e_signature')], 201);
         });
@@ -140,14 +173,24 @@ class ProcurementRegistryController extends Controller
         if (!$this->canManage()) return response()->json(['message' => 'Only Procurement can record quotations'], 403);
         $data = $request->validate([
             'supplier_id' => 'required|exists:procurement_suppliers,id', 'reference' => 'nullable|string|max:100',
-            'received_date' => 'nullable|date', 'expiry_date' => 'nullable|date', 'incoterm' => 'nullable|string|max:255',
+            'requested_date' => 'nullable|date', 'received_date' => 'nullable|date', 'expiry_date' => 'nullable|date', 'incoterm' => 'nullable|string|max:255',
             'lead_time_days' => 'nullable|integer|min:0', 'price_before_vat' => 'required|numeric|min:0',
+            'available_quantity' => 'nullable|numeric|min:0', 'minimum_order_quantity' => 'nullable|numeric|min:0',
             'vat' => 'nullable|numeric|min:0', 'technical_compliant' => 'required|boolean',
             'ehs_compliant' => 'required|boolean', 'selected' => 'nullable|boolean', 'notes' => 'nullable|string|max:2000',
+            'supporting_documents' => 'nullable|string|max:5000',
         ]);
         $supplier = ProcurementSupplier::findOrFail($data['supplier_id']);
-        if (!in_array($supplier->status, ['approved', 're_evaluation'], true)) {
+        if ($supplier->status !== 'approved') {
             return response()->json(['message' => 'Only approved vendors can be quoted'], 422);
+        }
+        if (!empty($data['selected'])) {
+            if (!$data['technical_compliant'] || !$data['ehs_compliant']) {
+                return response()->json(['message' => 'A non-compliant quotation cannot be selected'], 422);
+            }
+            if (!empty($data['expiry_date']) && $data['expiry_date'] < now()->toDateString()) {
+                return response()->json(['message' => 'An expired quotation cannot be selected'], 422);
+            }
         }
         return DB::transaction(function () use ($data, $prf) {
             if (!empty($data['selected'])) ProcurementQuotation::where('prf_id', $prf->id)->update(['selected' => false]);
@@ -182,6 +225,10 @@ class ProcurementRegistryController extends Controller
             $withholding += $line * ((float) ($item['withholding_rate'] ?? 0) / 100);
         }
         unset($item);
+        $existing = ProcurementBudgetPlan::where(['year'=>$data['year'],'month'=>$data['month']])->first();
+        if ($existing?->status === 'approved') {
+            return response()->json(['message'=>'An approved budget plan is locked and cannot be overwritten'], 422);
+        }
         $plan = ProcurementBudgetPlan::updateOrCreate(['year'=>$data['year'],'month'=>$data['month']], [
             'items'=>$data['items'], 'subtotal'=>$subtotal, 'vat_total'=>round($vat,2),
             'withholding_total'=>round($withholding,2), 'grand_total'=>round($subtotal+$vat-$withholding,2),
@@ -214,18 +261,29 @@ class ProcurementRegistryController extends Controller
 
     public function storeRejectedGood(Request $request): JsonResponse
     {
-        if (!$this->canAccess()) return response()->json(['message'=>'Forbidden'], 403);
         $data = $request->validate([
             'igi_id'=>'required|exists:incoming_goods_inspections,id','delivery_date'=>'nullable|date',
             'item_description'=>'required|string|max:500','part_number'=>'nullable|string|max:100',
             'quantity_affected'=>'required|numeric|min:0.001','rejecting_date'=>'nullable|date','reason'=>'required|string|max:5000',
         ]);
+        $igi = IncomingGoodsInspection::with('po.prf')->findOrFail($data['igi_id']);
+        $user = auth()->user();
+        $isRequester = $igi->po?->prf?->requested_by === $user->id;
+        if (!$this->canManage() && !$isRequester) {
+            return response()->json(['message'=>'Only the requester or Procurement can create the rejected goods form'], 403);
+        }
         $next = ((int) ProcurementRejectedGood::max('id')) + 1;
-        $row = ProcurementRejectedGood::create($data + [
-            'rejection_number'=>'RGF-EG1-'.now()->format('Y').'-'.str_pad((string)$next,4,'0',STR_PAD_LEFT),
-            'rejecting_date'=>$data['rejecting_date'] ?? now()->toDateString(), 'requester_id'=>auth()->id(),
-        ]);
-        return response()->json(['success'=>true,'data'=>$row],201);
+        return DB::transaction(function () use ($data, $next) {
+            $row = ProcurementRejectedGood::create($data + [
+                'rejection_number'=>'RGF-EG1-'.now()->format('Y').'-'.str_pad((string)$next,4,'0',STR_PAD_LEFT),
+                'rejecting_date'=>$data['rejecting_date'] ?? now()->toDateString(), 'requester_id'=>auth()->id(),
+            ]);
+            IncomingGoodsInspection::whereKey($data['igi_id'])->update([
+                'status' => 'rejected',
+                'approval_status' => 'rejected',
+            ]);
+            return response()->json(['success'=>true,'data'=>$row],201);
+        });
     }
 
     public function updateRejectedGood(Request $request, ProcurementRejectedGood $rejectedGood): JsonResponse
@@ -248,8 +306,15 @@ class ProcurementRegistryController extends Controller
                     'prf_id'=>$prf->id,'prf_number'=>$prf->prf_number,'requester'=>$prf->requester?->name,
                     'prf_date'=>$prf->date,'prf_status'=>$prf->status,'required_by_date'=>$prf->items->max('required_by_date'),
                     'po_id'=>$po?->id,'po_number'=>$po?->po_number,'supplier'=>$po?->vendor,'po_date'=>$po?->date,
-                    'po_status'=>$po?->status,'approval_status'=>$po?->approval_status,'payment_status'=>$po?->payment_status,
+                    'po_status'=>$po?->status,'approval_status'=>$po?->approval_status,
+                    'dispatched_at'=>$po?->dispatched_at,'dispatched_to'=>$po?->dispatched_to,
+                    'dispatch_reference'=>$po?->dispatch_reference,'payment_status'=>$po?->payment_status,
+                    'payment_method'=>$po?->payment_method,'payment_reference'=>$po?->payment_reference,
+                    'paid_at'=>$po?->paid_at,
                     'delivery_date'=>$po?->igi?->date,'igi_number'=>$po?->igi?->igi_number,'igi_status'=>$po?->igi?->status,
+                    'delivered_items'=>$po?->items?->map(fn ($item) => [
+                        'description'=>$item->item_description,'quantity'=>$item->qty,'unit'=>$item->unit,
+                    ])->values(),
                 ];
             });
         return response()->json(['success'=>true,'data'=>$rows]);

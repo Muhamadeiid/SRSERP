@@ -23,7 +23,7 @@ export function notificationRequestTarget(notification) {
   }
 
   if (data.prf_id) {
-    return { path: `/procurement/${data.prf_id}`, query: '' }
+    return { path: `/purchase-request/${data.prf_id}`, query: '' }
   }
 
   if (data.incident_report_id) {

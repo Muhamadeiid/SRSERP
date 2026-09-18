@@ -7,6 +7,8 @@ use App\Models\IncomingGoodsInspection;
 use App\Models\PurchaseOrder;
 use App\Models\ProcurementSupplier;
 use App\Models\IncomingGoodsInspectionApproval;
+use App\Models\Notification;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -178,7 +180,15 @@ class IgiController extends Controller
     public function update(Request $request, IncomingGoodsInspection $igi): JsonResponse
     {
         $user = auth()->user();
-        if (!$this->canAccess($user)) {
+        if ($request->has('status') || $request->has('approval_status')) {
+            return response()->json(['message' => 'IGI status can only change through the approval or rejected-goods workflow'], 422);
+        }
+        $department = strtolower((string) $user->department);
+        $canManage = $user->isAdmin() || in_array($user->role, ['procurement', 'purchasing'], true);
+        $canConfirmLabels = $canManage || $user->role === 'store_staff'
+            || str_contains($department, 'inventory') || str_contains($department, 'store');
+        $onlyLabelConfirmation = count(array_diff(array_keys($request->all()), ['labels_applied_at'])) === 0;
+        if ((!$onlyLabelConfirmation && !$canManage) || ($onlyLabelConfirmation && !$canConfirmLabels)) {
             return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
         }
 
@@ -189,7 +199,7 @@ class IgiController extends Controller
             'photos_notes'                => 'nullable|string|max:2000',
             'photos'                      => 'nullable|array',
             'photos.*'                    => 'nullable|string',
-            'status'                      => 'nullable|in:draft,submitted,approved,rejected',
+            'labels_applied_at'           => 'nullable|date',
             'items'                       => 'nullable|array',
             'items.*.description'         => 'nullable|string|max:500',
             'items.*.system'              => 'nullable|string|max:255',
@@ -210,26 +220,22 @@ class IgiController extends Controller
 
         $data = $v->validated();
 
+        if ($igi->approval_status !== 'draft') {
+            $onlyLabelConfirmation = count(array_diff(array_keys($data), ['labels_applied_at'])) === 0;
+            if (!$onlyLabelConfirmation) {
+                return response()->json(['message' => 'IGI contents are locked after submission'], 422);
+            }
+        }
+
         return DB::transaction(function () use ($igi, $data) {
-            $wasApproved = $igi->status === 'approved';
             $igi->update(array_filter([
                 'date'            => $data['date']            ?? null,
                 'supplier_name'   => $data['supplier_name']   ?? null,
                 'delivery_note_no'=> $data['delivery_note_no']?? null,
                 'photos_notes'    => $data['photos_notes']    ?? null,
                 'photos'          => $data['photos']          ?? null,
-                'status'          => $data['status']          ?? null,
+                'labels_applied_at'=> $data['labels_applied_at'] ?? null,
             ], fn($v) => $v !== null));
-
-            // A compliant completed delivery counts toward the supplier's first
-            // formal evaluation, which the SOP starts after 3 successful deliveries.
-            if (!$wasApproved && $igi->status === 'approved') {
-                $selectedQuotationId = PurchaseOrder::whereKey($igi->po_id)->value('selected_quotation_id');
-                if ($selectedQuotationId) {
-                    $actualSupplierId = \App\Models\ProcurementQuotation::whereKey($selectedQuotationId)->value('supplier_id');
-                    if ($actualSupplierId) ProcurementSupplier::whereKey($actualSupplierId)->increment('successful_deliveries');
-                }
-            }
 
             if (!empty($data['items'])) {
                 $igi->items()->delete();
@@ -269,8 +275,17 @@ class IgiController extends Controller
     {
         $user = auth()->user();
         if (!$this->canAccess($user)) return response()->json(['message'=>'Forbidden'],403);
-        if (!in_array($igi->approval_status, ['draft','rejected'], true)) return response()->json(['message'=>'IGI is already in approval'],422);
+        if ($igi->approval_status !== 'draft') return response()->json(['message'=>'IGI is already in approval or closed'],422);
+        $igi->loadMissing('items');
+        if ($igi->items->isEmpty()) return response()->json(['message'=>'At least one inspected item is required'],422);
+        if ($igi->items->contains(fn ($item) => $item->compliant_po === null || $item->compliant_technical === null || $item->compliant_ehs === null)) {
+            return response()->json(['message'=>'PO, technical, and EHS compliance must be recorded for every item'],422);
+        }
         $igi->update(['status'=>'submitted','approval_status'=>'pending_requester']);
+        $igi->loadMissing('po.prf');
+        if ($igi->po?->prf?->requested_by) {
+            Notification::notifyUser($igi->po->prf->requested_by, 'igi_approval_required', 'Incoming goods inspection awaiting your approval', "IGI {$igi->igi_number} requires requester confirmation.", ['path'=>"/goods-inspection/{$igi->id}"], true);
+        }
         return response()->json(['success'=>true,'data'=>$igi->fresh(['approvals.approver'])]);
     }
 
@@ -291,6 +306,15 @@ class IgiController extends Controller
         $stage=$stages[$igi->approval_status]??null;
         if(!$stage) return response()->json(['message'=>'IGI is not awaiting approval'],422);
         if(!$stage['allowed']) return response()->json(['message'=>'You cannot approve this IGI stage'],403);
+        if ($data['action'] === 'approve') {
+            $igi->loadMissing('items');
+            if ($igi->items->contains(fn ($item) => !$item->compliant_po || !$item->compliant_technical || !$item->compliant_ehs)) {
+                return response()->json(['message'=>'Non-compliant goods cannot be approved. Create the Rejected Goods Form (F08) instead'],422);
+            }
+            if ($stage['stage'] === 'management' && !$igi->labels_applied_at) {
+                return response()->json(['message'=>'Confirm that IGI tracking labels and shelf-life labels were applied before final approval'],422);
+            }
+        }
         return DB::transaction(function() use($igi,$user,$data,$stage){
             IncomingGoodsInspectionApproval::create(['igi_id'=>$igi->id,'stage'=>$stage['stage'],'action'=>$data['action'],'approver_id'=>$user->id,'comment'=>$data['comment']??null,'acted_at'=>now()]);
             if($data['action']==='reject') $igi->update(['status'=>'rejected','approval_status'=>'rejected']);
@@ -299,6 +323,7 @@ class IgiController extends Controller
                 if($stage['next']==='approved') $values['status']='approved';
                 $igi->update($values);
                 if($stage['next']==='approved') $this->incrementSupplierDelivery($igi);
+                $this->notifyNextIgiStage($igi, $stage['next']);
             }
             return response()->json(['success'=>true,'data'=>$igi->fresh(['creator:id,name,role','po.prf.requester:id,name,e_signature','items','approvals.approver:id,name,role,department,e_signature'])]);
         });
@@ -306,9 +331,37 @@ class IgiController extends Controller
 
     private function incrementSupplierDelivery(IncomingGoodsInspection $igi): void
     {
+        $locked = IncomingGoodsInspection::whereKey($igi->id)->lockForUpdate()->first();
+        if (!$locked || $locked->supplier_delivery_counted_at) return;
         $selectedQuotationId = PurchaseOrder::whereKey($igi->po_id)->value('selected_quotation_id');
         if (!$selectedQuotationId) return;
         $supplierId = \App\Models\ProcurementQuotation::whereKey($selectedQuotationId)->value('supplier_id');
-        if ($supplierId) ProcurementSupplier::whereKey($supplierId)->increment('successful_deliveries');
+        if ($supplierId) {
+            ProcurementSupplier::whereKey($supplierId)->increment('successful_deliveries');
+            $locked->update(['supplier_delivery_counted_at' => now()]);
+        }
+    }
+
+    private function notifyNextIgiStage(IncomingGoodsInspection $igi, string $status): void
+    {
+        $path = ['path' => "/goods-inspection/{$igi->id}"];
+        $title = "IGI {$igi->igi_number} awaiting approval";
+        if ($status === 'pending_inventory') {
+            User::where('is_active', true)->where(function ($query) {
+                $query->where('role', 'store_staff')->orWhere('department', 'like', '%inventory%')->orWhere('department', 'like', '%store%');
+            })->pluck('id')->each(fn ($id) => Notification::notifyUser($id, 'igi_approval_required', $title, 'Inventory confirmation is required.', $path, true));
+        } elseif ($status === 'pending_ehs') {
+            Notification::notifyRole('ehs', 'igi_approval_required', $title, 'EHS confirmation is required.', $path, true);
+        } elseif ($status === 'pending_quality') {
+            User::where('is_active', true)->where(function ($query) {
+                $query->where('department', 'like', '%quality%')->orWhere('department', 'qc');
+            })->pluck('id')->each(fn ($id) => Notification::notifyUser($id, 'igi_approval_required', $title, 'Quality Control confirmation is required.', $path, true));
+        } elseif ($status === 'pending_procurement') {
+            Notification::notifyRole('procurement', 'igi_approval_required', $title, 'Procurement confirmation is required.', $path, true);
+        } elseif ($status === 'pending_management') {
+            Notification::notifyRole('depot_manager', 'igi_approval_required', $title, 'Management confirmation is required.', $path, true);
+        } elseif ($status === 'approved') {
+            Notification::notifyUser($igi->created_by, 'igi_approved', "IGI {$igi->igi_number} approved", 'The incoming goods inspection is fully approved.', $path, true);
+        }
     }
 }
