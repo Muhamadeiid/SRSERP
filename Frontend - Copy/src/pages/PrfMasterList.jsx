@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search, Download, RefreshCw, FileSpreadsheet, ShoppingCart,
 } from 'lucide-react'
@@ -14,14 +14,45 @@ function trackingKey(s) {
   return (s || '~~~~ZZZZ').replace(/(\d+)/g, (_, d) => d.padStart(6, '0'))
 }
 
+const VALID_STATUSES = new Set([
+  'all',
+  'pending_procurement',
+  'pending_ehs',
+  'pending_depot',
+  'approved',
+  'rejected',
+  'cancelled',
+])
+
 export default function PrfMasterList() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [prfs,    setPrfs]    = useState([])
   const [loading, setLoading] = useState(true)
   const [err,     setErr]     = useState('')
-  const [status,  setStatus]  = useState('all')
+  const [status, setStatus] = useState(() => {
+    const requested = searchParams.get('status') || 'all'
+    return VALID_STATUSES.has(requested) ? requested : 'all'
+  })
   const [search,  setSearch]  = useState('')
+
+  // Keep dashboard deep-links and browser back/forward navigation in sync with
+  // the selected status tab.
+  useEffect(() => {
+    const requested = searchParams.get('status') || 'all'
+    setStatus(VALID_STATUSES.has(requested) ? requested : 'all')
+  }, [searchParams])
+
+  const selectStatus = useCallback((nextStatus) => {
+    setStatus(nextStatus)
+    setSearchParams(current => {
+      const next = new URLSearchParams(current)
+      if (nextStatus === 'all') next.delete('status')
+      else next.set('status', nextStatus)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -146,7 +177,7 @@ export default function PrfMasterList() {
         <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 bg-white rounded-lg border border-neutral-200 p-0.5">
             {STATUS_OPTIONS.map(([key, label]) => (
-              <button key={key} onClick={() => setStatus(key)} aria-pressed={status === key}
+              <button key={key} onClick={() => selectStatus(key)} aria-pressed={status === key}
                 className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
                   status === key ? 'bg-primary text-white' : 'text-neutral-500 hover:bg-neutral-100'
                 }`}>

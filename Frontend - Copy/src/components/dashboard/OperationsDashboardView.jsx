@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CalendarClock, ClipboardList, FilePlus2,
+  CakeSlice, ClipboardList, FilePlus2, FileText,
   Loader2, Package2, RefreshCw, ShieldCheck, ShoppingCart,
   Users, Wrench,
 } from 'lucide-react'
 import ModuleCard from './ModuleCard'
+import CalendarDashboardWidget from './CalendarDashboardWidget'
+import UserAvatar from '../profile/UserAvatar'
 
 /**
  * Root Operations Dashboard — one module card per department.
@@ -23,7 +25,7 @@ import ModuleCard from './ModuleCard'
 export default function OperationsDashboardView({
   user, loading, onRefresh,
   fullHrAccess, fullProcurementAccess, fullMaintenanceAccess, fullMaterialAccess,
-  empStats, todayAttendance = [],
+  empStats, todayAttendance = [], leaveRequests = [],
   procurementRequests = [], maintenanceTasks = [], birthdays = [],
 }) {
   const navigate = useNavigate()
@@ -70,6 +72,11 @@ export default function OperationsDashboardView({
   }, [activeTasks, today])
   const recentTasks = useMemo(() => activeTasks.slice(0, 4), [activeTasks])
 
+  // ── HR summary continued: latest leave/overtime submissions ────────────────
+  const recentLeaveRequests = useMemo(() => [...leaveRequests]
+    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+    .slice(0, 4), [leaveRequests])
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
 
@@ -100,23 +107,23 @@ export default function OperationsDashboardView({
           icon={Users}
           title="Human Resources"
           subtitle="Workforce, attendance and leaves"
-          href="/human-resources/dashboard"
+          href="/human-resources"
           loading={loading}
           kpis={[
-            { label: 'Employees', value: totalEmployees, onClick: () => navigate('/human-resources') },
+            { label: 'Employees', value: totalEmployees, onClick: () => navigate('/human-resources/employees') },
             { label: 'Present', value: presentToday, tone: 'green', sub: totalEmployees ? `${Math.round((presentToday / totalEmployees) * 100)}% today` : null, onClick: () => navigate('/human-resources/attendance') },
             { label: 'On Leave', value: onLeaveToday, tone: 'amber', onClick: () => navigate('/human-resources/attendance?status=leave') },
             { label: 'Absent', value: absentToday, tone: 'red', onClick: () => navigate('/human-resources/attendance?status=absent') },
           ]}
-          recent={birthdays.slice(0, 4).map(person => ({
-            id: `birthday-${person.id}`,
-            icon: CalendarClock,
-            iconTone: 'bg-pink-50 text-pink-600',
-            title: `${person.name}'s birthday`,
-            sub: `${person.position || 'Employee'} · ${person.date_label || ''}`,
-            href: '/human-resources',
+          recent={recentLeaveRequests.map(request => ({
+            id: `leave-${request.id}`,
+            icon: FileText,
+            iconTone: 'bg-primary/10 text-primary',
+            title: request.employee_name || request.user?.name || 'Employee',
+            sub: `${String(request.leave_type || request.type || 'leave').replaceAll('_', ' ')} · ${LEAVE_STATUS_LABEL[request.status] || request.status || 'submitted'}`,
+            href: `/human-resources/leave?req=${request.id}`,
           }))}
-          emptyRecent="No birthdays today or tomorrow"
+          emptyRecent="No leave requests yet"
         />}
 
         {fullProcurementAccess && <ModuleCard

@@ -23,17 +23,17 @@ const HR_FULL_ROLES_NAV = ['admin', 'depot_manager', 'hr']
 // neither       → visible to all authenticated users
 const NAV_GROUPS = [
   {
-    // HR-scoped overview — the detailed dashboard the module carries.
+    // HR Dashboard is now the module's landing page.
     key: 'overview', label: 'Overview', icon: LayoutDashboard, hrOnly: true,
     items: [
-      { label: 'HR Dashboard', path: '/human-resources/dashboard', icon: LayoutDashboard, hrOnly: true },
+      { label: 'HR Dashboard', path: '/human-resources', icon: LayoutDashboard, end: true, hrOnly: true },
     ],
   },
   {
     key: 'workforce', label: 'Workforce', icon: Users, hrOnly: true,
     items: [
-      { label: 'Employee List', path: '/human-resources',           icon: Users,     end: true, hrOnly: true },
-      { label: 'Org Chart',     path: '/human-resources/org-chart', icon: GitBranch,            hrOnly: true },
+      { label: 'Employee List', path: '/human-resources/employees', icon: Users,     hrOnly: true },
+      { label: 'Org Chart',     path: '/human-resources/org-chart', icon: GitBranch, hrOnly: true },
     ],
   },
   {

@@ -296,17 +296,18 @@ export default function App() {
             <HRLayout />
           </ProtectedRoute>
         }>
-          {/* Workforce — HR Full only; non-HR users redirected to leave form */}
+          {/* HR Dashboard is the module's landing page — non-HR users are sent
+              straight to the leave form because they don't have HR access. */}
           <Route index element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
-              <WorkforceTab />
+              <HrDashboardTab />
             </ProtectedRoute>
           } />
 
-          {/* HR Dashboard — module-scoped detailed overview */}
-          <Route path="dashboard" element={
+          {/* Workforce — the employee master list, now mounted at /employees */}
+          <Route path="employees" element={
             <ProtectedRoute roles={HR_FULL_ROLES} departments={HR_FULL_DEPTS} redirect="/human-resources/leave">
-              <HrDashboardTab />
+              <WorkforceTab />
             </ProtectedRoute>
           } />
 

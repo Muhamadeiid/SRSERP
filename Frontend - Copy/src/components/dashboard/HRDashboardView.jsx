@@ -1,13 +1,12 @@
 import { createElement, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  AlertCircle, ArrowRight, Award, CakeSlice, CalendarDays, CheckCircle2,
+  AlertCircle, ArrowRight, Award, CalendarDays,
   Clock3, Loader2, RefreshCw, Search, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { attendanceService } from '../../services/Attendanceservice'
 import { useLookups } from '../../hooks/useLookups'
 import UserAvatar from '../profile/UserAvatar'
-import CalendarDashboardWidget from './CalendarDashboardWidget'
 
 const dateKey = date => {
   const year = date.getFullYear()
@@ -55,7 +54,7 @@ function StatusBadge({ status }) {
 
 export default function HRDashboardView({
   user, loading, empStats, employees, requests, notifications: _notifications, todayAttendance,
-  maintenanceTasks, onRefresh, fullHrAccess = false, birthdayEmployees = [],
+  onRefresh, fullHrAccess = false,
 }) {
   const navigate = useNavigate()
   const { departments } = useLookups()
@@ -113,21 +112,6 @@ export default function HRDashboardView({
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 5), [requests])
 
-  const birthdays = useMemo(() => birthdayEmployees.map(employee => ({
-    ...employee,
-    id: `birthday-${employee.id}`,
-    title: `${employee.name}'s birthday`,
-    dateLabel: employee.date_label,
-    position: employee.position || '—',
-    department: departmentLabel(employee.department),
-  })), [birthdayEmployees, departmentLabel])
-
-  const visibleTasks = useMemo(() => maintenanceTasks.filter(task => task.status !== 'done').slice(0, 5).map(task => ({
-      id: `task-${task.id}`, title: task.title, kind: task.priority || 'Task', date: task.due_date,
-      href: `/maintenance?task=${task.id}`, priority: ['high', 'critical'].includes(task.priority),
-      status: task.status,
-    })), [maintenanceTasks])
-
   const overtimeApplications = useMemo(() => requests
     .filter(request => request.type === 'otr')
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -144,8 +128,8 @@ export default function HRDashboardView({
     <div className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-secondary-700">Operations Dashboard</h1>
-          <p className="mt-1 text-xs text-neutral-400">Live overview across departments and company operations.</p>
+          <h1 className="text-2xl font-extrabold text-secondary-700">HR Dashboard</h1>
+          <p className="mt-1 text-xs text-neutral-400">Attendance, leaves and recognition for the workforce.</p>
         </div>
         <button type="button" onClick={() => { onRefresh(); setWeekReload(value => value + 1) }} disabled={loading || weeklyLoading} className="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 text-xs font-bold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
@@ -197,33 +181,39 @@ export default function HRDashboardView({
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="rounded-md border border-neutral-200 bg-white shadow-sm lg:col-span-5">
-          <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-amber-600" /><span><h2 className="text-sm font-bold text-secondary-700">Maintenance Tasks</h2><p className="text-[9px] text-neutral-400">Only tasks visible to your account</p></span></span><span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-700">{visibleTasks.length}</span></div>
-          <div className="space-y-2 p-3">
-            {visibleTasks.length ? visibleTasks.map(item => (
-              <button key={item.id} onClick={() => navigate(item.href)} className={`w-full rounded-md border p-3 text-left transition hover:bg-neutral-50 ${item.priority ? 'border-l-4 border-l-primary' : 'border-neutral-200'}`}>
-                <div className="flex items-start gap-2.5">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-amber-100 text-amber-700"><Clock3 className="h-4 w-4" /></span>
-                  <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-secondary-700">{item.title}</span><span className="mt-2 flex items-center justify-between text-[9px] text-neutral-400"><span className="capitalize">{item.kind} · {String(item.status).replaceAll('_', ' ')}</span><strong>{item.date ? new Date(item.date).toLocaleDateString('en-GB') : 'No due date'}</strong></span></span>
-                </div>
-              </button>
-            )) : <div className="py-10 text-center"><CheckCircle2 className="mx-auto h-6 w-6 text-emerald-500" /><p className="mt-2 text-xs text-neutral-400">No visible active tasks</p></div>}
-          </div>
+      {/* Overtime Requests — HR-only board.
+          Maintenance tasks, birthdays and the calendar widget live on the
+          root Operations Dashboard, not on the HR-scoped view. */}
+      <section className="rounded-md border border-neutral-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+          <span className="flex items-center gap-2">
+            <Clock3 className="h-4 w-4 text-sky-600" />
+            <span>
+              <h2 className="text-sm font-bold text-secondary-700">Overtime Requests</h2>
+              <p className="text-[9px] text-neutral-400">Latest submissions across the workforce</p>
+            </span>
+          </span>
+          <button onClick={() => navigate('/human-resources/overtime')} className="text-[10px] font-bold text-primary">See all</button>
         </div>
-
-        <div className="rounded-md border border-neutral-200 bg-white shadow-sm lg:col-span-3">
-          <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><CakeSlice className="h-4 w-4 text-pink-600" /><span><h2 className="text-sm font-bold text-secondary-700">Birthdays</h2><p className="text-[9px] text-neutral-400">Today & tomorrow</p></span></span><span className="rounded-full bg-pink-50 px-2 py-1 text-[9px] font-bold text-pink-600">{birthdays.length}</span></div>
-          <div className="space-y-2 p-3">{birthdays.length ? birthdays.map(item => <div key={item.id} className="flex w-full items-start gap-2.5 rounded-md border border-pink-200 bg-pink-50/60 p-3"><UserAvatar user={item.user} name={item.name} /><span className="min-w-0 flex-1"><strong className="block text-xs text-secondary-700">{item.title}</strong><span className="mt-1 block truncate text-[9px] text-neutral-500">{item.position}</span><span className="mt-0.5 block truncate text-[9px] text-neutral-400">{item.department}</span><span className="mt-1.5 block text-[9px] font-bold text-pink-600">{item.dateLabel}</span></span></div>) : <div className="py-10 text-center text-xs text-neutral-400">No birthdays today or tomorrow</div>}</div>
-        </div>
-
-        <div className="rounded-md border border-neutral-200 bg-white shadow-sm lg:col-span-4">
-          <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-sky-600" /><h2 className="text-sm font-bold text-secondary-700">Overtime Requests</h2></span><button onClick={() => navigate('/human-resources/overtime')} className="text-[10px] font-bold text-primary">See all</button></div>
-          <div className="divide-y divide-neutral-100">{overtimeApplications.length ? overtimeApplications.map(request => <button key={request.id} onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"><UserAvatar user={request.user} name={request.user?.name || request.employee_name} /><span className="min-w-0 flex-1"><strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong><span className="mt-0.5 block text-[10px] text-neutral-400">{String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h</span></span><StatusBadge status={request.status} /></button>) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}</div>
+        <div className="divide-y divide-neutral-100">
+          {overtimeApplications.length ? overtimeApplications.map(request => (
+            <button
+              key={request.id}
+              onClick={() => navigate(`/human-resources/overtime?req=${request.id}`)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50"
+            >
+              <UserAvatar user={request.user} name={request.user?.name || request.employee_name} />
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-xs text-secondary-700">{request.employee_name}</strong>
+                <span className="mt-0.5 block text-[10px] text-neutral-400">
+                  {String(request.ot_date || request.request_date || '').slice(0, 10)} · {request.total_hours || request.hours || 0}h
+                </span>
+              </span>
+              <StatusBadge status={request.status} />
+            </button>
+          )) : <div className="py-12 text-center text-xs text-neutral-400">No overtime requests</div>}
         </div>
       </section>
-
-      <CalendarDashboardWidget />
 
       {fullHrAccess && <section className="rounded-md border border-neutral-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
