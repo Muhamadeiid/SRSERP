@@ -8,6 +8,8 @@ import {
 import ModuleCard from './ModuleCard'
 import CalendarDashboardWidget from './CalendarDashboardWidget'
 import UserAvatar from '../profile/UserAvatar'
+import './operations-dashboard.css'
+import OperationsInsights from './OperationsInsights'
 
 /**
  * Root Operations Dashboard — one module card per department.
@@ -80,13 +82,14 @@ export default function OperationsDashboardView({
     .slice(0, 4), [leaveRequests])
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 p-4 sm:p-6">
+    <div className="operations-dashboard mx-auto max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
 
       {/* Page header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="operations-hero">
         <div>
-          <h1 className="text-2xl font-extrabold leading-tight text-secondary-700 sm:text-[28px]">Operations Dashboard</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="operations-eyebrow">ROTEM SRS / OPERATIONS OVERVIEW</p>
+          <h1 className="operations-title">Operations Dashboard</h1>
+          <p className="operations-intro">
             {user?.name ? `Welcome back, ${user.name.split(' ')[0]}. ` : ''}
             Live overview across the departments available to your account.
           </p>
@@ -95,19 +98,32 @@ export default function OperationsDashboardView({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-neutral-100 bg-white px-3 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-50 disabled:opacity-50"
+          className="operations-refresh inline-flex items-center gap-2 rounded-lg px-4 py-3 text-xs font-bold disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
+        <div className="operations-hero-bottom">
+          <span>{new Date(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Account-scoped overview</span>
+        </div>
       </header>
 
+      <OperationsInsights hrAccess={fullHrAccess} procurementAccess={fullProcurementAccess} requests={procurementRequests} refreshing={loading} />
+
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div><p className="operations-section-kicker">YOUR WORKSPACE</p><h2 className="text-xl font-bold text-secondary-700">Department overview</h2></div>
+        <p className="text-xs text-neutral-500">Explore performance. Open a department to take action.</p>
+      </div>
+
       {/* Module cards — one per department the user can see. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="operations-departments-grid">
 
         {fullHrAccess && <ModuleCard
           icon={Users}
           title="Human Resources"
+          accent="people"
+          recentLabel="Latest employee requests"
           subtitle="Workforce, attendance and leaves"
           href="/human-resources"
           loading={loading}
@@ -131,6 +147,8 @@ export default function OperationsDashboardView({
         {fullProcurementAccess && <ModuleCard
           icon={ShoppingCart}
           title="Procurement"
+          accent="procurement"
+          recentLabel="Recent purchase requests"
           subtitle="Requests, suppliers and orders"
           href="/procurement"
           primaryAction={{ label: 'New PRF', icon: FilePlus2, href: '/procurement/new' }}
@@ -156,6 +174,8 @@ export default function OperationsDashboardView({
         {fullMaintenanceAccess && <ModuleCard
           icon={Wrench}
           title="Maintenance"
+          accent="maintenance"
+          recentLabel="Active work orders"
           subtitle="Preventive, corrective and heavy tasks"
           href="/maintenance"
           loading={loading}
@@ -180,6 +200,8 @@ export default function OperationsDashboardView({
         {fullMaterialAccess && <ModuleCard
           icon={Package2}
           title="Material Control"
+          accent="materials"
+          recentLabel="Inventory workspace"
           subtitle="Inventory ledger, rotable parts, withdrawals"
           href="/inventory"
           loading={loading}
@@ -195,6 +217,7 @@ export default function OperationsDashboardView({
       </div>
 
       {/* Cross-department widgets — visible to any signed-in user. */}
+      <div><p className="operations-section-kicker">ACROSS THE COMPANY</p><h2 className="text-xl font-bold text-secondary-700">People &amp; calendar</h2></div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <section className="rounded-2xl border border-neutral-100 bg-white shadow-sm">
           <header className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">

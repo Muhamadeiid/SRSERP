@@ -1,0 +1,55 @@
+.operations-dashboard { color: #17384b; }
+.operations-departments-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 20px; align-items: stretch; }
+.operations-insight { min-width: 0; background: #fff; border: 1px solid #e0e8ed; border-radius: 18px; padding: 24px; box-shadow: 0 3px 15px #123a4b05; }
+.operations-insight header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.operations-insight h2 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.operations-insight header p:not(.operations-section-kicker) { font-size: 11px; color: #7b8d98; margin-top: 4px; }
+.operations-insight header button { color: #005782; font-size: 11px; font-weight: 600; align-self: flex-start; padding: 8px 0; }
+.insight-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 20px 0 4px; font-size: 10px; color: #657b88; }
+.insight-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.insight-legend i { width: 7px; height: 7px; border-radius: 2px; }
+.attendance-bars { display: flex; gap: 8px; padding-top: 26px; background: repeating-linear-gradient(to top, transparent 0, transparent 49px, #edf1f4 50px, transparent 51px); }
+.attendance-day { flex: 1; min-width: 0; position: relative; }
+.attendance-stack { display: flex; flex-direction: column; justify-content: flex-end; height: 175px; margin: 0 auto; width: 55%; max-width: 38px; }
+.attendance-stack > span:not(.attendance-total) { display: block; flex-shrink: 0; }
+.attendance-total { font-size: 11px; color: #607482; padding-bottom: 6px; }
+.attendance-day-label { display: block; background: white; padding-top: 12px; font-size: 11px; color: #36556a; }
+.attendance-day-label small { display: block; margin-top: 3px; font-size: 9px; color: #82939d; }
+.attendance-tip { display: none; position: absolute; z-index: 2; bottom: 45px; left: 0; background: #17384b; color: white; border-radius: 8px; padding: 9px; width: 125px; font-size: 10px; box-shadow: 0 4px 12px #17384b20; }
+.attendance-day:nth-last-child(-n+2) .attendance-tip { left: auto; right: 0; }
+.attendance-day:hover .attendance-tip, .attendance-day:focus-visible .attendance-tip { display: block; }
+.operations-insight button:focus-visible { outline: 2px solid #005782; outline-offset: 3px; border-radius: 4px; }
+.pipeline-bars { display: grid; gap: 19px; margin: 27px 0; }
+.pipeline-bars button { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; }
+.pipeline-label { width: 120px; flex-shrink: 0; font-size: 11px; color: #486171; }
+.pipeline-track { flex: 1; height: 12px; overflow: hidden; background: #f0f4f6; border-radius: 3px; }
+.pipeline-track span { display: block; height: 100%; border-radius: 3px; }
+.pipeline-bars strong { width: 26px; text-align: right; font-size: 13px; }
+.insight-footnote { color: #82939d; font-size: 10px; margin-top: 20px; line-height: 1.6; }
+.insight-placeholder { min-height: 220px; display: grid; place-items: center; font-size: 12px; color: #728895; text-align: center; }
+@media (max-width: 480px) { .operations-insight { padding: 18px 14px; } .pipeline-label { width: 100px; } .attendance-bars { gap: 3px; } }
+.operations-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px; padding: 32px 36px 0; border-radius: 22px; color: #fff; background: linear-gradient(115deg, #06354d 0%, #005782 70%, #087f91 100%); box-shadow: 0 12px 32px #053b5014; }
+.operations-hero::after { content: ''; z-index: -1; position: absolute; width: 440px; height: 440px; right: 5%; top: -165px; border: 1px solid #ffffff18; border-radius: 50%; box-shadow: 0 0 0 55px #ffffff05, 0 0 0 110px #ffffff04, 0 0 0 165px #ffffff03; pointer-events: none; }
+.operations-eyebrow { margin-bottom: 16px; font-size: 10px; font-weight: 700; letter-spacing: .2em; color: #b5dfe9; }
+.operations-title { font-size: clamp(28px, 3vw, 42px); line-height: 1.14; font-weight: 750; letter-spacing: -.035em; }
+.operations-intro { max-width: 540px; margin-top: 14px; color: #d2e5ed; font-size: 13px; line-height: 1.7; }
+.operations-refresh { border: 1px solid #ffffff35; color: white; background: #ffffff0d; transition: background .2s; }
+.operations-refresh:hover { background: #ffffff20; }
+.operations-refresh:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+.operations-hero-bottom { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; border-top: 1px solid #ffffff20; padding: 15px 0; font-size: 11px; color: #c4dfe9; }
+.operations-section-kicker { font-size: 9px; font-weight: 700; letter-spacing: .17em; color: #728895; margin-bottom: 5px; }
+.operations-module { --module-accent: #005782; box-shadow: 0 3px 15px #123a4b05; border-color: #e0e8ed; border-top: 3px solid var(--module-accent); transition: box-shadow .2s, border-color .2s; }
+.operations-module:hover { box-shadow: 0 8px 28px #123a4b0d; }
+.operations-module--procurement { --module-accent: #177b78; }
+.operations-module--maintenance { --module-accent: #b5843b; }
+.operations-module--materials { --module-accent: #58738f; }
+.operations-module > header { padding: 22px 20px; gap: 16px; }
+.operations-module-icon { color: var(--module-accent); background: color-mix(in srgb, var(--module-accent) 9%, white); }
+.operations-module > .grid { background: #fbfcfd; }
+.operations-module > .grid > button, .operations-module > .grid > div { padding: 22px 20px; min-height: 105px; }
+.operations-activity-label { margin: 0; padding: 17px 20px 9px; font-size: 9px; letter-spacing: .13em; font-weight: 700; text-transform: uppercase; color: #7b8d98; }
+.operations-module .flex-1 > button { padding: 13px 20px; min-height: 66px; }
+.operations-empty { min-height: 145px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #7b8d98; text-align: center; font-size: 12px; }
+.operations-dashboard > footer { flex-wrap: wrap; gap: 12px; }
+@media (max-width: 480px) { .operations-hero { padding: 24px 20px 0; gap: 20px; border-radius: 16px; } .operations-module > header { padding: 18px 16px; } .operations-module > .grid > button, .operations-module > .grid > div { padding: 18px 16px; } }
+@media (prefers-reduced-motion: reduce) { .operations-dashboard *, .operations-dashboard *::after { transition: none !important; animation: none !important; } }

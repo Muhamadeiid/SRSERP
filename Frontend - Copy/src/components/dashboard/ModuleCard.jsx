@@ -24,19 +24,20 @@ export default function ModuleCard({
   kpis = [], recent = [], emptyRecent = 'Nothing to show yet',
   loading = false,
   className = '',
+  accent = 'people', recentLabel = 'Recent activity',
 }) {
   const navigate = useNavigate()
 
   return (
-    <section className={`flex flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white shadow-sm ${className}`}>
+    <section className={`operations-module operations-module--${accent} flex min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white ${className}`}>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+          <span className="operations-module-icon grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
             <Icon className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-secondary-700">{title}</h2>
-            {subtitle && <p className="truncate text-[10px] text-neutral-400">{subtitle}</p>}
+            <h2 className="text-base font-bold text-secondary-700">{title}</h2>
+            {subtitle && <p className="mt-1 text-xs text-neutral-500">{subtitle}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -56,7 +57,7 @@ export default function ModuleCard({
               onClick={() => navigate(href)}
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[10px] font-bold text-white hover:bg-primary/90"
             >
-              Open <ArrowRight className="h-3.5 w-3.5" />
+              Explore <ArrowRight className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -82,8 +83,8 @@ export default function ModuleCard({
                   md:border-r md:last:border-r-0
                 `}
               >
-                <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">{kpi.label}</p>
-                <p className={`mt-1 text-2xl font-extrabold leading-none ${tone}`}>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{kpi.label}</p>
+                <p className={`mt-3 text-3xl font-bold tracking-tight leading-none ${tone}`}>
                   {loading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-neutral-100" /> : kpi.value}
                 </p>
                 {kpi.sub && <p className="mt-1 truncate text-[10px] text-neutral-400">{kpi.sub}</p>}
@@ -93,13 +94,14 @@ export default function ModuleCard({
         </div>
       )}
 
+      <p className="operations-activity-label">{recentLabel}</p>
       <div className="flex-1 divide-y divide-neutral-100">
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-4 w-4 animate-spin text-neutral-300" />
           </div>
         ) : recent.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-neutral-400">{emptyRecent}</div>
+          <div className="operations-empty"><Icon className="h-7 w-7" /><p>{emptyRecent}</p></div>
         ) : recent.map(item => (
           <button
             key={item.id}
