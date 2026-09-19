@@ -10,6 +10,7 @@ import CalendarDashboardWidget from './CalendarDashboardWidget'
 import UserAvatar from '../profile/UserAvatar'
 import './operations-dashboard.css'
 import OperationsInsights from './OperationsInsights'
+import AttentionStrip from './AttentionStrip'
 
 /**
  * Root Operations Dashboard — one module card per department.
@@ -28,7 +29,7 @@ export default function OperationsDashboardView({
   user, loading, refreshing, onRefresh,
   fullHrAccess, fullProcurementAccess, fullMaintenanceAccess, fullMaterialAccess,
   empStats, todayAttendance = [], leaveRequests = [],
-  procurementRequests = [], maintenanceTasks = [], birthdays = [],
+  procurementRequests = [], maintenanceTasks = [], withdrawalStats = null, birthdays = [],
 }) {
   const navigate = useNavigate()
   // Capture "now" once at mount so date-based memos stay pure. Manual refreshes
@@ -81,6 +82,45 @@ export default function OperationsDashboardView({
     .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
     .slice(0, 4), [leaveRequests])
 
+  // ── What is actually waiting on this user right now ────────────────────────
+  const attentionItems = useMemo(() => {
+    const pendingLeaves = leaveRequests.filter(
+      request => ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending'].includes(request.status)
+    ).length
+
+    return [
+      fullHrAccess && {
+        key: 'leaves',
+        count: pendingLeaves,
+        label: `leave request${pendingLeaves === 1 ? '' : 's'} pending`,
+        href: '/human-resources/leave',
+        tone: 'amber',
+      },
+      fullProcurementAccess && {
+        key: 'prfs',
+        count: prfPending,
+        label: `purchase request${prfPending === 1 ? '' : 's'} in workflow`,
+        href: '/procurement/master?status=pending_procurement',
+        tone: 'blue',
+      },
+      fullMaintenanceAccess && {
+        key: 'critical',
+        count: criticalTasks,
+        label: `critical maintenance task${criticalTasks === 1 ? '' : 's'}`,
+        href: '/maintenance',
+        tone: 'red',
+      },
+      fullMaintenanceAccess && {
+        key: 'due',
+        count: dueSoon,
+        label: 'due within 7 days',
+        href: '/maintenance',
+        tone: 'amber',
+      },
+    ].filter(Boolean)
+  }, [leaveRequests, prfPending, criticalTasks, dueSoon,
+      fullHrAccess, fullProcurementAccess, fullMaintenanceAccess])
+
   return (
     <div className="operations-dashboard mx-auto max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
 
@@ -109,6 +149,9 @@ export default function OperationsDashboardView({
         </div>
       </header>
 
+      {/* What is waiting on you — hidden entirely on a clear day. */}
+      <AttentionStrip items={attentionItems} />
+
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div><p className="operations-section-kicker">YOUR WORKSPACE</p><h2 className="text-xl font-bold text-secondary-700">Department overview</h2></div>
         <p className="text-xs text-neutral-500">Explore performance. Open a department to take action.</p>
@@ -118,7 +161,6 @@ export default function OperationsDashboardView({
       <div className="operations-departments-grid">
 
         {fullHrAccess && <ModuleCard
-          showRecent={false}
           icon={Users}
           title="Human Resources"
           accent="people"
@@ -141,10 +183,9 @@ export default function OperationsDashboardView({
             href: `/human-resources/leave?req=${request.id}`,
           }))}
           emptyRecent="No leave requests yet"
-        ><OperationsInsights hrAccess requests={[]} refreshing={refreshing} /></ModuleCard>}
+        />}
 
         {fullProcurementAccess && <ModuleCard
-          showRecent={false}
           icon={ShoppingCart}
           title="Procurement"
           accent="procurement"
@@ -169,10 +210,9 @@ export default function OperationsDashboardView({
             badge: <PrfStatusPill status={item.status} />,
           }))}
           emptyRecent="No purchase requests yet"
-        ><OperationsInsights procurementAccess requests={procurementRequests} refreshing={loading} /></ModuleCard>}
+        />}
 
         {fullMaintenanceAccess && <ModuleCard
-          showRecent={false}
           icon={Wrench}
           title="Maintenance"
           accent="maintenance"
@@ -199,7 +239,6 @@ export default function OperationsDashboardView({
         />}
 
         {fullMaterialAccess && <ModuleCard
-          showRecent={false}
           icon={Package2}
           title="Material Control"
           accent="materials"
@@ -207,11 +246,31 @@ export default function OperationsDashboardView({
           subtitle="Inventory ledger, rotable parts, withdrawals"
           href="/inventory"
           loading={loading}
-          kpis={[]}
-          recent={[]}
+          kpis={[
+            { label: 'Withdrawals', value: withdrawalStats?.total ?? 0, onClick: () => navigate('/maintenance/withdrawals') },
+            { label: 'Out Now', value: withdrawalStats?.active ?? 0, tone: 'amber', sub: 'Not returned yet', onClick: () => navigate('/maintenance/withdrawals') },
+            { label: 'Returned', value: withdrawalStats?.returned ?? 0, tone: 'green', onClick: () => navigate('/maintenance/withdrawals') },
+            { label: 'This Month', value: withdrawalStats?.this_month ?? 0, tone: 'primary', onClick: () => navigate('/maintenance/withdrawals') },
+          ]}
+          recent={MATERIAL_SHORTCUTS}
           emptyRecent="Open Inventory for stock ledger and withdrawals"
-        ><div className="operations-material-shortcut"><Package2 className="h-8 w-8 text-primary" /><div><h3>Inventory workspace</h3><p>Manage stock records, rotable parts and damaged items.</p></div><button type="button" onClick={() => navigate('/inventory')}>Open inventory →</button></div></ModuleCard>}
+        />}
       </div>
+
+      {/* Analytics — lifted out of the department cards so every card keeps the
+          same height and the charts get the full page width to breathe. */}
+      {(fullHrAccess || fullProcurementAccess) && <>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div><p className="operations-section-kicker">TRENDS</p><h2 className="text-xl font-bold text-secondary-700">Operational analytics</h2></div>
+          <p className="text-xs text-neutral-500">Where the workload sits this week.</p>
+        </div>
+        <OperationsInsights
+          hrAccess={fullHrAccess}
+          procurementAccess={fullProcurementAccess}
+          requests={procurementRequests}
+          refreshing={refreshing}
+        />
+      </>}
 
       {/* Cross-department widgets — visible to any signed-in user. */}
       <div><p className="operations-section-kicker">ACROSS THE COMPANY</p><h2 className="text-xl font-bold text-secondary-700">People &amp; calendar</h2></div>
@@ -259,6 +318,12 @@ export default function OperationsDashboardView({
 }
 
 // ── Small helpers ────────────────────────────────────────────────────────────
+
+const MATERIAL_SHORTCUTS = [
+  { id: 'mc-ledger', icon: Package2, iconTone: 'bg-primary/10 text-primary', title: 'Material ledger', sub: 'Stock on hand and item master', href: '/inventory' },
+  { id: 'mc-rotable', icon: Package2, iconTone: 'bg-primary/10 text-primary', title: 'Rotable parts', sub: 'Serialised components in rotation', href: '/inventory/rotable' },
+  { id: 'mc-bad', icon: Package2, iconTone: 'bg-amber-50 text-amber-600', title: 'Bad items', sub: 'Quarantined and scrapped stock', href: '/inventory/bad' },
+]
 
 const LEAVE_STATUS_LABEL = {
   pending: 'Pending',

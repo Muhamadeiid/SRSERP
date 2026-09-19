@@ -12,7 +12,7 @@ import { getEmployeeStats, getUpcomingBirthdays } from '../services/employeeServ
 import { getLeaveRequests, getNotifications } from '../services/leaveService'
 import { getPrfs }                     from '../services/prfService'
 import { attendanceService }           from '../services/Attendanceservice'
-import { getMaintenanceTasks }          from '../services/maintenanceService'
+import { getMaintenanceTasks, getWithdrawalStats } from '../services/maintenanceService'
 import OperationsDashboardView          from '../components/dashboard/OperationsDashboardView'
 import UserAvatar                       from '../components/profile/UserAvatar'
 
@@ -195,6 +195,7 @@ export default function DashboardPage() {
   const [todayAttendance, setTodayAttendance] = useState([])
   const [maintenanceTasks, setMaintenanceTasks] = useState([])
   const [birthdays, setBirthdays] = useState([])
+  const [withdrawalStats, setWithdrawalStats] = useState(null)
 
   const fetchAll = useCallback(async (background = false) => {
     if (background !== true) setLoading(true)
@@ -219,12 +220,16 @@ export default function DashboardPage() {
     if (canSeeMaintenance) {
       secondaryTasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
     }
+    if (isDashFull) {
+      // Material Control card reads real withdrawal counts instead of bare arrows.
+      secondaryTasks.push(getWithdrawalStats().then(r => setWithdrawalStats(r?.data ?? r)).catch(() => setWithdrawalStats(null)))
+    }
     secondaryTasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
     secondaryTasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
     await Promise.allSettled([...coreTasks, ...secondaryTasks])
     setLoading(false)
     setRefreshing(false)
-  }, [isHRFull, canSeeProc, canSeeMaintenance])
+  }, [isHRFull, canSeeProc, canSeeMaintenance, isDashFull])
 
   useEffect(() => {
     fetchAll()
@@ -318,6 +323,7 @@ export default function DashboardPage() {
         leaveRequests={reqs}
         procurementRequests={prfs}
         maintenanceTasks={maintenanceTasks}
+        withdrawalStats={withdrawalStats}
         birthdays={birthdays}
         onRefresh={fetchAll}
         fullHrAccess={isHRFull}
