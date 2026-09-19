@@ -1,4 +1,20 @@
 .operations-dashboard { color: #17384b; }
+.operations-module { container-type: inline-size; }
+.operations-kpis { font-variant-numeric: tabular-nums; }
+.operations-explore { background: var(--module-accent); transition: filter .15s; }
+.operations-explore:hover { background: var(--module-accent); filter: brightness(1.1); }
+.operations-explore:focus-visible { outline: 2px solid var(--module-accent); outline-offset: 3px; }
+.operations-module .operations-insight { min-height: 360px; }
+.pipeline-bars button { border-radius: 6px; padding: 5px 0; }
+.pipeline-bars button:hover { background: #f5f8fa; }
+.attendance-day:hover .attendance-stack, .attendance-day:focus-visible .attendance-stack { filter: brightness(1.12); }
+@container (max-width: 420px) {
+  .operations-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operations-kpis > :nth-child(2n) { border-right: 0; }
+  .operations-kpis > :nth-child(-n+2) { border-bottom: 1px solid #edf1f4; }
+}
+.operations-module .operations-insight { border: 0; border-radius: 0; box-shadow: none; }
+.operations-module > .grid:has(.operations-insight) { background: white; border: 0; }
 .operations-departments-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 20px; align-items: stretch; }
 .operations-insight { min-width: 0; background: #fff; border: 1px solid #e0e8ed; border-radius: 18px; padding: 24px; box-shadow: 0 3px 15px #123a4b05; }
 .operations-insight header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }

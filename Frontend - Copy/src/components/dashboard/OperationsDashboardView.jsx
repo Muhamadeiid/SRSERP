@@ -109,8 +109,6 @@ export default function OperationsDashboardView({
         </div>
       </header>
 
-      <OperationsInsights hrAccess={fullHrAccess} procurementAccess={fullProcurementAccess} requests={procurementRequests} refreshing={loading} />
-
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div><p className="operations-section-kicker">YOUR WORKSPACE</p><h2 className="text-xl font-bold text-secondary-700">Department overview</h2></div>
         <p className="text-xs text-neutral-500">Explore performance. Open a department to take action.</p>
@@ -120,6 +118,7 @@ export default function OperationsDashboardView({
       <div className="operations-departments-grid">
 
         {fullHrAccess && <ModuleCard
+          showRecent={false}
           icon={Users}
           title="Human Resources"
           accent="people"
@@ -142,9 +141,10 @@ export default function OperationsDashboardView({
             href: `/human-resources/leave?req=${request.id}`,
           }))}
           emptyRecent="No leave requests yet"
-        />}
+        ><OperationsInsights hrAccess requests={[]} refreshing={loading} /></ModuleCard>}
 
         {fullProcurementAccess && <ModuleCard
+          showRecent={false}
           icon={ShoppingCart}
           title="Procurement"
           accent="procurement"
@@ -169,9 +169,10 @@ export default function OperationsDashboardView({
             badge: <PrfStatusPill status={item.status} />,
           }))}
           emptyRecent="No purchase requests yet"
-        />}
+        ><OperationsInsights procurementAccess requests={procurementRequests} refreshing={loading} /></ModuleCard>}
 
         {fullMaintenanceAccess && <ModuleCard
+          showRecent={false}
           icon={Wrench}
           title="Maintenance"
           accent="maintenance"
@@ -198,6 +199,7 @@ export default function OperationsDashboardView({
         />}
 
         {fullMaterialAccess && <ModuleCard
+          showRecent={false}
           icon={Package2}
           title="Material Control"
           accent="materials"

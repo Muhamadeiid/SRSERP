@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Loader2 } from 'lucide-react'
 
@@ -25,6 +26,7 @@ export default function ModuleCard({
   loading = false,
   className = '',
   accent = 'people', recentLabel = 'Recent activity',
+  children, showRecent = true,
 }) {
   const navigate = useNavigate()
 
@@ -33,7 +35,7 @@ export default function ModuleCard({
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="operations-module-icon grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="h-4 w-4" />
+            {createElement(Icon, { className: 'h-5 w-5' })}
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-bold text-secondary-700">{title}</h2>
@@ -55,7 +57,8 @@ export default function ModuleCard({
             <button
               type="button"
               onClick={() => navigate(href)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[10px] font-bold text-white hover:bg-primary/90"
+              aria-label={`Explore ${title}`}
+              className="operations-explore inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:bg-primary/90"
             >
               Explore <ArrowRight className="h-3.5 w-3.5" />
             </button>
@@ -66,7 +69,7 @@ export default function ModuleCard({
       {kpis.length > 0 && (
         // md-grid columns are pinned to a fixed set of classnames so Tailwind's
         // JIT actually picks them up — dynamic md:grid-cols-${n} would purge.
-        <div className={`grid grid-cols-2 border-b border-neutral-100 ${KPI_MD_COLS[Math.min(kpis.length, 4)] || 'md:grid-cols-4'}`}>
+        <div className={`operations-kpis grid grid-cols-2 border-b border-neutral-100 ${KPI_MD_COLS[Math.min(kpis.length, 4)] || 'md:grid-cols-4'}`}>
           {kpis.map((kpi, index) => {
             const tone = KPI_TONES[kpi.tone] || KPI_TONES.default
             const Base = kpi.onClick ? 'button' : 'div'
@@ -94,6 +97,8 @@ export default function ModuleCard({
         </div>
       )}
 
+      {children}
+      {showRecent && <>
       <p className="operations-activity-label">{recentLabel}</p>
       <div className="flex-1 divide-y divide-neutral-100">
         {loading ? (
@@ -122,6 +127,7 @@ export default function ModuleCard({
           </button>
         ))}
       </div>
+      </>}
     </section>
   )
 }
