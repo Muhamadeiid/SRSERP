@@ -197,6 +197,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [ready, setReady] = useState({ stats: false, attendance: false, procurement: false, maintenance: false, materials: false })
   const [empStats,  setEmpStats]  = useState(null)
   const [employees, setEmployees] = useState([])
   const [reqs,      setReqs]      = useState([])
@@ -216,12 +217,13 @@ export default function DashboardPage() {
     setRefreshing(true)
     const coreTasks = []
     const secondaryTasks = []
+    const loaded = key => setReady(previous => ({ ...previous, [key]: true }))
     if (isHRFull) {
       coreTasks.push(
-        getEmployeeStats().then(r => setEmpStats(r?.data ?? r)).catch(() => {}),
+        getEmployeeStats().then(r => setEmpStats(r?.data ?? r)).catch(() => {}).finally(() => loaded('stats')),
         attendanceService.getAttendance({ date: todayISO() }).then(r => {
           setTodayAttendance(Array.isArray(r?.data) ? r.data : [])
-        }).catch(() => {}),
+        }).catch(() => {}).finally(() => loaded('attendance')),
       )
       secondaryTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
       secondaryTasks.push(
@@ -237,14 +239,14 @@ export default function DashboardPage() {
       coreTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
     }
     if (canSeeProc) {
-      secondaryTasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}))
+      secondaryTasks.push(getPrfs().then(r => setPrfs(r?.data ?? [])).catch(() => {}).finally(() => loaded('procurement')))
     }
     if (canSeeMaintenance) {
-      secondaryTasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}))
+      secondaryTasks.push(getMaintenanceTasks().then(r => setMaintenanceTasks(r?.data ?? [])).catch(() => {}).finally(() => loaded('maintenance')))
     }
     if (isDashFull) {
       // Material Control card reads real withdrawal counts instead of bare arrows.
-      secondaryTasks.push(getWithdrawalStats().then(r => setWithdrawalStats(r?.data ?? r)).catch(() => setWithdrawalStats(null)))
+      secondaryTasks.push(getWithdrawalStats().then(r => setWithdrawalStats(r?.data ?? r)).catch(() => setWithdrawalStats(null)).finally(() => loaded('materials')))
     }
     secondaryTasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
     secondaryTasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
@@ -337,6 +339,7 @@ export default function DashboardPage() {
   if (user) {
     return (
       <OperationsDashboardView
+        dataReady={ready}
         refreshing={refreshing}
         user={user}
         loading={loading}

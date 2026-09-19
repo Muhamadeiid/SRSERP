@@ -1,7 +1,6 @@
 import { createElement } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, TrendingDown, TrendingUp } from 'lucide-react'
-import useCountUp from '../../hooks/useCountUp'
 import Sparkline from './Sparkline'
 
 /**
@@ -32,7 +31,7 @@ export default function ModuleCard({
   loading = false,
   className = '',
 }) {
-  const heroValue = useCountUp(loading ? 0 : hero?.value ?? 0)
+  const heroValue = hero?.value ?? '—'
   const delta = Number.isFinite(hero?.delta) && hero.delta !== 0 ? hero.delta : null
 
   return (

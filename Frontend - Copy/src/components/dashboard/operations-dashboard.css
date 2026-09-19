@@ -146,5 +146,34 @@
 /* Accent glow on hover — the department colour reads instead of a flat shadow. */
 .operations-module:hover { border-color: color-mix(in srgb, var(--module-accent) 28%, #e0e8ed); box-shadow: 0 10px 30px color-mix(in srgb, var(--module-accent) 12%, transparent); }
 
+/* A single scorecard surface: departments read as comparable rows, not tiles. */
+.operations-departments-grid { display: flex; flex-direction: column; gap: 0; background: #fff; border: 1px solid #e0e8ed; border-radius: 14px; overflow: hidden; }
+.operations-departments-grid .operations-module { display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(150px, 1fr) minmax(90px, .6fr) minmax(260px, 1.7fr); align-items: center; gap: 24px; padding: 22px 24px; border: 0; border-radius: 0; box-shadow: none; animation: none; height: auto; }
+.operations-departments-grid .operations-module + .operations-module { border-top: 1px solid #eaf0f3; }
+.operations-departments-grid .operations-module::before { display: none; }
+.operations-departments-grid .operations-module:hover { transform: none; box-shadow: none; background: #f8fbfc; }
+.operations-departments-grid .operations-module-hero { margin: 0; }
+.operations-departments-grid .operations-module-value { font-size: 30px; }
+.operations-departments-grid .operations-module-caption { margin-top: 6px; min-height: 0; font-size: 10px; max-width: 220px; }
+.operations-departments-grid .operations-module-trend { margin: 0; height: 30px; }
+.operations-departments-grid .operations-module-stats { margin: 0; padding: 0 0 0 24px; border-top: 0; border-left: 1px solid #eaf0f3; }
+.operations-departments-grid .operations-module-stats dt { white-space: normal; letter-spacing: .05em; color: #647d8b; }
+.operations-insight { border-radius: 12px; box-shadow: none; }
+.attendance-stack { max-width: 45px; }
+.pipeline-track { height: 15px; }
+.operations-hero { padding-top: 24px; gap: 16px; border-radius: 14px; }
+.operations-title { font-size: clamp(26px, 2.5vw, 34px); }
+.operations-eyebrow { margin-bottom: 10px; }
+.operations-intro { margin-top: 10px; }
+@media (max-width: 1100px) {
+  .operations-departments-grid .operations-module { grid-template-columns: minmax(170px, 1fr) minmax(120px, .7fr) minmax(220px, 1.2fr); gap: 18px; }
+  .operations-departments-grid .operations-module-trend { display: none; }
+}
+@media (max-width: 700px) {
+  .operations-departments-grid .operations-module { grid-template-columns: 1fr 100px; gap: 16px; padding: 20px; }
+  .operations-departments-grid .operations-module-stats { grid-column: 1 / -1; padding: 14px 0 0; border-left: 0; border-top: 1px solid #eaf0f3; }
+  .operations-departments-grid .operations-module-caption { font-size: 9px; }
+  .operations-departments-grid .operations-module-value { font-size: 26px; }
+}
 /* Final override — keep this last so every animation above is covered. */
 @media (prefers-reduced-motion: reduce) { .operations-dashboard *, .operations-dashboard *::after { transition: none !important; animation: none !important; } }

@@ -25,7 +25,7 @@ import ActivityStream from './ActivityStream'
  * viewers see a lightweight "My Requests" strip via the Dashboard shell.
  */
 export default function OperationsDashboardView({
-  user, loading, refreshing, onRefresh,
+  user, loading, refreshing, onRefresh, dataReady = {},
   fullHrAccess, fullProcurementAccess, fullMaintenanceAccess, fullMaterialAccess,
   empStats, todayAttendance = [], leaveRequests = [],
   procurementRequests = [], maintenanceTasks = [], withdrawalStats = null, birthdays = [],
@@ -150,8 +150,18 @@ export default function OperationsDashboardView({
       {/* What is waiting on you — hidden entirely on a clear day. */}
       <AttentionStrip items={attentionItems} />
 
+      <OperationsInsights
+        hrAccess={fullHrAccess}
+        procurementAccess={fullProcurementAccess}
+        requests={procurementRequests}
+        week={weekRows}
+        weekLoading={attendanceWeek.loading}
+        weekError={attendanceWeek.error}
+        refreshing={!dataReady.procurement}
+      />
+
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <div><p className="operations-section-kicker">YOUR WORKSPACE</p><h2 className="text-xl font-bold text-secondary-700">Department overview</h2></div>
+        <div><p className="operations-section-kicker">AT A GLANCE</p><h2 className="text-xl font-bold text-secondary-700">Operational scorecard</h2></div>
         <p className="text-xs text-neutral-500">Explore performance. Open a department to take action.</p>
       </div>
 
@@ -164,7 +174,7 @@ export default function OperationsDashboardView({
           accent="people"
           subtitle="Workforce, attendance and leaves"
           href="/human-resources"
-          loading={loading}
+          loading={!dataReady.stats || !dataReady.attendance}
           hero={{
             label: totalEmployees ? `present today · ${Math.round((presentToday / totalEmployees) * 100)}% of the workforce` : 'present today',
             value: presentToday,
@@ -185,7 +195,7 @@ export default function OperationsDashboardView({
           accent="procurement"
           subtitle="Requests, suppliers and orders"
           href="/procurement"
-          loading={loading}
+          loading={!dataReady.procurement}
           hero={{
             label: 'purchase requests moving through the workflow',
             value: prfPending,
@@ -204,7 +214,7 @@ export default function OperationsDashboardView({
           accent="maintenance"
           subtitle="Preventive, corrective and heavy tasks"
           href="/maintenance"
-          loading={loading}
+          loading={!dataReady.maintenance}
           hero={{
             label: 'work orders open across the fleet',
             value: activeTasks.length,
@@ -222,7 +232,7 @@ export default function OperationsDashboardView({
           accent="materials"
           subtitle="Inventory ledger, rotable parts, withdrawals"
           href="/inventory"
-          loading={loading}
+          loading={!dataReady.materials}
           hero={{
             label: 'items withdrawn and not yet returned',
             value: withdrawalStats?.active ?? 0,
@@ -236,23 +246,6 @@ export default function OperationsDashboardView({
         />}
       </div>
 
-      {/* Analytics — lifted out of the department cards so every card keeps the
-          same height and the charts get the full page width to breathe. */}
-      {(fullHrAccess || fullProcurementAccess) && <>
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div><p className="operations-section-kicker">TRENDS</p><h2 className="text-xl font-bold text-secondary-700">Operational analytics</h2></div>
-          <p className="text-xs text-neutral-500">Where the workload sits this week.</p>
-        </div>
-        <OperationsInsights
-          hrAccess={fullHrAccess}
-          procurementAccess={fullProcurementAccess}
-          requests={procurementRequests}
-          week={weekRows}
-          weekLoading={attendanceWeek.loading}
-          weekError={attendanceWeek.error}
-          refreshing={refreshing}
-        />
-      </>}
 
       {/* Individual leave/permission rows are deliberately absent: a manager
           does not need a per-person list here, and the same data reads better
