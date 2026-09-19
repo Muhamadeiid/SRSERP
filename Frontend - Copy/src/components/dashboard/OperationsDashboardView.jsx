@@ -25,7 +25,7 @@ import OperationsInsights from './OperationsInsights'
  * viewers see a lightweight "My Requests" strip via the Dashboard shell.
  */
 export default function OperationsDashboardView({
-  user, loading, onRefresh,
+  user, loading, refreshing, onRefresh,
   fullHrAccess, fullProcurementAccess, fullMaintenanceAccess, fullMaterialAccess,
   empStats, todayAttendance = [], leaveRequests = [],
   procurementRequests = [], maintenanceTasks = [], birthdays = [],
@@ -97,10 +97,10 @@ export default function OperationsDashboardView({
         <button
           type="button"
           onClick={onRefresh}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="operations-refresh inline-flex items-center gap-2 rounded-lg px-4 py-3 text-xs font-bold disabled:opacity-50"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {loading || refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
         <div className="operations-hero-bottom">
@@ -141,7 +141,7 @@ export default function OperationsDashboardView({
             href: `/human-resources/leave?req=${request.id}`,
           }))}
           emptyRecent="No leave requests yet"
-        ><OperationsInsights hrAccess requests={[]} refreshing={loading} /></ModuleCard>}
+        ><OperationsInsights hrAccess requests={[]} refreshing={refreshing} /></ModuleCard>}
 
         {fullProcurementAccess && <ModuleCard
           showRecent={false}
@@ -207,15 +207,10 @@ export default function OperationsDashboardView({
           subtitle="Inventory ledger, rotable parts, withdrawals"
           href="/inventory"
           loading={loading}
-          kpis={[
-            { label: 'Inventory', value: '→', tone: 'primary', onClick: () => navigate('/inventory') },
-            { label: 'Rotable', value: '→', tone: 'primary', onClick: () => navigate('/inventory/rotable') },
-            { label: 'Bad Items', value: '→', tone: 'amber', onClick: () => navigate('/inventory/bad') },
-            { label: 'Reports', value: '→', tone: 'primary', onClick: () => navigate('/inventory/reports') },
-          ]}
+          kpis={[]}
           recent={[]}
           emptyRecent="Open Inventory for stock ledger and withdrawals"
-        />}
+        ><div className="operations-material-shortcut"><Package2 className="h-8 w-8 text-primary" /><div><h3>Inventory workspace</h3><p>Manage stock records, rotable parts and damaged items.</p></div><button type="button" onClick={() => navigate('/inventory')}>Open inventory →</button></div></ModuleCard>}
       </div>
 
       {/* Cross-department widgets — visible to any signed-in user. */}

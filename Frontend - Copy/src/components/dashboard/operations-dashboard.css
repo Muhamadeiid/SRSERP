@@ -64,7 +64,11 @@
 .operations-module > .grid { background: #fbfcfd; }
 .operations-module > .grid > button, .operations-module > .grid > div { padding: 22px 20px; min-height: 105px; }
 .operations-activity-label { margin: 0; padding: 17px 20px 9px; font-size: 9px; letter-spacing: .13em; font-weight: 700; text-transform: uppercase; color: #7b8d98; }
-.operations-module .flex-1 > button { padding: 13px 20px; min-height: 66px; }
+.operations-recent-list > button { padding: 13px 20px; min-height: 66px; }
+.operations-material-shortcut { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 24px; }
+.operations-material-shortcut h3 { font-size: 14px; font-weight: 600; }
+.operations-material-shortcut p { font-size: 12px; color: #728895; margin-top: 5px; }
+.operations-material-shortcut button { color: #005782; font-size: 12px; font-weight: 600; padding: 10px 0; }
 .operations-empty { min-height: 145px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #7b8d98; text-align: center; font-size: 12px; }
 .operations-dashboard > footer { flex-wrap: wrap; gap: 12px; }
 @media (max-width: 480px) { .operations-hero { padding: 24px 20px 0; gap: 20px; border-radius: 16px; } .operations-module > header { padding: 18px 16px; } .operations-module > .grid > button, .operations-module > .grid > div { padding: 18px 16px; } }

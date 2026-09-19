@@ -100,7 +100,7 @@ export default function ModuleCard({
       {children}
       {showRecent && <>
       <p className="operations-activity-label">{recentLabel}</p>
-      <div className="flex-1 divide-y divide-neutral-100">
+      <div className="operations-recent-list flex-1 divide-y divide-neutral-100">
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-4 w-4 animate-spin text-neutral-300" />

@@ -186,6 +186,7 @@ export default function DashboardPage() {
   const canSeeMaintenance = ['admin', 'depot_manager'].includes(role) || isManager
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [empStats,  setEmpStats]  = useState(null)
   const [employees, setEmployees] = useState([])
   const [reqs,      setReqs]      = useState([])
@@ -195,8 +196,9 @@ export default function DashboardPage() {
   const [maintenanceTasks, setMaintenanceTasks] = useState([])
   const [birthdays, setBirthdays] = useState([])
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true)
+  const fetchAll = useCallback(async (background = false) => {
+    if (background !== true) setLoading(true)
+    setRefreshing(true)
     const coreTasks = []
     const secondaryTasks = []
     if (isHRFull) {
@@ -219,14 +221,14 @@ export default function DashboardPage() {
     }
     secondaryTasks.push(getNotifications().then(r => setNotifs(r?.data ?? [])).catch(() => {}))
     secondaryTasks.push(getUpcomingBirthdays().then(r => setBirthdays(Array.isArray(r) ? r : r?.data ?? [])).catch(() => setBirthdays([])))
-    void Promise.allSettled(secondaryTasks)
-    await Promise.allSettled(coreTasks)
+    await Promise.allSettled([...coreTasks, ...secondaryTasks])
     setLoading(false)
+    setRefreshing(false)
   }, [isHRFull, canSeeProc, canSeeMaintenance])
 
   useEffect(() => {
     fetchAll()
-    const t = setInterval(fetchAll, 60000)
+    const t = setInterval(() => fetchAll(true), 60000)
     return () => clearInterval(t)
   }, [fetchAll])
 
@@ -308,6 +310,7 @@ export default function DashboardPage() {
   if (user) {
     return (
       <OperationsDashboardView
+        refreshing={refreshing}
         user={user}
         loading={loading}
         empStats={empStats}
