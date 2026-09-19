@@ -1,164 +1,91 @@
 import { createElement } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowUpRight, TrendingDown, TrendingUp } from 'lucide-react'
 import useCountUp from '../../hooks/useCountUp'
 import Sparkline from './Sparkline'
 
 /**
- * Shared module summary card used on the Operations Dashboard.
+ * Shared department summary card on the Operations Dashboard.
  *
- * Each department (HR, Procurement, Maintenance, Material Control) reuses the
- * same card so the root dashboard reads as one system: identical header rhythm,
- * KPI band, and recent-items list, distinguished only by icon and content.
+ * One headline number per department, a trend line under it, and three
+ * supporting figures — nothing else. The detail (who, which request, when)
+ * lives in the module itself and in the shared activity feed, so the card
+ * answers a single question: "is this department healthy right now?"
+ *
+ * The whole card is the link, via the stretched-link pattern: a real anchor on
+ * the title carries the accessible name and keyboard focus, and its ::after
+ * overlay makes the entire card surface clickable. A <button> wrapper would be
+ * invalid here — a button may only contain phrasing content, not <header>/<dl>.
  *
  * Props:
- *   icon           — lucide icon component for the header tile
- *   title, subtitle — header text
- *   href           — where the whole card header links to (Open Module)
- *   primaryAction  — optional secondary CTA in the header (e.g. "New PRF")
- *   kpis           — [{ label, value, tone?: 'green'|'amber'|'red'|'primary', onClick? }]
- *   recent         — [{ id, title, sub, badge, href }]
- *   emptyRecent    — copy shown when the recent list is empty
- *   loading        — swaps KPI values and rows for a skeleton
+ *   icon, title, subtitle — header identity
+ *   href                  — where the card navigates
+ *   accent                — people | procurement | maintenance | materials
+ *   hero                  — { label, value, delta?, spark?, tone? } the headline
+ *   stats                 — up to three { label, value, tone? } supporting figures
+ *   loading               — swaps numbers for skeletons
  */
 export default function ModuleCard({
-  icon: Icon, title, subtitle,
-  href, primaryAction,
-  kpis = [], recent = [], emptyRecent = 'Nothing to show yet',
+  icon: Icon, title, subtitle, href,
+  accent = 'people',
+  hero = null, stats = [],
   loading = false,
   className = '',
-  accent = 'people', recentLabel = 'Recent activity',
-  children, showRecent = true,
 }) {
-  const navigate = useNavigate()
+  const heroValue = useCountUp(loading ? 0 : hero?.value ?? 0)
+  const delta = Number.isFinite(hero?.delta) && hero.delta !== 0 ? hero.delta : null
 
   return (
-    <section className={`operations-module operations-module--${accent} flex min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-100 bg-white ${className}`}>
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="operations-module-icon grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-            {createElement(Icon, { className: 'h-5 w-5' })}
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-secondary-700">{title}</h2>
-            {subtitle && <p className="mt-1 text-xs text-neutral-500">{subtitle}</p>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {primaryAction && (
-            <button
-              type="button"
-              onClick={() => navigate(primaryAction.href)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-[10px] font-bold text-secondary-700 hover:bg-neutral-50"
-            >
-              {primaryAction.icon && <primaryAction.icon className="h-3.5 w-3.5" />}
-              {primaryAction.label}
-            </button>
-          )}
-          {href && (
-            <button
-              type="button"
-              onClick={() => navigate(href)}
-              aria-label={`Explore ${title}`}
-              className="operations-explore inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:bg-primary/90"
-            >
-              Explore <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+    <article className={`operations-module operations-module--${accent} ${className}`}>
+      <header>
+        <span className="operations-module-icon">
+          {createElement(Icon, { className: 'h-5 w-5' })}
+        </span>
+        <span className="operations-module-identity">
+          <strong>
+            <Link to={href} className="operations-module-link">{title}</Link>
+          </strong>
+          {subtitle && <small>{subtitle}</small>}
+        </span>
+        <ArrowUpRight className="operations-module-go h-4 w-4" aria-hidden="true" />
       </header>
 
-      {kpis.length > 0 && (
-        // md-grid columns are pinned to a fixed set of classnames so Tailwind's
-        // JIT actually picks them up — dynamic md:grid-cols-${n} would purge.
-        <div className={`operations-kpis grid grid-cols-2 border-b border-neutral-100 ${KPI_MD_COLS[Math.min(kpis.length, 4)] || 'md:grid-cols-4'}`}>
-          {kpis.map((kpi, index) => (
-            <KpiTile
-              key={kpi.label}
-              kpi={kpi}
-              index={index}
-              loading={loading}
-              accentColor={ACCENT_HEX[accent] || ACCENT_HEX.people}
-            />
-          ))}
+      {hero && (
+        <div className="operations-module-hero">
+          <span className="operations-module-figure">
+            {loading
+              ? <span className="operations-skeleton-number" />
+              : <span className={`operations-module-value ${HERO_TONES[hero.tone] || ''}`}>{heroValue}</span>}
+            {!loading && delta !== null && (
+              <span className={`operations-delta ${delta > 0 ? 'operations-delta--up' : 'operations-delta--down'}`}>
+                {createElement(delta > 0 ? TrendingUp : TrendingDown, { className: 'h-3 w-3' })}
+                {Math.abs(delta)}
+              </span>
+            )}
+          </span>
+          <p className="operations-module-caption">{hero.label}</p>
         </div>
       )}
 
-      {children}
-      {showRecent && <>
-      <p className="operations-activity-label">{recentLabel}</p>
-      <div className="operations-recent-list flex-1 divide-y divide-neutral-100">
-        {loading ? (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-4 w-4 animate-spin text-neutral-300" />
-          </div>
-        ) : recent.length === 0 ? (
-          <div className="operations-empty"><Icon className="h-7 w-7" /><p>{emptyRecent}</p></div>
-        ) : recent.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => item.href && navigate(item.href)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/25"
-          >
-            {item.icon && (
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${item.iconTone || 'bg-neutral-100 text-neutral-500'}`}>
-                <item.icon className="h-4 w-4" />
-              </span>
-            )}
-            <span className="min-w-0 flex-1">
-              <strong className="block truncate text-xs text-secondary-700">{item.title}</strong>
-              {item.sub && <span className="mt-0.5 block truncate text-[10px] text-neutral-400">{item.sub}</span>}
-            </span>
-            {item.badge}
-          </button>
-        ))}
+      <div className="operations-module-trend">
+        {!loading && hero?.spark?.length > 1
+          ? <Sparkline values={hero.spark} tone={ACCENT_HEX[accent] || ACCENT_HEX.people} height={34} />
+          : <span className="operations-module-rule" />}
       </div>
-      </>}
-    </section>
-  )
-}
 
-/**
- * One KPI cell: label, rolled-up number, optional delta pill and sparkline.
- * Split out of ModuleCard so the count-up hook gets its own component instance
- * per tile rather than one shared animation for the whole card.
- */
-function KpiTile({ kpi, index, loading, accentColor }) {
-  const tone = KPI_TONES[kpi.tone] || KPI_TONES.default
-  const Base = kpi.onClick ? 'button' : 'div'
-  const shown = useCountUp(kpi.value)
-  const delta = Number.isFinite(kpi.delta) && kpi.delta !== 0 ? kpi.delta : null
-
-  return (
-    <Base
-      type={kpi.onClick ? 'button' : undefined}
-      onClick={kpi.onClick}
-      className={`
-        operations-kpi relative px-4 py-3 text-left transition-colors
-        ${kpi.onClick ? 'hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25' : ''}
-        ${index % 2 === 0 ? 'border-r border-neutral-100' : ''}
-        ${index < 2 ? 'border-b border-neutral-100 md:border-b-0' : ''}
-        md:border-r md:last:border-r-0
-      `}
-    >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{kpi.label}</p>
-
-      <span className="mt-3 flex items-end gap-2">
-        <span className={`text-3xl font-bold leading-none tracking-tight ${tone}`}>
-          {loading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-neutral-100" /> : shown}
-        </span>
-        {!loading && delta !== null && (
-          <span className={`operations-delta ${delta > 0 ? 'operations-delta--up' : 'operations-delta--down'}`}>
-            {createElement(delta > 0 ? TrendingUp : TrendingDown, { className: 'h-3 w-3' })}
-            {Math.abs(delta)}
-          </span>
-        )}
-      </span>
-
-      {kpi.sub && <p className="mt-1 truncate text-[10px] text-neutral-400">{kpi.sub}</p>}
-      {!loading && kpi.spark?.length > 1 && <Sparkline values={kpi.spark} tone={accentColor} />}
-    </Base>
+      {stats.length > 0 && (
+        <dl className="operations-module-stats">
+          {stats.slice(0, 3).map(stat => (
+            <div key={stat.label}>
+              <dt>{stat.label}</dt>
+              <dd className={HERO_TONES[stat.tone] || ''}>
+                {loading ? <span className="operations-skeleton-chip" /> : stat.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </article>
   )
 }
 
@@ -169,18 +96,8 @@ const ACCENT_HEX = {
   materials:   '#58738f',
 }
 
-const KPI_TONES = {
-  default: 'text-secondary-700',
-  primary: 'text-primary',
-  green:   'text-emerald-600',
-  amber:   'text-amber-600',
-  red:     'text-red-600',
-  blue:    'text-blue-600',
-}
-
-const KPI_MD_COLS = {
-  1: 'md:grid-cols-1',
-  2: 'md:grid-cols-2',
-  3: 'md:grid-cols-3',
-  4: 'md:grid-cols-4',
+const HERO_TONES = {
+  green: 'text-emerald-600',
+  amber: 'text-amber-600',
+  red:   'text-red-600',
 }
