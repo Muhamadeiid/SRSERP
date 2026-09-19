@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Loader2 } from 'lucide-react'
+import { ArrowRight, Loader2, TrendingDown, TrendingUp } from 'lucide-react'
+import useCountUp from '../../hooks/useCountUp'
+import Sparkline from './Sparkline'
 
 /**
  * Shared module summary card used on the Operations Dashboard.
@@ -70,30 +72,15 @@ export default function ModuleCard({
         // md-grid columns are pinned to a fixed set of classnames so Tailwind's
         // JIT actually picks them up — dynamic md:grid-cols-${n} would purge.
         <div className={`operations-kpis grid grid-cols-2 border-b border-neutral-100 ${KPI_MD_COLS[Math.min(kpis.length, 4)] || 'md:grid-cols-4'}`}>
-          {kpis.map((kpi, index) => {
-            const tone = KPI_TONES[kpi.tone] || KPI_TONES.default
-            const Base = kpi.onClick ? 'button' : 'div'
-            return (
-              <Base
-                key={kpi.label}
-                type={kpi.onClick ? 'button' : undefined}
-                onClick={kpi.onClick}
-                className={`
-                  px-4 py-3 text-left transition-colors
-                  ${kpi.onClick ? 'hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25' : ''}
-                  ${index % 2 === 0 ? 'border-r border-neutral-100' : ''}
-                  ${index < 2 ? 'border-b border-neutral-100 md:border-b-0' : ''}
-                  md:border-r md:last:border-r-0
-                `}
-              >
-                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{kpi.label}</p>
-                <p className={`mt-3 text-3xl font-bold tracking-tight leading-none ${tone}`}>
-                  {loading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-neutral-100" /> : kpi.value}
-                </p>
-                {kpi.sub && <p className="mt-1 truncate text-[10px] text-neutral-400">{kpi.sub}</p>}
-              </Base>
-            )
-          })}
+          {kpis.map((kpi, index) => (
+            <KpiTile
+              key={kpi.label}
+              kpi={kpi}
+              index={index}
+              loading={loading}
+              accentColor={ACCENT_HEX[accent] || ACCENT_HEX.people}
+            />
+          ))}
         </div>
       )}
 
@@ -130,6 +117,56 @@ export default function ModuleCard({
       </>}
     </section>
   )
+}
+
+/**
+ * One KPI cell: label, rolled-up number, optional delta pill and sparkline.
+ * Split out of ModuleCard so the count-up hook gets its own component instance
+ * per tile rather than one shared animation for the whole card.
+ */
+function KpiTile({ kpi, index, loading, accentColor }) {
+  const tone = KPI_TONES[kpi.tone] || KPI_TONES.default
+  const Base = kpi.onClick ? 'button' : 'div'
+  const shown = useCountUp(kpi.value)
+  const delta = Number.isFinite(kpi.delta) && kpi.delta !== 0 ? kpi.delta : null
+
+  return (
+    <Base
+      type={kpi.onClick ? 'button' : undefined}
+      onClick={kpi.onClick}
+      className={`
+        operations-kpi relative px-4 py-3 text-left transition-colors
+        ${kpi.onClick ? 'hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25' : ''}
+        ${index % 2 === 0 ? 'border-r border-neutral-100' : ''}
+        ${index < 2 ? 'border-b border-neutral-100 md:border-b-0' : ''}
+        md:border-r md:last:border-r-0
+      `}
+    >
+      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{kpi.label}</p>
+
+      <span className="mt-3 flex items-end gap-2">
+        <span className={`text-3xl font-bold leading-none tracking-tight ${tone}`}>
+          {loading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-neutral-100" /> : shown}
+        </span>
+        {!loading && delta !== null && (
+          <span className={`operations-delta ${delta > 0 ? 'operations-delta--up' : 'operations-delta--down'}`}>
+            {createElement(delta > 0 ? TrendingUp : TrendingDown, { className: 'h-3 w-3' })}
+            {Math.abs(delta)}
+          </span>
+        )}
+      </span>
+
+      {kpi.sub && <p className="mt-1 truncate text-[10px] text-neutral-400">{kpi.sub}</p>}
+      {!loading && kpi.spark?.length > 1 && <Sparkline values={kpi.spark} tone={accentColor} />}
+    </Base>
+  )
+}
+
+const ACCENT_HEX = {
+  people:      '#005782',
+  procurement: '#177b78',
+  maintenance: '#b5843b',
+  materials:   '#58738f',
 }
 
 const KPI_TONES = {

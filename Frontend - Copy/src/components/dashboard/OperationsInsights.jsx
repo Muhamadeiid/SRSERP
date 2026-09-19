@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { attendanceService } from '../../services/Attendanceservice'
 
-const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const stages = [
   ['pending_procurement', 'Procurement review', '#005782'],
   ['pending_ehs', 'EHS review', '#6489a5'],
@@ -12,27 +9,22 @@ const stages = [
   ['cancelled', 'Cancelled', '#a2adb5'],
 ]
 
-export default function OperationsInsights({ hrAccess, procurementAccess, requests, refreshing }) {
+/**
+ * Presentational analytics panels for the Operations Dashboard.
+ *
+ * The weekly attendance rows arrive as a prop rather than being fetched here:
+ * Dashboard owns every request so the 60s background refresh keeps these
+ * charts in step with the KPI tiles, and attendance is not pulled twice.
+ */
+export default function OperationsInsights({
+  hrAccess, procurementAccess, requests = [],
+  week = [], weekLoading = false, weekError = false,
+  refreshing,
+}) {
   const navigate = useNavigate()
-  const [week, setWeek] = useState({ rows: [], loading: true, error: false })
-  useEffect(() => {
-    if (!hrAccess || refreshing) return
-    let active = true
-    const end = new Date()
-    const start = new Date(end)
-    start.setDate(start.getDate() - 6)
-    setWeek(previous => ({ ...previous, loading: previous.rows.length === 0, error: false }))
-    attendanceService.getDashboardWeek(dateKey(start), dateKey(end))
-      .then(response => {
-        if (!Array.isArray(response?.data)) throw new Error('Invalid weekly data')
-        if (active) setWeek({ rows: response.data, loading: false, error: false })
-      })
-      .catch(() => { if (active) setWeek(previous => ({ ...previous, loading: false, error: true })) })
-    return () => { active = false }
-  }, [hrAccess, refreshing])
 
   if (!hrAccess && !procurementAccess) return null
-  const max = Math.max(1, ...week.rows.map(day => Number(day.present || 0) + Number(day.leave || 0) + Number(day.absent || 0)))
+  const max = Math.max(1, ...week.map(day => Number(day.present || 0) + Number(day.leave || 0) + Number(day.absent || 0)))
   const counts = stages.map(([status, label, color]) => ({ status, label, color, count: requests.filter(request => request.status === status).length }))
   const largestStage = Math.max(1, ...counts.map(stage => stage.count))
 
@@ -40,10 +32,10 @@ export default function OperationsInsights({ hrAccess, procurementAccess, reques
     {hrAccess && <section className="operations-insight">
       <header><div><p className="operations-section-kicker">WORKFORCE PULSE</p><h2>Attendance overview</h2><p>Last 7 days · employees per day</p></div><button type="button" onClick={() => navigate('/human-resources/attendance')}>View attendance →</button></header>
       <div className="insight-legend"><span><i style={{ background: '#005782' }} />Present</span><span><i style={{ background: '#d7b776' }} />On leave</span><span><i style={{ background: '#d78d88' }} />Absent</span></div>
-      {week.error && week.rows.length > 0 && <p className="insight-footnote" role="status">Showing the last loaded data. Refresh to retry.</p>}
-      {week.loading && !week.rows.length ? <div className="insight-placeholder" role="status">Loading attendance…</div> : week.error && !week.rows.length ? <div className="insight-placeholder" role="status">Attendance could not be loaded. Use Refresh to try again.</div> : !week.rows.length ? <div className="insight-placeholder">No attendance data for this period</div> : <>
+      {weekError && week.length > 0 && <p className="insight-footnote" role="status">Showing the last loaded data. Refresh to retry.</p>}
+      {weekLoading && !week.length ? <div className="insight-placeholder" role="status">Loading attendance…</div> : weekError && !week.length ? <div className="insight-placeholder" role="status">Attendance could not be loaded. Use Refresh to try again.</div> : !week.length ? <div className="insight-placeholder">No attendance data for this period</div> : <>
         <div className="attendance-bars" aria-label="Daily attendance breakdown">
-          {week.rows.map(day => {
+          {week.map(day => {
             const present = Number(day.present || 0), leave = Number(day.leave || 0), absent = Number(day.absent || 0)
             const date = new Date(`${day.date}T00:00:00`)
             const description = `${day.date}: ${present} present, ${leave} on leave, ${absent} absent`

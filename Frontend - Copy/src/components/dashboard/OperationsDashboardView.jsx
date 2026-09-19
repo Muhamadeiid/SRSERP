@@ -11,6 +11,7 @@ import UserAvatar from '../profile/UserAvatar'
 import './operations-dashboard.css'
 import OperationsInsights from './OperationsInsights'
 import AttentionStrip from './AttentionStrip'
+import ActivityStream from './ActivityStream'
 
 /**
  * Root Operations Dashboard — one module card per department.
@@ -30,6 +31,7 @@ export default function OperationsDashboardView({
   fullHrAccess, fullProcurementAccess, fullMaintenanceAccess, fullMaterialAccess,
   empStats, todayAttendance = [], leaveRequests = [],
   procurementRequests = [], maintenanceTasks = [], withdrawalStats = null, birthdays = [],
+  attendanceWeek = { rows: [], loading: false, error: false },
 }) {
   const navigate = useNavigate()
   // Capture "now" once at mount so date-based memos stay pure. Manual refreshes
@@ -81,6 +83,19 @@ export default function OperationsDashboardView({
   const recentLeaveRequests = useMemo(() => [...leaveRequests]
     .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
     .slice(0, 4), [leaveRequests])
+
+  // ── Trend series pulled from the weekly attendance rows ────────────────────
+  const weekRows = useMemo(() => attendanceWeek.rows || [], [attendanceWeek.rows])
+  const presentSeries = useMemo(() => weekRows.map(day => Number(day.present || 0)), [weekRows])
+  const leaveSeries = useMemo(() => weekRows.map(day => Number(day.leave || 0)), [weekRows])
+  const absentSeries = useMemo(() => weekRows.map(day => Number(day.absent || 0)), [weekRows])
+
+  // Yesterday is the second-to-last row; today's live count comes from the
+  // attendance endpoint, so compare against it rather than the last row.
+  const deltaFor = series => (series.length >= 2 ? series[series.length - 2] : null)
+  const presentDelta = deltaFor(presentSeries) === null ? null : presentToday - deltaFor(presentSeries)
+  const leaveDelta = deltaFor(leaveSeries) === null ? null : onLeaveToday - deltaFor(leaveSeries)
+  const absentDelta = deltaFor(absentSeries) === null ? null : absentToday - deltaFor(absentSeries)
 
   // ── What is actually waiting on this user right now ────────────────────────
   const attentionItems = useMemo(() => {
@@ -170,9 +185,9 @@ export default function OperationsDashboardView({
           loading={loading}
           kpis={[
             { label: 'Employees', value: totalEmployees, onClick: () => navigate('/human-resources/employees') },
-            { label: 'Present', value: presentToday, tone: 'green', sub: totalEmployees ? `${Math.round((presentToday / totalEmployees) * 100)}% today` : null, onClick: () => navigate('/human-resources/attendance') },
-            { label: 'On Leave', value: onLeaveToday, tone: 'amber', onClick: () => navigate('/human-resources/attendance?status=leave') },
-            { label: 'Absent', value: absentToday, tone: 'red', onClick: () => navigate('/human-resources/attendance?status=absent') },
+            { label: 'Present', value: presentToday, tone: 'green', delta: presentDelta, spark: presentSeries, sub: totalEmployees ? `${Math.round((presentToday / totalEmployees) * 100)}% today` : null, onClick: () => navigate('/human-resources/attendance') },
+            { label: 'On Leave', value: onLeaveToday, tone: 'amber', delta: leaveDelta, spark: leaveSeries, onClick: () => navigate('/human-resources/attendance?status=leave') },
+            { label: 'Absent', value: absentToday, tone: 'red', delta: absentDelta, spark: absentSeries, onClick: () => navigate('/human-resources/attendance?status=absent') },
           ]}
           recent={recentLeaveRequests.map(request => ({
             id: `leave-${request.id}`,
@@ -268,9 +283,23 @@ export default function OperationsDashboardView({
           hrAccess={fullHrAccess}
           procurementAccess={fullProcurementAccess}
           requests={procurementRequests}
+          week={weekRows}
+          weekLoading={attendanceWeek.loading}
+          weekError={attendanceWeek.error}
           refreshing={refreshing}
         />
       </>}
+
+      <ActivityStream
+        leaveRequests={leaveRequests}
+        procurementRequests={procurementRequests}
+        maintenanceTasks={maintenanceTasks}
+        hrAccess={fullHrAccess}
+        procurementAccess={fullProcurementAccess}
+        maintenanceAccess={fullMaintenanceAccess}
+        now={today}
+        loading={loading}
+      />
 
       {/* Cross-department widgets — visible to any signed-in user. */}
       <div><p className="operations-section-kicker">ACROSS THE COMPANY</p><h2 className="text-xl font-bold text-secondary-700">People &amp; calendar</h2></div>

@@ -67,7 +67,6 @@
 .operations-empty { min-height: 145px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #7b8d98; text-align: center; font-size: 12px; }
 .operations-dashboard > footer { flex-wrap: wrap; gap: 12px; }
 @media (max-width: 480px) { .operations-hero { padding: 24px 20px 0; gap: 20px; border-radius: 16px; } .operations-module > header { padding: 18px 16px; } .operations-module > .grid > button, .operations-module > .grid > div { padding: 18px 16px; } }
-@media (prefers-reduced-motion: reduce) { .operations-dashboard *, .operations-dashboard *::after { transition: none !important; animation: none !important; } }
 
 /* ── Needs your attention ───────────────────────────────────────────────── */
 .operations-attention { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding: 16px 20px; border: 1px solid #f0d9ae; border-left: 4px solid #d99c2b; border-radius: 14px; background: linear-gradient(100deg, #fffaf0, #fffdf8); }
@@ -84,3 +83,54 @@
 .operations-chip--blue { border-color: #c7dcea; color: #1d6a95; }
 .operations-chip--red { border-color: #efc9c9; color: #a84343; }
 @media (max-width: 720px) { .operations-attention-chips { margin-left: 0; width: 100%; } }
+
+/* ── KPI deltas & sparklines ────────────────────────────────────────────── */
+.operations-kpi { overflow: hidden; }
+.operations-delta { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.operations-delta--up { background: #e8f5ee; color: #1a7a4c; }
+.operations-delta--down { background: #fbecec; color: #a84343; }
+.operations-sparkline { display: block; width: 100%; height: 22px; margin-top: 10px; opacity: .85; }
+
+/* ── Recent activity feed ───────────────────────────────────────────────── */
+.operations-activity { background: #fff; border: 1px solid #e0e8ed; border-radius: 18px; padding: 24px; box-shadow: 0 3px 15px #123a4b05; }
+.operations-activity header h2 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; color: #17384b; }
+.operations-activity header p:not(.operations-section-kicker) { font-size: 11px; color: #7b8d98; margin-top: 4px; }
+.operations-activity-list { margin-top: 18px; display: grid; }
+.operations-activity-list li + li { border-top: 1px solid #f0f4f6; }
+.operations-activity-list button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 8px; text-align: left; border-radius: 8px; transition: background .15s; }
+.operations-activity-list button:hover { background: #f7fafb; }
+.operations-activity-list button:focus-visible { outline: 2px solid #005782; outline-offset: -2px; }
+.operations-activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.operations-activity-body { min-width: 0; flex: 1; }
+.operations-activity-body strong { display: block; font-size: 12px; font-weight: 600; color: #17384b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.operations-activity-body small { display: block; margin-top: 3px; font-size: 10px; color: #7b8d98; text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.operations-activity-meta { flex-shrink: 0; text-align: right; }
+.operations-activity-source { display: block; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #93a5b0; }
+.operations-activity-meta time { display: block; margin-top: 3px; font-size: 10px; color: #7b8d98; font-variant-numeric: tabular-nums; }
+.operations-activity-empty { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #93a5b0; font-size: 12px; }
+.operations-activity-skeleton { margin-top: 18px; display: grid; gap: 18px; }
+.operations-activity-skeleton > div { display: flex; align-items: center; gap: 14px; }
+.operations-activity-skeleton-dot { width: 8px; height: 8px; border-radius: 50%; background: #e6edf1; }
+.operations-activity-skeleton-line { flex: 1; height: 11px; border-radius: 4px; background: linear-gradient(90deg, #eef3f6 25%, #f7fafb 50%, #eef3f6 75%); background-size: 200% 100%; animation: operations-shimmer 1.4s ease-in-out infinite; }
+@keyframes operations-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (max-width: 480px) { .operations-activity { padding: 18px 14px; } .operations-activity-source { display: none; } }
+
+/* ── Entrance choreography ──────────────────────────────────────────────── */
+@keyframes operations-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.operations-dashboard > * { animation: operations-rise .45s cubic-bezier(.22, .78, .35, 1) backwards; }
+.operations-dashboard > *:nth-child(1) { animation-delay: 0ms; }
+.operations-dashboard > *:nth-child(2) { animation-delay: 45ms; }
+.operations-dashboard > *:nth-child(3) { animation-delay: 90ms; }
+.operations-dashboard > *:nth-child(4) { animation-delay: 135ms; }
+.operations-dashboard > *:nth-child(n+5) { animation-delay: 180ms; }
+.operations-departments-grid > * { animation: operations-rise .45s cubic-bezier(.22, .78, .35, 1) backwards; }
+.operations-departments-grid > *:nth-child(1) { animation-delay: 120ms; }
+.operations-departments-grid > *:nth-child(2) { animation-delay: 165ms; }
+.operations-departments-grid > *:nth-child(3) { animation-delay: 210ms; }
+.operations-departments-grid > *:nth-child(4) { animation-delay: 255ms; }
+
+/* Accent glow on hover — the department colour reads instead of a flat shadow. */
+.operations-module:hover { border-color: color-mix(in srgb, var(--module-accent) 28%, #e0e8ed); box-shadow: 0 10px 30px color-mix(in srgb, var(--module-accent) 12%, transparent); }
+
+/* Final override — keep this last so every animation above is covered. */
+@media (prefers-reduced-motion: reduce) { .operations-dashboard *, .operations-dashboard *::after { transition: none !important; animation: none !important; } }

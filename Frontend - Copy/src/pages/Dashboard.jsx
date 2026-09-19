@@ -28,6 +28,16 @@ const fmtTime = (d) => {
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+// Six days back plus today = the 7-day window the attendance chart draws.
+const weekStartISO = () => {
+  const start = new Date()
+  start.setDate(start.getDate() - 6)
+  const year = start.getFullYear()
+  const month = String(start.getMonth() + 1).padStart(2, '0')
+  const day = String(start.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const todayISO = () => {
   const today = new Date()
   const year = today.getFullYear()
@@ -196,6 +206,10 @@ export default function DashboardPage() {
   const [maintenanceTasks, setMaintenanceTasks] = useState([])
   const [birthdays, setBirthdays] = useState([])
   const [withdrawalStats, setWithdrawalStats] = useState(null)
+  // Weekly attendance is owned here rather than inside OperationsInsights so
+  // the 60s background refresh keeps the chart in step with the KPI tiles and
+  // attendance is not fetched twice on one page.
+  const [attendanceWeek, setAttendanceWeek] = useState({ rows: [], loading: true, error: false })
 
   const fetchAll = useCallback(async (background = false) => {
     if (background !== true) setLoading(true)
@@ -210,6 +224,14 @@ export default function DashboardPage() {
         }).catch(() => {}),
       )
       secondaryTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
+      secondaryTasks.push(
+        attendanceService.getDashboardWeek(weekStartISO(), todayISO())
+          .then(r => {
+            if (!Array.isArray(r?.data)) throw new Error('Invalid weekly attendance payload')
+            setAttendanceWeek({ rows: r.data, loading: false, error: false })
+          })
+          .catch(() => setAttendanceWeek(previous => ({ ...previous, loading: false, error: true })))
+      )
     } else {
       // All other roles (staff, manager, procurement, ehs) — see just their own submitted requests
       coreTasks.push(getLeaveRequests().then(r => setReqs(r?.data ?? [])).catch(() => {}))
@@ -324,6 +346,7 @@ export default function DashboardPage() {
         procurementRequests={prfs}
         maintenanceTasks={maintenanceTasks}
         withdrawalStats={withdrawalStats}
+        attendanceWeek={attendanceWeek}
         birthdays={birthdays}
         onRefresh={fetchAll}
         fullHrAccess={isHRFull}
