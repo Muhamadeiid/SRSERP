@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux'
 import {
   Printer, CheckCircle, XCircle, AlertCircle, Ban,
   Loader2, Search, Bell, X, Eye, Clock, Calendar, RefreshCw, CalendarClock, Download, ArchiveRestore,
-  UploadCloud, Trash2, Paperclip, FileText, ChevronDown, ArrowUpDown
+  UploadCloud, Trash2, Paperclip, FileText, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react'
 import { getEmployees, getEmployeeFormProfile, searchEmployees, getDepotManager } from '../services/employeeService'
 import { useLookups } from '../hooks/useLookups'
@@ -448,13 +448,50 @@ function StatusBadge({ status }) {
   )
 }
 
-const REQUEST_GRID = 'grid w-full min-w-[820px] grid-cols-[minmax(360px,1fr)_160px_300px] items-center gap-4'
+const REQUEST_GRID = 'grid w-full min-w-[1140px] grid-cols-[minmax(170px,1.3fr)_minmax(170px,1.3fr)_130px_90px_150px_270px] items-center gap-3'
 
-function RequestTableHeader() {
+const REQUEST_COLUMNS = [
+  ['employee', 'Employee'], ['request', 'Request Type'], ['date', 'Date'],
+  ['amount', 'Days / Hours'], ['status', 'Status'],
+]
+
+function requestSortValue(request, key) {
+  switch (key) {
+    case 'employee': return request.employee_name || ''
+    case 'request': return request.type === 'lrf' ? `${request.leave_type || ''} Leave` : 'Overtime Request'
+    case 'date': return request.type === 'lrf' ? request.start_date || '' : request.ot_date || ''
+    case 'amount': return Number(request.type === 'lrf' ? request.days : request.hours) || 0
+    case 'status': return request.status || ''
+    default: return ''
+  }
+}
+
+function sortRequests(requests, sort) {
+  if (!sort.key) return requests
+  return [...requests].sort((left, right) => {
+    const a = requestSortValue(left, sort.key)
+    const b = requestSortValue(right, sort.key)
+    const comparison = typeof a === 'number' && typeof b === 'number'
+      ? a - b
+      : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
+    return (sort.direction === 'desc' ? -1 : 1) * comparison
+  })
+}
+
+function RequestTableHeader({ sort, onSort }) {
   return (
     <div className="border-b border-neutral-200 bg-primary/5">
-      <div className={`${REQUEST_GRID} px-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
-        <span className="text-left">Employee / Request</span><span>Status</span><span>Actions</span>
+      <div className={`${REQUEST_GRID} px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:px-6`}>
+        {REQUEST_COLUMNS.map(([key, label]) => {
+          const active = sort?.key === key
+          const SortIcon = active ? (sort.direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+          return <span key={key} role="columnheader" aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+            <button type="button" onClick={() => onSort(key)} className="flex items-center gap-1.5 text-left hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" title={`Sort by ${label}`}>
+              {label}<SortIcon className="h-3 w-3 shrink-0" />
+            </button>
+          </span>
+        })}
+        <span className="text-center">Actions</span>
       </div>
     </div>
   )
@@ -3037,6 +3074,11 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
   const [pendingSearch, setPendingSearch] = useState('')
   const [pendingDepartment, setPendingDepartment] = useState('all')
   const [pendingSort, setPendingSort] = useState('submitted_desc')
+  const [columnSorts, setColumnSorts] = useState({})
+  const toggleColumnSort = (section, key) => setColumnSorts(current => {
+    const previous = current[section]
+    return { ...current, [section]: { key, direction: previous?.key === key && previous.direction === 'asc' ? 'desc' : 'asc' } }
+  })
   const [archiveExpanded, setArchiveExpanded] = useState(false)
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('all')
@@ -3138,6 +3180,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
       const bDate = new Date(useStartDate ? requestDate(b) : (b.created_at || 0)).getTime()
       return pendingSort.endsWith('_asc') ? aDate - bDate : bDate - aDate
     })
+  const sortedPendingRequests = sortRequests(visiblePendingRequests, columnSorts.pending || {})
   const summaryTotal = typeFiltered.length
   const summaryPending = typeFiltered.filter(request => ['pending', 'manager_approved', 'hr_approved', 'cancellation_pending', 'amendment_pending'].includes(request.status)).length
   const summaryApproved = typeFiltered.filter(request => request.status === 'approved').length
@@ -3169,15 +3212,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           ? <UserAvatar user={r.user} name={r.user.name} />
           : <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${r.type === 'lrf' ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'}`}>{r.type === 'lrf' ? <Calendar className="h-4 w-4" /> : <Clock className="h-4 w-4" />}</div>}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-secondary-700 truncate">
-            {r.type==='lrf' ? `${(r.leave_type||'').replace('_',' ')} Leave` : 'Overtime Request'}
-            {r.tracking_no && <span className="ml-2 text-xs text-neutral-400 font-normal">{r.tracking_no}</span>}
-          </p>
-          <p className="text-[11px] sm:text-xs text-neutral-400 truncate">
-            {r.employee_name} · {r.type==='lrf'
-              ? `${fmtShort(r.start_date)} → ${fmtShort(r.end_date)} · ${fmtDays(r.days)}d`
-              : `${fmtShort(r.ot_date)} · ${r.start_time}–${r.end_time} · ${displayOvertimeHours(r.hours)}h`}
-          </p>
+          <p className="text-sm font-semibold text-secondary-700 truncate">{r.employee_name}</p>
           {r.status === 'rejected' && (
             <p className="mt-1 truncate text-[11px] font-medium text-red-600">
               Rejected{r.rejecter?.name ? ` by ${r.rejecter.name}` : ''}{r.rejection_reason ? ` · ${r.rejection_reason}` : ''}
@@ -3185,6 +3220,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           )}
         </div>
       </div>
+      <div className="min-w-0"><p className="truncate text-xs font-semibold text-secondary-700">{r.type === 'lrf' ? `${(r.leave_type || '').replace('_', ' ')} Leave` : 'Overtime Request'}</p><p className="truncate text-[11px] text-neutral-400">{r.tracking_no || '—'}</p></div>
+      <span className="text-xs text-neutral-600">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+      <span className="text-xs font-semibold text-neutral-600">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
       <span className="justify-self-center"><StatusBadge status={r.status} /></span>
       <div className="flex items-center justify-center gap-2 shrink-0">
         <button
@@ -3630,9 +3668,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             </label>
           </div>
           <div className="overflow-x-auto">
-          <RequestTableHeader />
+          <RequestTableHeader sort={columnSorts.pending} onSort={key => toggleColumnSort('pending', key)} />
           <div className="divide-y divide-neutral-50">
-            {visiblePendingRequests.map(r => (
+            {sortedPendingRequests.map(r => (
               <div key={r.id}>
               <div className={`${REQUEST_GRID} px-4 py-3 transition-colors hover:bg-amber-50/40 sm:px-6`}>
                 <div className="flex min-w-0 items-center gap-3">
@@ -3643,14 +3681,12 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-secondary-700">{r.employee_name}</p>
                     </div>
-                    <p className="text-xs text-neutral-400">
-                      {r.type==='lrf'
-                        ? `${r.leave_type} leave · ${fmtDays(r.days)} days (${fmtShort(r.start_date)}→${fmtShort(r.end_date)})`
-                        : `Overtime · ${displayOvertimeHours(r.hours)}h · ${fmtShort(r.ot_date)}`}
-                      {requestDepartment(r) && <span className="ml-2 font-medium text-neutral-500">· {requestDepartment(r)}</span>}
-                    </p>
+                    <p className="text-xs text-neutral-400">{requestDepartment(r)}</p>
                   </div>
                 </div>
+                <div className="min-w-0"><p className="truncate text-xs font-semibold text-secondary-700">{r.type === 'lrf' ? `${(r.leave_type || '').replace('_', ' ')} Leave` : 'Overtime Request'}</p><p className="truncate text-[11px] text-neutral-400">{r.tracking_no || '—'}</p></div>
+                <span className="text-xs text-neutral-600">{fmtShort(r.type === 'lrf' ? r.start_date : r.ot_date)}</span>
+                <span className="text-xs font-semibold text-neutral-600">{r.type === 'lrf' ? `${fmtDays(r.days)}d` : `${displayOvertimeHours(r.hours)}h`}</span>
                 <span className="justify-self-center"><StatusBadge status={r.status} /></span>
                 <div className="grid grid-cols-[32px_32px_32px_132px] items-center justify-center gap-1.5 whitespace-nowrap">
                   <button onClick={() => openRequest(r)} title="View request" aria-label="View request" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-primary"><Eye className="w-4 h-4" /></button>
@@ -3708,8 +3744,8 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               <p className="text-[11px] text-neutral-400">Approved, current or upcoming</p>
             </div>
             <div className="divide-y divide-neutral-50 overflow-x-auto">
-              <RequestTableHeader />
-              {active.map(r => renderRequestRow(r, { showArchiveAction: canManagePrintArchive }))}
+              <RequestTableHeader sort={columnSorts.active} onSort={key => toggleColumnSort('active', key)} />
+              {sortRequests(active, columnSorts.active || {}).map(r => renderRequestRow(r, { showArchiveAction: canManagePrintArchive }))}
             </div>
           </div>
         )
@@ -3761,9 +3797,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
                   </label>
                 </div>
                 <div className="divide-y divide-neutral-50 overflow-x-auto">
-                  <RequestTableHeader />
+                  <RequestTableHeader sort={columnSorts.archived} onSort={key => toggleColumnSort('archived', key)} />
                   {archived.length > 0
-                    ? archived.map(request => renderRequestRow(request, { showRestoreAction: true }))
+                    ? sortRequests(archived, columnSorts.archived || {}).map(request => renderRequestRow(request, { showRestoreAction: true }))
                     : <p className="px-6 py-8 text-center text-xs text-neutral-400">No archived requests for this month.</p>}
                 </div>
               </div>
@@ -3820,7 +3856,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           const totalPages = Math.max(1, Math.ceil(filtered.length / HISTORY_PER_PAGE))
           const safePage   = Math.min(historyPage, totalPages)
           const pageStart  = (safePage - 1) * HISTORY_PER_PAGE
-          const pageItems  = filtered.slice(pageStart, pageStart + HISTORY_PER_PAGE)
+          const pageItems  = sortRequests(filtered, columnSorts.history || {}).slice(pageStart, pageStart + HISTORY_PER_PAGE)
 
           return (
             <>
@@ -3900,7 +3936,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
               ) : (
                 <>
                   <div className="divide-y divide-neutral-50 overflow-x-auto">
-                    <RequestTableHeader />
+                    <RequestTableHeader sort={columnSorts.history} onSort={key => { toggleColumnSort('history', key); setHistoryPage(1) }} />
                     {pageItems.map(r => renderRequestRow(r))}
                   </div>
 
