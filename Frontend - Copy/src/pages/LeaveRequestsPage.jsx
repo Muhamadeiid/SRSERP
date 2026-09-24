@@ -2425,6 +2425,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const awaitingHrApproval = req.can_approve_hr
     || req.status === 'manager_approved'
     || (req.status === 'pending' && hasNoDirectManager)
+  const canEditTracking = isHR
+    && (awaitingHrApproval || ['hr_approved', 'approved'].includes(req.status))
   const canEditHrLeave = isLRF
     && ['pending', 'manager_approved', 'hr_approved'].includes(req.status)
     && (isDirectManager || canHrApprove || isDepotAdmin)
@@ -2596,7 +2598,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
           <div className="min-w-0 flex-1 mr-3">
             <p className="text-sm font-bold text-secondary-700">{isLRF ? 'Leave Request (LRF)' : 'Overtime Request (OTR)'}</p>
 
-            {isHR && editingTracking ? (
+            {canEditTracking && editingTracking ? (
               <div className="mt-1 flex items-center gap-1.5">
                 <input
                   value={trackingDraft}
@@ -2620,7 +2622,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 <p className={`text-xs ${trackingMissing ? 'text-amber-600 italic font-semibold' : 'text-neutral-400'}`}>
                   {trackingMissing ? 'No tracking number' : req.tracking_no}
                 </p>
-                {isHR && req.status === 'approved' && (
+                {canEditTracking && (
                   <button onClick={() => setEditingTracking(true)}
                     className="text-[10px] font-bold text-primary hover:underline">
                     {trackingMissing ? '+ Set' : 'Edit'}

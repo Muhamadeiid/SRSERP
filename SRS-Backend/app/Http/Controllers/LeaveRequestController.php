@@ -1203,20 +1203,27 @@ class LeaveRequestController extends Controller
 
     /**
      * Manually set / update the tracking_no on a leave or overtime request.
-     * Allowed only for: admin, depot_manager, or any HR-department user.
-     * Used right before printing so HR can stamp the official document number.
+     * Available to HR as soon as the request reaches the HR stage, so the
+     * official number can be prepared before HR or final approval.
      */
     public function updateTrackingNo(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->isHR()) {
+        if (!$user->isHR() && !$user->hasPermission('leaves.approve_hr')) {
             return response()->json(['success' => false, 'message' => 'Only HR can edit the tracking number'], 403);
         }
 
-        if ($leaveRequest->status !== 'approved') {
+        $employee = $leaveRequest->employee_id
+            ? Employee::withTrashed()->find($leaveRequest->employee_id)
+            : $this->uniqueActiveEmployeeByName($leaveRequest->employee_name);
+        $hasNoDirectManager = $employee && !$this->directManagerUserId($employee);
+        $hasReachedHr = in_array($leaveRequest->status, ['manager_approved', 'hr_approved', 'approved'], true)
+            || ($leaveRequest->status === 'pending' && $hasNoDirectManager);
+
+        if (!$hasReachedHr) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tracking numbers can only be edited after final approval.',
+                'message' => 'The tracking number can be edited once the request reaches HR approval.',
             ], 422);
         }
 

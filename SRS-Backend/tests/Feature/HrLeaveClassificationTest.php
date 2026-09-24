@@ -68,4 +68,44 @@ class HrLeaveClassificationTest extends TestCase
             'status' => 'hr_approved',
         ]);
     }
+
+    public function test_hr_can_set_tracking_number_at_hr_approval_stage_for_leave_and_overtime(): void
+    {
+        $hr = User::create([
+            'name' => 'Tracking HR Officer',
+            'email' => 'hr-tracking@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'hr',
+        ]);
+
+        $leave = LeaveRequest::create([
+            'employee_name' => 'Leave Employee',
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'start_date' => '2026-09-28',
+            'end_date' => '2026-09-28',
+            'days' => 1,
+            'status' => 'manager_approved',
+        ]);
+        $overtime = LeaveRequest::create([
+            'employee_name' => 'Overtime Employee',
+            'type' => 'otr',
+            'ot_date' => '2026-09-28',
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'hours' => 2,
+            'status' => 'manager_approved',
+        ]);
+
+        $this->actingAs($hr)
+            ->putJson("/api/leave-requests/{$leave->id}/tracking-no", ['tracking_no' => 'LRF-EG1-014'])
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'LRF-EG1-014');
+
+        $this->actingAs($hr)
+            ->putJson("/api/leave-requests/{$overtime->id}/tracking-no", ['tracking_no' => 'OTR-GZ-007'])
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'OTR-GZ-007');
+    }
 }
