@@ -62,6 +62,9 @@ export const eventStart = event => {
   return start
 }
 
+/** Repeating events (daily stand-ups, weekly reports) are background rhythm, not news. */
+export const isRecurring = event => !!event.recurrence?.type && event.recurrence.type !== 'none'
+
 export const isOverdue = (event, todayKey) =>
   event.type === 'task' && !event.isDone && event.date < todayKey
 

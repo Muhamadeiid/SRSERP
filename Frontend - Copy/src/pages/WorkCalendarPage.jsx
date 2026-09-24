@@ -11,7 +11,7 @@ import KpiStrip from '../components/calendar/KpiStrip'
 import TaskBoard from '../components/calendar/TaskBoard'
 import TodayRail from '../components/calendar/TodayRail'
 import WeekView from '../components/calendar/WeekView'
-import { EVENT_TYPES, dateKey, parseKey } from '../components/calendar/calendarMeta'
+import { EVENT_TYPES, dateKey, isRecurring, parseKey } from '../components/calendar/calendarMeta'
 import '../components/calendar/calendar.css'
 import useCalendar from '../hooks/useCalendar'
 import { deleteCalendarEvent, getCalendarStats, updateCalendarTaskProgress } from '../services/calendarService'
@@ -51,6 +51,13 @@ export default function WorkCalendarPage() {
   )
 
   const [enabledTypes, setEnabledTypes] = useState(() => new Set(EVENT_TYPES.map(type => type.key)))
+  const [showRecurring, setShowRecurring] = useState(() => {
+    try { return localStorage.getItem('cal-show-recurring') !== '0' } catch { return true }
+  })
+  const toggleRecurring = () => setShowRecurring(current => {
+    try { localStorage.setItem('cal-show-recurring', current ? '0' : '1') } catch { /* private mode */ }
+    return !current
+  })
   const { events, nonWorkingDays, loading, error, refresh, range } = useCalendar(cursor)
   const [drawerDate, setDrawerDate] = useState(null)
   const [selectedEventId, setSelectedEventId] = useState(null)
@@ -114,6 +121,8 @@ export default function WorkCalendarPage() {
   })
 
   const drawerEvents = drawerDate ? events.filter(event => event.date === drawerDate) : []
+  const viewEvents = useMemo(() => (showRecurring ? events : events.filter(event => !isRecurring(event))), [events, showRecurring])
+  const recurringCount = useMemo(() => new Set(events.filter(isRecurring).map(event => event.id)).size, [events])
   const openDay = date => { setDrawerDate(date); setSelectedEventId(null) }
   const openEvent = event => {
     // Task-board items can sit outside the visible month; jump there first.
@@ -193,6 +202,11 @@ export default function WorkCalendarPage() {
                 <i aria-hidden="true" />{type.plural} <b>{eventCounts[type.key]}</b>
               </button>
             ))}
+            {recurringCount > 0 && (
+              <button type="button" className="cal-chip cal-chip--routine" aria-pressed={showRecurring} onClick={toggleRecurring} title="Daily and weekly repeating events">
+                <i aria-hidden="true" />Recurring <b>{recurringCount}</b>
+              </button>
+            )}
             <div className="cal-legend">
               <span><i style={{ background: 'var(--cal-weekend-bg)' }} /> Off day</span>
               <span><i className="cal-leave-day" /> Leave</span>
@@ -205,11 +219,11 @@ export default function WorkCalendarPage() {
               <span className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> Loading calendar…</span>
             </div>
           ) : view === 'week' ? (
-            <WeekView weekStart={weekStart} events={events} nonWorkingDays={nonWorkingDays} enabledTypes={enabledTypes} onDayClick={openDay} onEventClick={openEvent} />
+            <WeekView weekStart={weekStart} events={viewEvents} nonWorkingDays={nonWorkingDays} enabledTypes={enabledTypes} onDayClick={openDay} onEventClick={openEvent} />
           ) : view === 'agenda' ? (
-            <AgendaView cursor={cursor} events={events} enabledTypes={enabledTypes} onEventClick={openEvent} />
+            <AgendaView cursor={cursor} events={viewEvents} enabledTypes={enabledTypes} onEventClick={openEvent} />
           ) : (
-            <CalendarGrid cursor={cursor} range={range} events={events} nonWorkingDays={nonWorkingDays} enabledTypes={enabledTypes} onDayClick={openDay} onEventClick={openEvent} />
+            <CalendarGrid cursor={cursor} range={range} events={viewEvents} nonWorkingDays={nonWorkingDays} enabledTypes={enabledTypes} onDayClick={openDay} onEventClick={openEvent} />
           )}
         </section>
 

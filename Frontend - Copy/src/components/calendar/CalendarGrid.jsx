@@ -1,5 +1,5 @@
 import EventPill from './EventPill'
-import { dateKey } from './calendarMeta'
+import { dateKey, isRecurring } from './calendarMeta'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const VISIBLE_PER_DAY = 3
@@ -31,7 +31,7 @@ export default function CalendarGrid({ cursor, range, events, nonWorkingDays, en
         <div className="cal-days">
           {days.map(date => {
             const key = dateKey(date)
-            const dayEvents = eventsByDate[key] || []
+            const dayEvents = (eventsByDate[key] || []).slice().sort((a, b) => Number(isRecurring(a)) - Number(isRecurring(b)))
             const nonWorking = nonWorkingByDate.get(key)
             const classes = [
               'cal-cell',

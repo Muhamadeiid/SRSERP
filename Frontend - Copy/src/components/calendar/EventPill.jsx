@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import { dateKey, isOverdue } from './calendarMeta'
+import { dateKey, isOverdue, isRecurring } from './calendarMeta'
 
 /**
  * Compact event chip for the month grid. Tasks get a checkbox glyph and a
@@ -10,7 +10,7 @@ export default function EventPill({ event, onClick }) {
   const isTask = event.type === 'task'
   const overdue = isOverdue(event, dateKey(new Date()))
   const time = event.time ? event.time.slice(0, 5) : ''
-  const classes = ['cal-pill', event.isDone && 'cal-pill--done', overdue && 'cal-pill--overdue'].filter(Boolean).join(' ')
+  const classes = ['cal-pill', isRecurring(event) && !overdue && 'cal-pill--routine', event.isDone && 'cal-pill--done', overdue && 'cal-pill--overdue'].filter(Boolean).join(' ')
 
   return (
     <button

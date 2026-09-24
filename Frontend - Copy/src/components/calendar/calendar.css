@@ -115,6 +115,16 @@
 .cal-pill--done .cal-pill-check { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cal-pill-flag { width: 6px; height: 6px; flex-shrink: 0; margin-left: auto; border-radius: 50%; background: var(--prio); }
 
+/* Recurring events: a dot and muted text, no fill, so one-off items stand out. */
+.cal-pill--routine { height: 20px; background: transparent; color: #5f7481; font-weight: 500; }
+.cal-pill--routine::before { top: 50%; bottom: auto; left: 2px; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; }
+.cal-pill--routine time { font-weight: 600; color: #7b8d98; }
+.cal-pill--routine:hover { background: var(--accent-tint); box-shadow: none; transform: none; }
+.cal-cell--off .cal-pill--routine { opacity: .5; }
+.cal-week-card--routine { background: transparent; border-color: var(--cal-line); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cal-week-card--routine strong { font-weight: 600; color: #486171; }
+.cal-chip--routine i { background: transparent; border: 2px solid #8496a1; width: 9px; height: 9px; }
+
 /* ── Week view ── */
 .cal-week { display: grid; grid-template-columns: repeat(7, minmax(124px, 1fr)); overflow-x: auto; }
 .cal-week-col { min-height: 460px; border-right: 1px solid #eef3f6; }

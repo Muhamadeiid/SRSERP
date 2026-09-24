@@ -1,5 +1,5 @@
 import { CheckCircle2, Repeat2, Users } from 'lucide-react'
-import { assignees, dateKey, isOverdue } from './calendarMeta'
+import { assignees, dateKey, isOverdue, isRecurring } from './calendarMeta'
 
 const sortByTime = (a, b) => String(a.time || '99').localeCompare(String(b.time || '99'))
 
@@ -34,7 +34,7 @@ export default function WeekView({ weekStart, events, nonWorkingDays, enabledTyp
                   <button
                     type="button"
                     key={event.occurrenceKey || `${event.id}-${event.date}`}
-                    className="cal-week-card"
+                    className={`cal-week-card ${isRecurring(event) && !isOverdue(event, today) ? 'cal-week-card--routine' : ''}`}
                     data-type={isOverdue(event, today) ? undefined : event.type}
                     style={isOverdue(event, today) ? { '--accent': 'var(--cal-overdue)', '--accent-tint': '#fdecea' } : undefined}
                     onClick={() => onEventClick(event)}
