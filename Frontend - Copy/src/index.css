@@ -5,16 +5,18 @@
 :root {
   --notification-critical: #d92d20;
   --notification-badge: #e5484d;
-  --cal-meeting: #3b5de7;
-  --cal-meeting-tint: #eaeeff;
-  --cal-task: #d97706;
-  --cal-task-tint: #fef3e4;
-  --cal-interview: #7c3aed;
-  --cal-interview-tint: #f3ecff;
-  --cal-leave: #0f766e;
-  --cal-leave-tint: #e7f2f0;
+  /* Calendar types reuse the dashboard's department accents so the whole
+     site speaks one colour language: primary blue, warm amber, slate, teal. */
+  --cal-meeting: #005782;
+  --cal-meeting-tint: #e8f1f7;
+  --cal-task: #b5843b;
+  --cal-task-tint: #faf3e8;
+  --cal-interview: #58738f;
+  --cal-interview-tint: #eef2f6;
+  --cal-leave: #177b78;
+  --cal-leave-tint: #e7f3f2;
   --cal-overdue: #b42318;
-  --cal-weekend-bg: #f5f6f7;
+  --cal-weekend-bg: #f7f9fa;
   --cal-today-bg: #fff7e6;
 }
 
@@ -452,7 +454,7 @@
 }
 
 .cal-leave-day {
-  background-image: repeating-linear-gradient(-45deg, rgba(15, 118, 110, .07) 0, rgba(15, 118, 110, .07) 5px, transparent 5px, transparent 10px);
+  background-image: repeating-linear-gradient(-45deg, rgba(23, 123, 120, .07) 0, rgba(23, 123, 120, .07) 5px, transparent 5px, transparent 10px);
 }
 
 @layer base {

@@ -1,27 +1,30 @@
-import { AlertTriangle, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
+import { dateKey, isOverdue } from './calendarMeta'
 
-const TYPE_STYLES = {
-  meeting: 'border-[var(--cal-meeting)] bg-[var(--cal-meeting-tint)] text-[var(--cal-meeting)]',
-  task: 'border-[var(--cal-task)] bg-[var(--cal-task-tint)] text-[var(--cal-task)]',
-  interview: 'border-[var(--cal-interview)] bg-[var(--cal-interview-tint)] text-[var(--cal-interview)]',
-  leave: 'border-[var(--cal-leave)] bg-[var(--cal-leave-tint)] text-[var(--cal-leave)]',
-}
-
+/**
+ * Compact event chip for the month grid. Tasks get a checkbox glyph and a
+ * priority dot so they read differently from meetings at a glance; overdue
+ * tasks switch to the alert palette.
+ */
 export default function EventPill({ event, onClick }) {
-  const overdue = event.type === 'task' && !event.isDone && event.date < new Date().toISOString().slice(0, 10)
+  const isTask = event.type === 'task'
+  const overdue = isOverdue(event, dateKey(new Date()))
   const time = event.time ? event.time.slice(0, 5) : ''
+  const classes = ['cal-pill', event.isDone && 'cal-pill--done', overdue && 'cal-pill--overdue'].filter(Boolean).join(' ')
 
   return (
     <button
       type="button"
+      data-type={event.type}
+      data-priority={event.priority || 'normal'}
       onClick={clickEvent => { clickEvent.stopPropagation(); onClick?.(event) }}
-      title={`${event.title}${time ? ` - ${time}` : ''}`}
-      className={`flex h-6 w-full items-center gap-1 overflow-hidden rounded-[4px] border-l-[3px] px-1.5 text-left text-[10px] font-semibold ${TYPE_STYLES[event.type] || TYPE_STYLES.meeting} ${overdue ? '!border-[var(--cal-overdue)] ring-1 ring-red-200' : ''}`}
+      title={`${event.title}${time ? ` · ${time}` : ''}`}
+      className={classes}
     >
-      {overdue && <AlertTriangle className="h-3 w-3 shrink-0 text-[var(--cal-overdue)]" />}
-      {event.type === 'task' && event.isDone && <Check className="h-3 w-3 shrink-0" />}
-      {time && <span className="shrink-0 font-bold">{time}</span>}
-      <span className={`truncate ${event.isDone ? 'line-through opacity-60' : ''}`}>{event.title}</span>
+      {isTask && <span className="cal-pill-check" aria-hidden="true">{event.isDone && <Check className="h-2 w-2" strokeWidth={4} />}</span>}
+      {time && <time>{time}</time>}
+      <span>{event.title}</span>
+      {isTask && !event.isDone && ['high', 'urgent'].includes(event.priority) && <i className="cal-pill-flag" aria-label={`${event.priority} priority`} />}
     </button>
   )
 }

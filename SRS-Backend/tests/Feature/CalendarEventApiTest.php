@@ -113,6 +113,70 @@ class CalendarEventApiTest extends TestCase
         $this->assertDatabaseHas('calendar_events', ['id' => $eventId, 'is_done' => true]);
     }
 
+    public function test_assignee_moves_task_through_statuses_and_ticks_checklist(): void
+    {
+        $manager = $this->user('manager');
+        $report = $this->user('staff', $manager->id);
+        $outsider = $this->user('staff');
+        Sanctum::actingAs($manager);
+        $eventId = $this->postJson('/api/calendar/events', $this->eventPayload('task', [
+            ['user_id' => $report->id, 'role' => 'assignee'],
+        ]) + [
+            'priority' => 'urgent',
+            'checklist' => [['text' => 'Collect readings'], ['text' => '  '], ['text' => 'Upload report']],
+        ])->assertCreated()
+            ->assertJsonPath('data.priority', 'urgent')
+            ->assertJsonPath('data.status', 'todo')
+            ->assertJsonPath('data.reminderMinutes', 30)
+            ->assertJsonCount(2, 'data.checklist')
+            ->json('data.id');
+
+        Sanctum::actingAs($report);
+        $this->patchJson("/api/calendar/events/{$eventId}/progress", [
+            'status' => 'in_progress',
+            'checklist' => [['text' => 'Collect readings', 'done' => true], ['text' => 'Upload report', 'done' => false]],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.checklist.0.done', true);
+        $this->assertDatabaseHas('notifications', ['user_id' => $manager->id, 'type' => 'calendar_task_started']);
+
+        $this->patchJson("/api/calendar/events/{$eventId}/progress", ['status' => 'done'])
+            ->assertOk()
+            ->assertJsonPath('data.isDone', true);
+        $this->assertDatabaseHas('calendar_events', ['id' => $eventId, 'status' => 'done', 'completed_by' => $report->id]);
+
+        Sanctum::actingAs($outsider);
+        $this->patchJson("/api/calendar/events/{$eventId}/progress", ['status' => 'todo'])->assertForbidden();
+    }
+
+    public function test_task_board_separates_my_tasks_from_tasks_i_assigned(): void
+    {
+        $manager = $this->user('manager');
+        $report = $this->user('staff', $manager->id);
+        Sanctum::actingAs($manager);
+        $delegated = $this->postJson('/api/calendar/events', $this->eventPayload('task', [
+            ['user_id' => $report->id, 'role' => 'assignee'],
+        ]))->assertCreated()->json('data.id');
+        $own = $this->postJson('/api/calendar/events', $this->eventPayload('task'))->assertCreated()->json('data.id');
+
+        $this->getJson('/api/calendar/tasks?scope=assigned')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $delegated);
+        $this->getJson('/api/calendar/tasks?scope=mine')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $own);
+
+        Sanctum::actingAs($report);
+        $this->getJson('/api/calendar/tasks?scope=mine')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $delegated);
+    }
+
+    public function test_all_day_events_never_carry_a_reminder(): void
+    {
+        Sanctum::actingAs($this->user('admin'));
+        $this->postJson('/api/calendar/events', array_merge($this->eventPayload('meeting'), [
+            'is_all_day' => true, 'event_time' => null, 'reminder_minutes' => 15,
+        ]))->assertCreated()->assertJsonPath('data.reminderMinutes', null);
+    }
+
     public function test_visible_maintenance_task_due_dates_are_included_in_work_calendar(): void
     {
         $creator = $this->user('admin');

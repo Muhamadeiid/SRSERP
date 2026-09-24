@@ -65,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/calendar/events', [CalendarEventController::class, 'store']);
     Route::patch('/calendar/events/{calendarEvent}', [CalendarEventController::class, 'update']);
     Route::patch('/calendar/events/{calendarEvent}/done', [CalendarEventController::class, 'toggleDone']);
+    Route::patch('/calendar/events/{calendarEvent}/progress', [CalendarEventController::class, 'progress']);
+    Route::get('/calendar/tasks', [CalendarEventController::class, 'tasks']);
     Route::delete('/calendar/events/{calendarEvent}', [CalendarEventController::class, 'destroy']);
     Route::get('/calendar/stats', [CalendarEventController::class, 'stats']);
 

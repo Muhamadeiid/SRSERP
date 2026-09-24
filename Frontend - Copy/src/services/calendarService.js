@@ -20,3 +20,9 @@ export const deleteCalendarEvent = id =>
 
 export const setCalendarTaskDone = (id, done) =>
   api.patch(`/calendar/events/${id}/done`, { done }).then(response => response.data)
+
+export const getCalendarTasks = scope =>
+  api.get('/calendar/tasks', { params: { scope } }).then(response => response.data)
+
+export const updateCalendarTaskProgress = (id, payload) =>
+  api.patch(`/calendar/events/${id}/progress`, payload).then(response => response.data)

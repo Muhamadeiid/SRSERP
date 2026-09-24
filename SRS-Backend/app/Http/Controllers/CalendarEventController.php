@@ -93,6 +93,8 @@ class CalendarEventController extends Controller
         $data = $this->validatedPayload($request);
         $this->authorizePayload($request->user(), $data);
 
+        $data = $this->normalizeTaskFields($data, ! $request->has('reminder_minutes'));
+
         $event = DB::transaction(function () use ($request, $data) {
             $participants = $data['participants'] ?? [];
             unset($data['participants']);
@@ -120,6 +122,9 @@ class CalendarEventController extends Controller
             'leave_end_date', 'recurrence_type', 'recurrence_interval', 'recurrence_weekdays', 'recurrence_until',
         ]), $data);
         $this->authorizePayload($request->user(), $merged);
+        if (array_key_exists('checklist', $data)) $data['checklist'] = $this->normalizeChecklist($data['checklist']);
+        // A reminder is meaningless without a start time; drop it when the event becomes all-day.
+        if (! empty($merged['is_all_day']) || empty($merged['event_time'])) $data['reminder_minutes'] = null;
 
         $before = $calendarEvent->only(['title', 'event_date', 'event_time', 'duration_min']);
         DB::transaction(function () use ($request, $calendarEvent, $data) {
@@ -148,21 +153,151 @@ class CalendarEventController extends Controller
             ->wherePivot('role', 'assignee')
             ->exists();
         abort_unless($calendarEvent->created_by === $request->user()->id || $isAssignee, 403);
-        $calendarEvent->update(['is_done' => $data['done']]);
+        $this->applyStatus($calendarEvent, $request->user(), $data['done'] ? 'done' : 'todo');
 
-        if ($data['done'] && $calendarEvent->created_by !== $request->user()->id) {
-            Notification::notifyUser(
-                $calendarEvent->created_by,
-                'calendar_task_completed',
-                'Task completed',
-                "{$request->user()->name} completed {$calendarEvent->title}.",
-                ['calendar_event_id' => $calendarEvent->id, 'path' => '/calendar'],
-                false,
-                $this->notificationOptions($calendarEvent, $request->user(), 'task')
-            );
+        return response()->json(['success' => true, 'data' => $this->resource($calendarEvent->fresh()->load(['creator:id,name,role', 'participants:id,name,role']))]);
+    }
+
+    /**
+     * Assignee/creator progress update: move a task through todo -> in_progress
+     * -> done, and tick checklist items. Separate from update() because an
+     * assignee may progress a task they are not allowed to edit.
+     */
+    public function progress(Request $request, CalendarEvent $calendarEvent): JsonResponse
+    {
+        abort_unless($calendarEvent->type === 'task', 422, 'Only tasks have progress.');
+        abort_unless($this->canWorkOn($calendarEvent, $request->user()), 403);
+        $data = $request->validate([
+            'status' => ['sometimes', Rule::in(['todo', 'in_progress', 'done'])],
+            'checklist' => ['sometimes', 'nullable', 'array', 'max:30'],
+            'checklist.*.text' => ['required_with:checklist', 'string', 'max:255'],
+            'checklist.*.done' => ['sometimes', 'boolean'],
+        ]);
+
+        if (array_key_exists('checklist', $data)) {
+            $calendarEvent->update(['checklist' => $this->normalizeChecklist($data['checklist'])]);
+        }
+        if (isset($data['status'])) {
+            $this->applyStatus($calendarEvent, $request->user(), $data['status']);
         }
 
         return response()->json(['success' => true, 'data' => $this->resource($calendarEvent->fresh()->load(['creator:id,name,role', 'participants:id,name,role']))]);
+    }
+
+    /**
+     * Task board feed, independent of the month being viewed.
+     *   scope=mine      tasks I must do (assigned to me, or my own self-tasks)
+     *   scope=assigned  tasks I handed to other people
+     * Open tasks are always returned; finished ones only from the last 14 days.
+     */
+    public function tasks(Request $request): JsonResponse
+    {
+        $scope = $request->validate(['scope' => ['sometimes', Rule::in(['mine', 'assigned'])]])['scope'] ?? 'mine';
+        $user = $request->user();
+        $recentCutoff = now()->subDays(14);
+        $assignedToOthers = fn ($q) => $q->where('users.id', '!=', $user->id)->where('calendar_event_participants.role', 'assignee');
+
+        $query = CalendarEvent::query()
+            ->where('type', 'task')
+            ->where(function ($q) use ($recentCutoff) {
+                $q->where('status', '!=', 'done')->orWhere('completed_at', '>=', $recentCutoff);
+            })
+            ->with(['creator:id,name,role', 'participants:id,name,role', 'completer:id,name']);
+
+        if ($scope === 'assigned') {
+            $query->where('created_by', $user->id)->whereHas('participants', $assignedToOthers);
+        } else {
+            $query->where(function ($q) use ($user, $assignedToOthers) {
+                $q->whereHas('participants', fn ($p) => $p->where('users.id', $user->id)->where('calendar_event_participants.role', 'assignee'))
+                    ->orWhere(fn ($self) => $self->where('created_by', $user->id)->whereDoesntHave('participants', $assignedToOthers));
+            });
+        }
+
+        $rank = ['urgent' => 0, 'high' => 1, 'normal' => 2, 'low' => 3];
+        $tasks = $query->get()
+            ->sortBy(fn (CalendarEvent $task) => sprintf(
+                '%d-%s-%d-%s',
+                $task->status === 'done' ? 1 : 0,
+                $task->event_date->toDateString(),
+                $rank[$task->priority] ?? 2,
+                (string) $task->event_time
+            ))
+            ->values()
+            ->map(fn (CalendarEvent $task) => $this->resource($task));
+
+        return response()->json(['success' => true, 'data' => $tasks]);
+    }
+
+    private function canWorkOn(CalendarEvent $event, User $user): bool
+    {
+        if ($event->created_by === $user->id || $user->isAdmin()) return true;
+
+        return $event->participants()
+            ->where('users.id', $user->id)
+            ->wherePivot('role', 'assignee')
+            ->exists();
+    }
+
+    private function applyStatus(CalendarEvent $event, User $actor, string $status): void
+    {
+        if ($event->status === $status) return;
+
+        $event->update([
+            'status' => $status,
+            'is_done' => $status === 'done',
+            'completed_at' => $status === 'done' ? now() : null,
+            'completed_by' => $status === 'done' ? $actor->id : null,
+        ]);
+
+        // Only the person who handed out the task needs to hear about progress.
+        if ($event->created_by === $actor->id || ! in_array($status, ['in_progress', 'done'], true)) return;
+
+        $done = $status === 'done';
+        Notification::notifyUser(
+            $event->created_by,
+            $done ? 'calendar_task_completed' : 'calendar_task_started',
+            $done ? 'Task completed' : 'Task started',
+            $done ? "{$actor->name} completed {$event->title}." : "{$actor->name} started working on {$event->title}.",
+            ['calendar_event_id' => $event->id, 'path' => $this->eventLink($event)],
+            $done,
+            $this->notificationOptions($event, $actor, 'task')
+        );
+    }
+
+    /**
+     * Type-dependent defaults. A new timed meeting or interview reminds 15
+     * minutes ahead and a timed task 30 minutes ahead unless the client chose
+     * otherwise; all-day items and leave cannot carry a reminder.
+     */
+    private function normalizeTaskFields(array $data, bool $applyReminderDefault): array
+    {
+        $timed = empty($data['is_all_day']) && ! empty($data['event_time']) && ($data['type'] ?? null) !== 'leave';
+        if (! $timed) {
+            $data['reminder_minutes'] = null;
+        } elseif ($applyReminderDefault) {
+            $data['reminder_minutes'] = ($data['type'] ?? null) === 'task' ? 30 : 15;
+        }
+
+        $data['checklist'] = ($data['type'] ?? null) === 'task'
+            ? $this->normalizeChecklist($data['checklist'] ?? null)
+            : null;
+
+        return $data;
+    }
+
+    private function normalizeChecklist(?array $items): ?array
+    {
+        $clean = collect($items ?? [])
+            ->map(fn ($item) => [
+                'text' => trim((string) ($item['text'] ?? '')),
+                'done' => (bool) ($item['done'] ?? false),
+            ])
+            ->filter(fn ($item) => $item['text'] !== '')
+            ->take(30)
+            ->values()
+            ->all();
+
+        return $clean ?: null;
     }
 
     public function destroy(Request $request, CalendarEvent $calendarEvent): JsonResponse
@@ -216,7 +351,7 @@ class CalendarEventController extends Controller
                 "calendar_{$type}_created",
                 $label,
                 $body,
-                ['calendar_event_id' => $event->id, 'participant_role' => $role, 'path' => '/calendar'],
+                ['calendar_event_id' => $event->id, 'participant_role' => $role, 'path' => $this->eventLink($event)],
                 in_array($type, ['task', 'interview'], true),
                 $this->notificationOptions(
                     $event,
@@ -242,11 +377,16 @@ class CalendarEventController extends Controller
                 "calendar_{$event->type}_rescheduled",
                 ucfirst($event->type) . ' updated',
                 "{$actor->name} updated {$event->title}. New schedule: {$event->event_date->format('d M Y')}" . ($event->event_time ? ' at ' . substr((string) $event->event_time, 0, 5) : '') . '.',
-                ['calendar_event_id' => $event->id, 'path' => '/calendar'],
+                ['calendar_event_id' => $event->id, 'path' => $this->eventLink($event)],
                 false,
                 $this->notificationOptions($event, $actor, $event->type, 'warn')
             );
         }
+    }
+
+    private function eventLink(CalendarEvent $event): string
+    {
+        return '/calendar?date=' . $event->event_date->toDateString() . '&event=' . $event->id;
     }
 
     private function notificationOptions(CalendarEvent $event, User $actor, string $type, string $priority = 'info'): array
@@ -259,7 +399,7 @@ class CalendarEventController extends Controller
             },
             'priority' => $priority,
             'sender_user_id' => $actor->id,
-            'link' => '/calendar?event=' . $event->id,
+            'link' => $this->eventLink($event),
             'meta' => array_values(array_filter([
                 ['kind' => 'tag', 'value' => $event->event_date->format('d M Y')],
                 $event->event_time ? ['kind' => 'text', 'value' => substr((string) $event->event_time, 0, 5)] : null,
@@ -273,7 +413,7 @@ class CalendarEventController extends Controller
         $validated = $request->validate(['month' => ['required', 'date_format:Y-m']]);
         $from = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
         $to = $from->copy()->endOfMonth();
-        $today = Carbon::today();
+        $today = Carbon::today(config('srs.local_timezone'));
         $events = $this->visibleQuery($request->user()->id)
             ->whereDate('event_date', '<=', $to)
             ->where(function ($q) use ($from) {
@@ -410,6 +550,11 @@ class CalendarEventController extends Controller
         $required = $partial ? 'sometimes' : 'required';
         return $request->validate([
             'type' => [$required, Rule::in(['meeting', 'task', 'interview', 'leave'])],
+            'priority' => ['sometimes', Rule::in(['low', 'normal', 'high', 'urgent'])],
+            'reminder_minutes' => ['nullable', 'integer', Rule::in([0, 5, 10, 15, 30, 60, 120, 1440])],
+            'checklist' => ['sometimes', 'nullable', 'array', 'max:30'],
+            'checklist.*.text' => ['required_with:checklist', 'string', 'max:255'],
+            'checklist.*.done' => ['sometimes', 'boolean'],
             'title' => [$required, 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:10000'],
             'event_date' => [$required, 'date'],
@@ -525,6 +670,14 @@ class CalendarEventController extends Controller
             'participants' => $event->participants->map(fn ($user) => ['id' => $user->id, 'name' => $user->name, 'role' => $user->pivot->role])->values(),
             'note' => $event->notes,
             'isDone' => $event->is_done,
+            'priority' => $event->priority ?? 'normal',
+            'status' => $event->status ?? ($event->is_done ? 'done' : 'todo'),
+            'reminderMinutes' => $event->reminder_minutes,
+            'checklist' => $event->checklist ?? [],
+            'completedAt' => $event->completed_at?->toIso8601String(),
+            'completedBy' => $event->relationLoaded('completer') && $event->completer
+                ? ['id' => $event->completer->id, 'name' => $event->completer->name]
+                : null,
             'recurrence' => [
                 'type' => $event->recurrence_type,
                 'interval' => $event->recurrence_interval,

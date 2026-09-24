@@ -18,6 +18,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Local wall-clock timezone
+    |--------------------------------------------------------------------------
+    |
+    | Calendar events, overtime shifts and similar schedules are stored as the
+    | local time people typed ("10:00"), while the app clock runs in UTC.
+    | Reminder jobs compare against now() in this zone so a 10:00 meeting is
+    | announced at 09:45 Cairo time, not 09:45 UTC (three hours late).
+    |
+    */
+
+    'local_timezone' => env('SRS_LOCAL_TIMEZONE', 'Africa/Cairo'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Procurement direct-order categories
     |--------------------------------------------------------------------------
     |

@@ -1,13 +1,8 @@
 import EventPill from './EventPill'
+import { dateKey } from './calendarMeta'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-const dateKey = date => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+const VISIBLE_PER_DAY = 3
 
 export default function CalendarGrid({ cursor, range, events, nonWorkingDays, enabledTypes, onDayClick, onEventClick }) {
   const today = dateKey(new Date())
@@ -17,48 +12,58 @@ export default function CalendarGrid({ cursor, range, events, nonWorkingDays, en
     return result
   }, {})
   const nonWorkingByDate = new Map(nonWorkingDays.map(item => [item.date, item]))
-  const days = Array.from({ length: 42 }, (_, index) => {
+  const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+  const weeks = Math.ceil((firstOfMonth.getDay() + daysInMonth) / 7)
+  const days = Array.from({ length: weeks * 7 }, (_, index) => {
     const date = new Date(range.start)
     date.setDate(range.start.getDate() + index)
     return date
   })
 
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[900px]">
-        <div className="grid grid-cols-7 border-b border-neutral-200 bg-neutral-50">
-          {WEEKDAYS.map((day, index) => (
-            <div key={day} className={`py-2.5 text-center text-[11px] font-bold uppercase ${index >= 5 ? 'text-red-500' : 'text-neutral-500'}`}>{day}</div>
-          ))}
+    <div className="cal-month">
+      <div className="cal-month-inner">
+        <div className="cal-weekdays">
+          {WEEKDAYS.map((day, index) => <span key={day} data-weekend={index === 5 || undefined}>{day}</span>)}
         </div>
 
-        <div className="grid grid-cols-7">
+        <div className="cal-days">
           {days.map(date => {
             const key = dateKey(date)
             const dayEvents = eventsByDate[key] || []
             const nonWorking = nonWorkingByDate.get(key)
-            const outsideMonth = date.getMonth() !== cursor.getMonth()
-            const weekend = date.getDay() === 5 || date.getDay() === 6
-            const leaveDay = dayEvents.some(event => event.type === 'leave')
+            const classes = [
+              'cal-cell',
+              date.getMonth() !== cursor.getMonth() && 'cal-cell--outside',
+              (nonWorking || date.getDay() === 5) && 'cal-cell--off',
+              dayEvents.some(event => event.type === 'leave') && 'cal-cell--leave',
+              key === today && 'cal-cell--today',
+            ].filter(Boolean).join(' ')
 
             return (
               <div
                 key={key}
                 role="button"
                 tabIndex={0}
+                aria-label={`${date.toDateString()}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                 onClick={() => onDayClick?.(key)}
                 onKeyDown={event => {
-                  if (event.key === 'Enter' || event.key === ' ') onDayClick?.(key)
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onDayClick?.(key) }
                 }}
-                className={`relative min-h-[118px] border-b border-r border-neutral-200 p-2 text-left align-top transition-colors hover:bg-primary-50/40 ${outsideMonth ? 'bg-neutral-50/70' : 'bg-white'} ${weekend || nonWorking ? 'cal-weekend-cell' : ''} ${leaveDay ? 'cal-leave-day' : ''}`}
+                className={classes}
               >
-                <div className="relative z-[1] mb-1.5 flex items-center justify-between gap-1">
-                  <span className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${key === today ? 'bg-red-700 text-white' : outsideMonth ? 'text-neutral-300' : weekend ? 'text-red-500' : 'text-secondary-700'}`}>{date.getDate()}</span>
-                  {nonWorking && <span className="max-w-[82px] truncate text-[9px] font-semibold text-neutral-400" title={nonWorking.label}>{nonWorking.label}</span>}
+                <div className="cal-cell-head">
+                  <span className="cal-daynum">{date.getDate()}</span>
+                  {nonWorking && <span className="cal-offlabel" title={nonWorking.label}>{nonWorking.label}</span>}
                 </div>
-                <div className="relative z-[1] space-y-1">
-                  {dayEvents.slice(0, 3).map(event => <EventPill key={event.occurrenceKey || `${event.id}-${event.date}`} event={event} onClick={onEventClick} />)}
-                  {dayEvents.length > 3 && <span className="block px-1 text-[10px] font-bold text-neutral-500">+{dayEvents.length - 3} more</span>}
+                <div className="cal-cell-events">
+                  {dayEvents.slice(0, VISIBLE_PER_DAY).map(event => (
+                    <EventPill key={event.occurrenceKey || `${event.id}-${event.date}`} event={event} onClick={onEventClick} />
+                  ))}
+                  {dayEvents.length > VISIBLE_PER_DAY && (
+                    <span className="cal-more">+{dayEvents.length - VISIBLE_PER_DAY} more</span>
+                  )}
                 </div>
               </div>
             )

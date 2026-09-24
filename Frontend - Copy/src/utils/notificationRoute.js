@@ -9,9 +9,12 @@ export function notificationRequestTarget(notification) {
   }
 
   if (data.calendar_event_id) {
+    // The drawer opens on a specific day, so carry the occurrence date along
+    // when the notification link has one (reminders and newer notifications).
+    const date = String(notification?.link || data.path || '').match(/[?&]date=(\d{4}-\d{2}-\d{2})/)?.[1]
     return {
       path: '/work-calendar',
-      query: `event=${data.calendar_event_id}`,
+      query: `${date ? `date=${date}&` : ''}event=${data.calendar_event_id}`,
     }
   }
 

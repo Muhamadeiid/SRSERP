@@ -9,8 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class CalendarEvent extends Model
 {
     protected $fillable = [
-        'type', 'title', 'notes', 'event_date', 'event_time', 'duration_min',
-        'is_all_day', 'leave_end_date', 'created_by', 'is_done',
+        'type', 'priority', 'title', 'notes', 'checklist', 'event_date', 'event_time', 'duration_min',
+        'reminder_minutes', 'is_all_day', 'leave_end_date', 'created_by', 'is_done', 'status',
+        'completed_at', 'completed_by',
         'recurrence_type', 'recurrence_interval', 'recurrence_weekdays', 'recurrence_until',
     ];
 
@@ -23,11 +24,19 @@ class CalendarEvent extends Model
         'is_done' => 'boolean',
         'recurrence_interval' => 'integer',
         'recurrence_weekdays' => 'array',
+        'reminder_minutes' => 'integer',
+        'checklist' => 'array',
+        'completed_at' => 'datetime',
     ];
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function completer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by');
     }
 
     public function participants(): BelongsToMany
