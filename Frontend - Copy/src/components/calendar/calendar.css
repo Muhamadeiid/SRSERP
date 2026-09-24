@@ -123,7 +123,11 @@
 .cal-cell--off .cal-pill--routine { opacity: .5; }
 .cal-week-card--routine { background: transparent; border-color: var(--cal-line); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .cal-week-card--routine strong { font-weight: 600; color: #486171; }
+.cal-chip--routine { background: #f0f4f6; }
 .cal-chip--routine i { background: transparent; border: 2px solid #8496a1; width: 9px; height: 9px; }
+.cal-chip--routine[aria-pressed="false"] { background: #fff; opacity: 1; border-style: dashed; }
+.cal-chip--routine[aria-pressed="true"] { background: #e8f1f7; border-color: #bfd6e4; color: #005782; }
+.cal-chip--routine[aria-pressed="true"] i { background: currentColor; border-color: currentColor; }
 
 /* ── Week view ── */
 .cal-week { display: grid; grid-template-columns: repeat(7, minmax(124px, 1fr)); overflow-x: auto; }

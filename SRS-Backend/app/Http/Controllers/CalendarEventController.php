@@ -73,7 +73,17 @@ class CalendarEventController extends Controller
             ->orderBy('event_time')
             ->get();
 
-        $occurrences = $events->flatMap(fn (CalendarEvent $event) => $this->occurrences($event, $from, $to));
+        // Compute the off-day map once, then drop daily-recurring occurrences
+        // that would otherwise land on weekends / holidays / the employee's
+        // weekly off. Weekly and monthly recurrences are kept — the user
+        // explicitly picked those weekdays or day-of-month, and Depot may
+        // schedule a weekly meeting on Saturday on purpose.
+        $meta = $this->calendarMeta($request->user(), $from, $to);
+        $offDates = collect($meta['nonWorkingDays'])->pluck('date')->flip();
+
+        $occurrences = $events->flatMap(fn (CalendarEvent $event) => $this->occurrences($event, $from, $to))
+            ->reject(fn (array $occ) => ($occ['recurrence']['type'] ?? 'none') === 'daily' && $offDates->has($occ['date']));
+
         $maintenanceTasks = $this->visibleMaintenanceTasks($request->user(), $from, $to)
             ->map(fn (MaintenanceTask $task) => $this->maintenanceTaskResource($task));
         $occurrences = $occurrences
@@ -84,7 +94,7 @@ class CalendarEventController extends Controller
         return response()->json([
             'success' => true,
             'data' => $occurrences->values(),
-            'meta' => $this->calendarMeta($request->user(), $from, $to),
+            'meta' => $meta,
         ]);
     }
 

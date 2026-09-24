@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Models\CalendarEvent;
 use App\Models\LeaveRequest;
 use App\Models\MaintenanceTask;
+use App\Models\Employee;
 use App\Models\Notification;
+use App\Models\PublicHoliday;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -90,9 +92,19 @@ class DispatchNotificationReminders extends Command
 
     private function sendEventReminder(CalendarEvent $event, Carbon $day, Carbon $startsAt, Carbon $now): void
     {
+        $isDaily = $event->recurrence_type === 'daily';
+        // A daily meeting isn't scheduled on off days, and reminders that
+        // would land there just annoy people. Weekly and monthly recurrences
+        // are the user's explicit choice, so they are always kept.
+        if ($isDaily && $this->isCompanyOffDay($day)) return;
+
         $recipients = $event->type === 'task'
             ? $this->taskRecipients($event)
             : $event->participants->pluck('id')->push($event->created_by)->unique();
+        if ($isDaily) {
+            $recipients = $this->filterOffDayRecipients($recipients, $day);
+            if ($recipients->isEmpty()) return;
+        }
 
         $minutes = max(0, (int) round($now->diffInMinutes($startsAt, false)));
         $when = $this->humanLead($minutes);
@@ -325,4 +337,30 @@ class DispatchNotificationReminders extends Command
             'actions' => [['label' => 'Open', 'style' => 'primary', 'action' => 'open', 'payload' => []]],
         ]);
     }
+    /** Friday for everyone, plus any date inside a declared public holiday. */
+    private function isCompanyOffDay(Carbon $date): bool
+    {
+        if ($date->isFriday()) return true;
+
+        return PublicHoliday::query()
+            ->whereDate('date', '<=', $date->toDateString())
+            ->where(function ($q) use ($date) {
+                $q->whereNull('end_date')->whereDate('date', '=', $date->toDateString())
+                    ->orWhereDate('end_date', '>=', $date->toDateString());
+            })
+            ->exists();
+    }
+
+    /** Drop recipients whose employee record has this weekday as their weekly off. */
+    private function filterOffDayRecipients($recipients, Carbon $date)
+    {
+        $ids = collect($recipients)->map(fn ($id) => (int) $id)->unique();
+        if ($ids->isEmpty()) return $ids;
+
+        $offMap = Employee::query()->whereIn('user_id', $ids)->get()
+            ->mapWithKeys(fn ($employee) => [(int) $employee->user_id => ! $employee->isWorkingDay($date)]);
+
+        return $ids->reject(fn ($id) => $offMap->get($id, false))->values();
+    }
+
 }
