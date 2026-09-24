@@ -52,7 +52,7 @@ export default function WorkCalendarPage() {
 
   const [enabledTypes, setEnabledTypes] = useState(() => new Set(EVENT_TYPES.map(type => type.key)))
   const [showRecurring, setShowRecurring] = useState(() => {
-    try { return localStorage.getItem('cal-show-recurring') === '1' } catch { return false }
+    try { return localStorage.getItem('cal-show-recurring') !== '0' } catch { return true }
   })
   const toggleRecurring = () => setShowRecurring(current => {
     try { localStorage.setItem('cal-show-recurring', current ? '0' : '1') } catch { /* private mode */ }

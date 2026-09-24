@@ -116,11 +116,13 @@
 .cal-pill-flag { width: 6px; height: 6px; flex-shrink: 0; margin-left: auto; border-radius: 50%; background: var(--prio); }
 
 /* Recurring events: a dot and muted text, no fill, so one-off items stand out. */
-.cal-pill--routine { height: 20px; background: transparent; color: #5f7481; font-weight: 500; }
-.cal-pill--routine::before { top: 50%; bottom: auto; left: 2px; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; }
-.cal-pill--routine time { font-weight: 600; color: #7b8d98; }
-.cal-pill--routine:hover { background: var(--accent-tint); box-shadow: none; transform: none; }
-.cal-cell--off .cal-pill--routine { opacity: .5; }
+.cal-pill--routine { height: 16px; padding: 0 4px; background: transparent; color: #93a5b0; font-size: 9.5px; font-weight: 500; letter-spacing: -.01em; gap: 3px; }
+/* Single accent dot instead of the left border stripe. */
+.cal-pill--routine::before { top: 50%; bottom: auto; left: 3px; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 65%, transparent); }
+.cal-pill--routine { padding-left: 12px; }
+.cal-pill--routine time { font-weight: 600; color: #7b8d98; font-size: 9.5px; }
+.cal-pill--routine:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); box-shadow: none; transform: none; color: #486171; }
+.cal-cell--off .cal-pill--routine { opacity: .55; }
 .cal-week-card--routine { background: transparent; border-color: var(--cal-line); border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .cal-week-card--routine strong { font-weight: 600; color: #486171; }
 .cal-chip--routine { background: #f0f4f6; }
