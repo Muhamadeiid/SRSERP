@@ -390,7 +390,7 @@ class PurchaseOrderController extends Controller
         }
         $po->update(['vendor' => $selected->supplier->company_name]);
         $po->update(['approval_status' => 'pending_procurement']);
-        Notification::notifyRole('procurement', 'po_approval_required', 'Purchase Order awaiting approval', "PO {$po->po_number} is ready for Procurement approval.", ['path'=>"/purchase-order/{$po->id}"], true);
+        Notification::notifyRole('procurement', 'po_approval_required', 'Purchase Order awaiting approval', "PO {$po->po_number} is ready for Procurement approval.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
         return response()->json(['success' => true, 'data' => $po->fresh(['approvals.approver','selectedQuotation.supplier'])]);
     }
 
@@ -412,20 +412,21 @@ class PurchaseOrderController extends Controller
                 'po_id'=>$po->id,'stage'=>$stage['stage'],'action'=>$data['action'],
                 'approver_id'=>$user->id,'comment'=>$data['comment'] ?? null,'acted_at'=>now(),
             ]);
+            Notification::resolveFor('purchase_order_id', $po->id);
             if ($data['action']==='reject') {
                 $po->update(['approval_status'=>'rejected']);
-                Notification::notifyUser($po->created_by, 'po_rejected', 'Purchase Order rejected', "PO {$po->po_number} was rejected.", ['path'=>"/purchase-order/{$po->id}"], true);
+                Notification::notifyUser($po->created_by, 'po_rejected', 'Purchase Order rejected', "PO {$po->po_number} was rejected.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
             }
             else {
                 $values=['approval_status'=>$stage['next']];
                 if ($stage['next']==='approved') $values['status']='issued';
                 $po->update($values);
                 if ($stage['next'] === 'pending_depot') {
-                    Notification::notifyRole('depot_manager', 'po_approval_required', 'Purchase Order awaiting Depot approval', "PO {$po->po_number} requires your approval.", ['path'=>"/purchase-order/{$po->id}"], true);
+                    Notification::notifyRole('depot_manager', 'po_approval_required', 'Purchase Order awaiting Depot approval', "PO {$po->po_number} requires your approval.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
                 } elseif ($stage['next'] === 'pending_management') {
-                    Notification::notifyRole('admin', 'po_approval_required', 'Purchase Order awaiting Management approval', "PO {$po->po_number} requires final approval.", ['path'=>"/purchase-order/{$po->id}"], true);
+                    Notification::notifyRole('admin', 'po_approval_required', 'Purchase Order awaiting Management approval', "PO {$po->po_number} requires final approval.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
                 } elseif ($stage['next'] === 'approved') {
-                    Notification::notifyUser($po->created_by, 'po_approved', 'Purchase Order approved', "PO {$po->po_number} is approved and ready to dispatch.", ['path'=>"/purchase-order/{$po->id}"], true);
+                    Notification::notifyUser($po->created_by, 'po_approved', 'Purchase Order approved', "PO {$po->po_number} is approved and ready to dispatch.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
                 }
             }
             return response()->json(['success'=>true,'data'=>$po->fresh(['approvals.approver:id,name,e_signature','selectedQuotation.supplier'])]);

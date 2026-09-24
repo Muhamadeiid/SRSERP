@@ -574,10 +574,8 @@ class LeaveRequestController extends Controller
             'manager_signature' => $user->e_signature ?? null,
         ]));
 
-        $this->notifyHr($leaveRequest, $leaveRequest->type . '_manager_approved', "{$typeLabel} - HR Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by {$user->name}. Awaiting HR approval.");
-        if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_manager_approved', "{$typeLabel} - Manager Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was approved by your direct manager. Awaiting HR approval.", ['leave_request_id' => $leaveRequest->id]);
-        }
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
+        $this->notifyHr($leaveRequest, $leaveRequest->type . '_manager_approved', "{$typeLabel} - HR Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} {$this->ref($leaveRequest)} was approved by {$user->name}. Awaiting your approval.");
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
@@ -612,11 +610,8 @@ class LeaveRequestController extends Controller
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         // Depot manager now owns the final step — push.
-        Notification::notifyRole('depot_manager', $leaveRequest->type . '_hr_approved', "{$typeLabel} - Depot Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by HR {$user->name}. Awaiting Depot Manager final approval.", ['leave_request_id' => $leaveRequest->id], true);
-        Notification::notifyRole('admin', $leaveRequest->type . '_hr_approved', "{$typeLabel} - HR Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was approved by HR {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
-        if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_hr_approved', "{$typeLabel} - HR Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) was approved by HR. Awaiting Depot Manager final approval.", ['leave_request_id' => $leaveRequest->id]);
-        }
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
+        Notification::notifyDepotManagers($leaveRequest->type . '_hr_approved', "{$typeLabel} - Final Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} {$this->ref($leaveRequest)} passed manager and HR review. Awaiting your final approval.", ['leave_request_id' => $leaveRequest->id]);
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
@@ -655,11 +650,10 @@ class LeaveRequestController extends Controller
         $leaveRequest->refresh();
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
         if ($leaveRequest->user_id) {
-            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_approved', "{$typeLabel} Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) has been fully approved by {$user->name}. It is ready to print.", ['leave_request_id' => $leaveRequest->id]);
+            Notification::notifyUser($leaveRequest->user_id, $leaveRequest->type . '_approved', "{$typeLabel} Approved", "Your {$typeLabel} ({$leaveRequest->tracking_no}) has been fully approved by {$user->name}. It is ready to print.", ['leave_request_id' => $leaveRequest->id], true);
         }
-        Notification::notifyRole('admin', $leaveRequest->type . '_approved', "{$typeLabel} Fully Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was fully approved by {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
-        Notification::notifyRole('hr', $leaveRequest->type . '_approved', "{$typeLabel} Fully Approved", "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was fully approved by Depot Manager {$user->name}.", ['leave_request_id' => $leaveRequest->id]);
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
@@ -724,6 +718,7 @@ class LeaveRequestController extends Controller
         ]);
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
         if ($leaveRequest->user_id) {
             Notification::notifyUser(
                 $leaveRequest->user_id,
@@ -762,6 +757,7 @@ class LeaveRequestController extends Controller
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $reason = $request->input('reason') ? ' - ' . $request->input('reason') : '';
         $event = $leaveRequest->type === 'lrf' ? 'lrf_rescheduled' : 'otr_rescheduled';
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
         if ($leaveRequest->user_id) {
             Notification::notifyUser(
                 $leaveRequest->user_id,
@@ -817,13 +813,11 @@ class LeaveRequestController extends Controller
 
             $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
             $message = "{$user->name} requested cancellation of {$typeLabel} ({$leaveRequest->tracking_no}) for {$leaveRequest->employee_name}.";
-            Notification::notifyRole(
-                'depot_manager',
+            Notification::notifyDepotManagers(
                 $leaveRequest->type . '_cancellation_requested',
                 "{$typeLabel} Cancellation Approval Required",
                 $message,
-                ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type],
-                true
+                ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type]
             );
 
             return response()->json([
@@ -841,10 +835,7 @@ class LeaveRequestController extends Controller
             'cancellation_reason' => $request->input('reason'),
         ]);
 
-        $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
-        $msg = "{$leaveRequest->employee_name}'s {$typeLabel} ({$leaveRequest->tracking_no}) was cancelled by {$user->name}.";
-        Notification::notifyRole('admin', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
-        Notification::notifyRole('depot_manager', 'lrf_cancelled', "{$typeLabel} Cancelled", $msg, ['leave_request_id' => $leaveRequest->id]);
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
 
         return response()->json([
             'success' => true,
@@ -1052,8 +1043,7 @@ class LeaveRequestController extends Controller
 
         $label = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
-        Notification::notifyRole('depot_manager', $leaveRequest->type . '_amendment_requested', "{$label} Amendment Required", "{$user->name} requested changes to {$leaveRequest->tracking_no}.", $data, true);
-        Notification::notifyRole('admin', $leaveRequest->type . '_amendment_requested', "{$label} Amendment Required", "{$user->name} requested changes to {$leaveRequest->tracking_no}.", $data);
+        Notification::notifyDepotManagers($leaveRequest->type . '_amendment_requested', "{$label} Amendment Required", "{$user->name} requested changes to {$leaveRequest->tracking_no}.", $data);
 
         return response()->json(['success' => true, 'message' => 'Amendment sent for Depot Manager approval', 'data' => $amendment->load('requester:id,name')]);
     }
@@ -1131,9 +1121,9 @@ class LeaveRequestController extends Controller
         $title = "{$label} Amendment " . ($approved ? 'Approved' : 'Rejected');
         $body = "Changes to {$leaveRequest->tracking_no} were " . ($approved ? 'approved.' : 'rejected.');
         $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
         if ($leaveRequest->user_id) Notification::notifyUser($leaveRequest->user_id, $event, $title, $body, $data, true);
         Notification::notifyRole('hr', $event, $title, $body, $data);
-        Notification::notifyRole('admin', $event, $title, $body, $data);
     }
 
     private function notifyCancellationDecision(LeaveRequest $leaveRequest, bool $approved): void
@@ -1145,12 +1135,13 @@ class LeaveRequestController extends Controller
         $body = "Cancellation of {$typeLabel} ({$tracking}) was " . ($approved ? 'approved.' : 'rejected.');
         $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
 
+        Notification::resolveFor('leave_request_id', $leaveRequest->id);
         if ($leaveRequest->user_id) {
             Notification::notifyUser($leaveRequest->user_id, $event, $title, $body, $data, true);
         }
+        // HR must restore the balance and attendance for a cancelled approved leave.
         if ($approved) {
             Notification::notifyRole('hr', $event, $title, $body, $data);
-            Notification::notifyRole('admin', $event, $title, $body, $data);
         }
     }
 
@@ -1265,33 +1256,25 @@ class LeaveRequestController extends Controller
                 $leave,
                 $leave->type . '_manager_skipped',
                 "{$typeLabel} - HR Approval Required",
-                "{$leave->employee_name}'s {$typeLabel} ({$leave->tracking_no}) has no direct manager assigned. The manager step was skipped and the request is awaiting HR approval."
+                "{$leave->employee_name}'s {$typeLabel} {$this->ref($leave)} has no direct manager assigned, so it came straight to HR. Awaiting your approval."
             );
             return;
         }
 
-        $hasDirectManager = false;
-
-        if ($employee?->user_manager_id) {
-            $hasDirectManager = true;
-            // Direct manager must approve — push.
-            Notification::notifyUser($employee->user_manager_id, 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. Awaiting your approval.", ['leave_request_id' => $leave->id], true);
-        } elseif ($employee?->direct_manager_id) {
-            $managerEmp = Employee::active()->find($employee->direct_manager_id);
-            if ($managerEmp?->user_id) {
-                $hasDirectManager = true;
-                Notification::notifyUser($managerEmp->user_id, 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. Awaiting your approval.", ['leave_request_id' => $leave->id], true);
-            }
+        // Same resolution store() used to route the request, so the alert
+        // reaches the manager who can actually approve it. The old lookup
+        // preferred user_manager_id even when that account was inactive.
+        $managerUserId = $employee ? $this->directManagerUserId($employee) : null;
+        if ($managerUserId) {
+            Notification::notifyUser($managerUserId, 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel}. Awaiting your approval.", ['leave_request_id' => $leave->id], true);
         }
+        // HR and Depot are told when it reaches their step, not on submission.
+    }
 
-        if (!$hasDirectManager) {
-            // No direct manager set — depot manager owns the manager step, push.
-            Notification::notifyRole('depot_manager', 'new_' . $leave->type, "New {$typeLabel} - Direct Approval Required", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. No direct manager assigned. Awaiting your approval.", ['leave_request_id' => $leave->id], true);
-        }
-
-        // Informational only — HR gets a real push when it becomes their turn (after manager approves).
-        Notification::notifyRole('hr', 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}. HR review will be required after manager approval.", ['leave_request_id' => $leave->id]);
-        Notification::notifyRole('admin', 'new_' . $leave->type, "New {$typeLabel}", "{$leave->employee_name} submitted a {$typeLabel} - {$leave->tracking_no}", ['leave_request_id' => $leave->id]);
+    /** Readable reference: the official number only exists after final approval. */
+    private function ref(LeaveRequest $leave): string
+    {
+        return $leave->tracking_no ? "({$leave->tracking_no})" : "(#{$leave->id})";
     }
 
     private function directManagerUserId(Employee $employee): ?int
@@ -1317,10 +1300,8 @@ class LeaveRequestController extends Controller
 
     private function notifyHr(LeaveRequest $leave, string $type, string $title, string $body): void
     {
-        $data = ['leave_request_id' => $leave->id];
-        // HR now owns the pending step — push. Admins get in-app only.
-        Notification::notifyRole('hr', $type, $title, $body, $data, true);
-        Notification::notifyRole('admin', $type, $title, $body, $data);
+        // HR now owns the pending step — push.
+        Notification::notifyRole('hr', $type, $title, $body, ['leave_request_id' => $leave->id], true);
     }
 
     private function isDirectManager(LeaveRequest $leaveRequest, int $userId): bool

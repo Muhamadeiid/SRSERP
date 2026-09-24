@@ -103,6 +103,33 @@ class Notification extends Model
     // notifications should stay false to avoid noisy push spam.
     // Critical notifications (category='crit' or priority='crit') bypass user in-app and DND
     // preferences — safety alerts must always land.
+    /**
+     * Mark every unread notification about one record as read.
+     *
+     * Called when a workflow step completes, before the next step's
+     * notification goes out. The "awaiting your approval" alert then clears
+     * itself for the person who acted and for everyone else who received the
+     * same alert (e.g. the other HR officers), instead of sitting unread
+     * after the work is already done.
+     */
+    public static function resolveFor(string $dataKey, int $recordId): int
+    {
+        return static::query()
+            ->where('read', false)
+            ->where("data->{$dataKey}", $recordId)
+            ->update(['read' => true, 'read_at' => now()]);
+    }
+
+    /**
+     * Depot-level approval alerts. Falls back to admins only when no active
+     * depot manager account exists, so the step is never left with no owner.
+     */
+    public static function notifyDepotManagers(string $type, string $title, string $body, array $data = [], bool $push = true, array $options = []): void
+    {
+        $role = User::where('role', 'depot_manager')->where('is_active', true)->exists() ? 'depot_manager' : 'admin';
+        static::notifyRole($role, $type, $title, $body, $data, $push, $options);
+    }
+
     public static function notifyRole(string $role, string $type, string $title, string $body, array $data = [], bool $push = false, array $options = []): void
     {
         $data = static::withNavigationPath($type, $data);

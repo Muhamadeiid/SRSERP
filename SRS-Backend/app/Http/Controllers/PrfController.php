@@ -216,12 +216,12 @@ class PrfController extends Controller
 
             $prf->update(['status' => $stage['next']]);
 
-            // Notifications
+            // Clear this stage's "awaiting approval" alerts, then hand over.
+            Notification::resolveFor('prf_id', $prf->id);
             if ($stage['next'] === 'approved') {
                 $this->notifyRequesterFinalApproved($prf, $user);
             } else {
                 $this->notifyStageApprovers($prf, $stage['next']);
-                $this->notifyRequesterStageMoved($prf, $stage['label']);
             }
 
             return response()->json([
@@ -277,13 +277,15 @@ class PrfController extends Controller
 
             $prf->update(['status' => 'rejected', 'prf_number' => $voidNumber]);
 
+            Notification::resolveFor('prf_id', $prf->id);
             if ($prf->requested_by) {
                 Notification::notifyUser(
                     $prf->requested_by,
                     'prf_rejected',
                     "PRF Rejected — {$originalNumber}",
                     "Your PRF was rejected by {$user->name} ({$stage['label']}): {$request->input('comment')}",
-                    ['prf_id' => $prf->id]
+                    ['prf_id' => $prf->id],
+                    true
                 );
             }
 
@@ -353,7 +355,8 @@ class PrfController extends Controller
                 'prf_pending',
                 $title,
                 $body,
-                ['prf_id' => $prf->id]
+                ['prf_id' => $prf->id],
+                true
             );
 
             // Best-effort email — don't fail the request if mail isn't configured
@@ -367,18 +370,6 @@ class PrfController extends Controller
         }
     }
 
-    private function notifyRequesterStageMoved(Prf $prf, string $stageLabelDone): void
-    {
-        if (!$prf->requested_by) return;
-        Notification::notifyUser(
-            $prf->requested_by,
-            'prf_stage_moved',
-            "PRF Approved ({$stageLabelDone}) — {$prf->prf_number}",
-            "Your PRF was approved by {$stageLabelDone}. Awaiting next stage.",
-            ['prf_id' => $prf->id]
-        );
-    }
-
     private function notifyRequesterFinalApproved(Prf $prf, User $by): void
     {
         if (!$prf->requested_by) return;
@@ -387,7 +378,8 @@ class PrfController extends Controller
             'prf_approved',
             "PRF Fully Approved — {$prf->prf_number}",
             "Your PRF was fully approved by {$by->name}. It is ready to print.",
-            ['prf_id' => $prf->id]
+            ['prf_id' => $prf->id],
+            true
         );
     }
 }

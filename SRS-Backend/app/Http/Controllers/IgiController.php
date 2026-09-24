@@ -284,7 +284,7 @@ class IgiController extends Controller
         $igi->update(['status'=>'submitted','approval_status'=>'pending_requester']);
         $igi->loadMissing('po.prf');
         if ($igi->po?->prf?->requested_by) {
-            Notification::notifyUser($igi->po->prf->requested_by, 'igi_approval_required', 'Incoming goods inspection awaiting your approval', "IGI {$igi->igi_number} requires requester confirmation.", ['path'=>"/goods-inspection/{$igi->id}"], true);
+            Notification::notifyUser($igi->po->prf->requested_by, 'igi_approval_required', 'Incoming goods inspection awaiting your approval', "IGI {$igi->igi_number} requires requester confirmation.", ['igi_id'=>$igi->id,'path'=>"/goods-inspection/{$igi->id}"], true);
         }
         return response()->json(['success'=>true,'data'=>$igi->fresh(['approvals.approver'])]);
     }
@@ -317,7 +317,14 @@ class IgiController extends Controller
         }
         return DB::transaction(function() use($igi,$user,$data,$stage){
             IncomingGoodsInspectionApproval::create(['igi_id'=>$igi->id,'stage'=>$stage['stage'],'action'=>$data['action'],'approver_id'=>$user->id,'comment'=>$data['comment']??null,'acted_at'=>now()]);
-            if($data['action']==='reject') $igi->update(['status'=>'rejected','approval_status'=>'rejected']);
+            Notification::resolveFor('igi_id', $igi->id);
+            if($data['action']==='reject') {
+                $igi->update(['status'=>'rejected','approval_status'=>'rejected']);
+                if ($igi->created_by) {
+                    $reason = !empty($data['comment']) ? ": {$data['comment']}" : '.';
+                    Notification::notifyUser($igi->created_by, 'igi_rejected', "IGI {$igi->igi_number} rejected", "Rejected by {$user->name}{$reason}", ['igi_id'=>$igi->id,'path'=>"/goods-inspection/{$igi->id}"], true, ['priority' => 'warn']);
+                }
+            }
             else {
                 $values=['approval_status'=>$stage['next']];
                 if($stage['next']==='approved') $values['status']='approved';
@@ -344,7 +351,7 @@ class IgiController extends Controller
 
     private function notifyNextIgiStage(IncomingGoodsInspection $igi, string $status): void
     {
-        $path = ['path' => "/goods-inspection/{$igi->id}"];
+        $path = ['igi_id' => $igi->id, 'path' => "/goods-inspection/{$igi->id}"];
         $title = "IGI {$igi->igi_number} awaiting approval";
         if ($status === 'pending_inventory') {
             User::where('is_active', true)->where(function ($query) {

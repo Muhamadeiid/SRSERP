@@ -64,19 +64,10 @@ class ResignationRequestController extends Controller
             'status' => 'pending',
         ]);
 
-        Notification::notifyRole(
-            'depot_manager',
+        Notification::notifyDepotManagers(
             'resignation_approval_required',
             'IMPORTANT: Resignation Approval Required',
             "HR {$user->name} submitted a resignation request for {$resignation->full_name}. Last working day: {$resignation->last_working_date->format('d M Y')}.",
-            ['resignation_request_id' => $resignation->id, 'path' => '/human-resources/resignations'],
-            true
-        );
-        Notification::notifyRole(
-            'admin',
-            'resignation_approval_required',
-            'IMPORTANT: Resignation Approval Required',
-            "A resignation request for {$resignation->full_name} is awaiting Depot Manager approval.",
             ['resignation_request_id' => $resignation->id, 'path' => '/human-resources/resignations']
         );
 
@@ -106,8 +97,8 @@ class ResignationRequestController extends Controller
         });
 
         $body = "{$resignationRequest->full_name}'s resignation was approved. The employee remains active through {$resignationRequest->last_working_date->format('d M Y')} and then moves to Ex-Employees automatically.";
+        Notification::resolveFor('resignation_request_id', $resignationRequest->id);
         Notification::notifyRole('hr', 'resignation_approved', 'Resignation Approved', $body, ['resignation_request_id' => $resignationRequest->id, 'path' => '/human-resources/resignations'], true);
-        Notification::notifyRole('admin', 'resignation_approved', 'Resignation Approved', $body, ['resignation_request_id' => $resignationRequest->id, 'path' => '/human-resources/resignations']);
 
         return response()->json(['success' => true, 'data' => $resignationRequest->fresh(['employee', 'creator', 'approver'])]);
     }
@@ -128,8 +119,8 @@ class ResignationRequestController extends Controller
         ]);
 
         $body = "{$resignationRequest->full_name}'s resignation was rejected. Reason: {$data['reason']}";
+        Notification::resolveFor('resignation_request_id', $resignationRequest->id);
         Notification::notifyRole('hr', 'resignation_rejected', 'Resignation Rejected', $body, ['resignation_request_id' => $resignationRequest->id, 'path' => '/human-resources/resignations'], true);
-        Notification::notifyRole('admin', 'resignation_rejected', 'Resignation Rejected', $body, ['resignation_request_id' => $resignationRequest->id, 'path' => '/human-resources/resignations']);
 
         return response()->json(['success' => true, 'data' => $resignationRequest->fresh(['creator', 'rejecter'])]);
     }
