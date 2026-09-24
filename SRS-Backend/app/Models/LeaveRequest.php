@@ -22,7 +22,7 @@ class LeaveRequest extends Model
         'status', 'approved_by', 'approved_at', 'balance_deducted_at', 'rejection_reason',
         'rejected_by', 'rejected_at',
         // Cancellation
-        'cancelled_at', 'cancelled_by', 'cancellation_reason',
+        'cancelled_at', 'cancelled_by', 'cancellation_reason', 'cancelled_tracking_no',
         'requested_cancellation_at', 'requested_cancellation_by',
         'cancellation_rejected_at', 'cancellation_rejected_by', 'cancellation_rejection_reason',
         // Reschedule

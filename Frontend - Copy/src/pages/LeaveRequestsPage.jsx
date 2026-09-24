@@ -2601,7 +2601,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 <input
                   value={trackingDraft}
                   onChange={e => setTrackingDraft(e.target.value)}
-                  placeholder={isLRF ? 'LRF-GZ-0001' : 'OTR-EG1-0001'}
+                  placeholder={isLRF ? 'LRF-GZ-001' : 'OTR-EG1-001'}
                   autoFocus
                   className="text-xs px-2 py-1 border border-primary rounded-md outline-none focus:ring-1 focus:ring-primary w-44"
                   onKeyDown={e => { if (e.key === 'Enter') saveTracking(); if (e.key === 'Escape') { setEditingTracking(false); setTrackingDraft(req.tracking_no || '') } }}

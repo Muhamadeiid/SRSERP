@@ -883,6 +883,8 @@ class LeaveRequestController extends Controller
                 'cancelled_by' => $user->id,
             ]);
 
+            $this->releaseAndResequenceTracking($locked);
+
             return $locked;
         });
 
@@ -944,10 +946,12 @@ class LeaveRequestController extends Controller
                 'cancellation_rejection_reason' => null,
             ]);
 
+            $this->releaseAndResequenceTracking($locked);
+
             return [$locked, $balanceRestored];
         });
 
-        $tracking = $leaveRequest->tracking_no ?: "#{$leaveRequest->id}";
+        $tracking = $leaveRequest->cancelled_tracking_no ?: $leaveRequest->tracking_no ?: "#{$leaveRequest->id}";
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $body = "{$typeLabel} ({$tracking}) for {$leaveRequest->employee_name} was cancelled by {$user->name}.";
         $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
@@ -1137,7 +1141,8 @@ class LeaveRequestController extends Controller
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
         $event = $leaveRequest->type . ($approved ? '_cancellation_approved' : '_cancellation_rejected');
         $title = "{$typeLabel} Cancellation " . ($approved ? 'Approved' : 'Rejected');
-        $body = "Cancellation of {$typeLabel} ({$leaveRequest->tracking_no}) was " . ($approved ? 'approved.' : 'rejected.');
+        $tracking = $leaveRequest->tracking_no ?: $leaveRequest->cancelled_tracking_no ?: "#{$leaveRequest->id}";
+        $body = "Cancellation of {$typeLabel} ({$tracking}) was " . ($approved ? 'approved.' : 'rejected.');
         $data = ['leave_request_id' => $leaveRequest->id, 'request_type' => $leaveRequest->type];
 
         if ($leaveRequest->user_id) {
@@ -1146,6 +1151,53 @@ class LeaveRequestController extends Controller
         if ($approved) {
             Notification::notifyRole('hr', $event, $title, $body, $data);
             Notification::notifyRole('admin', $event, $title, $body, $data);
+        }
+    }
+
+    /**
+     * Release the official number of a finally-cancelled request and close the
+     * resulting gap inside that exact request/project series. The released
+     * number remains on the cancelled row as an audit reference only.
+     */
+    private function releaseAndResequenceTracking(LeaveRequest $cancelled): void
+    {
+        $released = trim((string) $cancelled->tracking_no);
+        if ($released === '') {
+            return;
+        }
+
+        $cancelled->update([
+            'cancelled_tracking_no' => $released,
+            'tracking_no' => null,
+        ]);
+
+        if (!preg_match('/^(.*-)(\d+)$/', $released, $matches)) {
+            return;
+        }
+
+        $prefix = $matches[1];
+        $requests = LeaveRequest::query()
+            ->where('id', '!=', $cancelled->id)
+            ->where('tracking_no', 'like', $prefix . '%')
+            ->whereNotIn('status', ['cancelled', 'rejected', 'rescheduled'])
+            ->orderByRaw('COALESCE(approved_at, created_at) ASC')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
+
+        // Two passes keep this safe even if an installation still has a
+        // unique index on tracking_no: free every old number before assigning
+        // the compact sequence.
+        foreach ($requests as $request) {
+            DB::table('leave_requests')->where('id', $request->id)->update([
+                'tracking_no' => "__TRACKING_RESEQUENCE__{$request->id}",
+            ]);
+        }
+
+        foreach ($requests->values() as $index => $request) {
+            DB::table('leave_requests')->where('id', $request->id)->update([
+                'tracking_no' => $prefix . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+            ]);
         }
     }
 
@@ -1365,7 +1417,7 @@ class LeaveRequestController extends Controller
             : '';
         $next = (ctype_digit($tail) ? (int) $tail : 0) + 1;
 
-        return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
     }
 
     private function trackingPrefix(string $type, ?Employee $employee = null): string

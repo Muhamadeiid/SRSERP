@@ -301,6 +301,38 @@ class LeaveRequestCancellationWorkflowTest extends TestCase
         $this->assertSame($depot->id, $request->fresh()->cancelled_by);
     }
 
+    public function test_final_cancellation_releases_number_and_resequences_its_series(): void
+    {
+        [$employee, $depot] = $this->users();
+        $prefix = 'LRF-GZ' . Str::upper(Str::random(6)) . '-';
+
+        $requests = collect([1, 2, 3])->map(function (int $sequence) use ($employee, $prefix) {
+            return LeaveRequest::create([
+                'tracking_no' => $prefix . str_pad((string) $sequence, 3, '0', STR_PAD_LEFT),
+                'user_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'type' => 'lrf',
+                'leave_type' => 'annual',
+                'paid' => true,
+                'start_date' => now()->addDays($sequence)->toDateString(),
+                'end_date' => now()->addDays($sequence)->toDateString(),
+                'days' => 1,
+                'status' => 'approved',
+                'approved_at' => now()->addSeconds($sequence),
+            ]);
+        });
+
+        Sanctum::actingAs($depot);
+        $this->postJson("/api/leave-requests/{$requests[1]->id}/cancel-approved", [
+            'reason' => 'Approved in error',
+        ])->assertOk();
+
+        $this->assertNull($requests[1]->fresh()->tracking_no);
+        $this->assertSame($prefix . '002', $requests[1]->fresh()->cancelled_tracking_no);
+        $this->assertSame($prefix . '001', $requests[0]->fresh()->tracking_no);
+        $this->assertSame($prefix . '002', $requests[2]->fresh()->tracking_no);
+    }
+
     private function users(): array
     {
         return [$this->createUser('staff'), $this->createUser('depot_manager')];
