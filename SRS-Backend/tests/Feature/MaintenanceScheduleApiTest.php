@@ -147,7 +147,7 @@ class MaintenanceScheduleApiTest extends TestCase
         $this->assertLessThanOrEqual(17, $gap);
     }
 
-    public function test_train_gets_only_normal_a_maintenance_before_entering_nine_year_overhaul(): void
+    public function test_train_keeps_its_natural_maintenance_cycle_before_entering_nine_year_overhaul(): void
     {
         MaintenanceSchedule::create(['schedule_date' => '2026-09-22', 'train_id' => '08', 'code' => 'A']);
         foreach (CarbonPeriod::create('2026-09-19', '2026-09-30') as $date) {
@@ -159,11 +159,11 @@ class MaintenanceScheduleApiTest extends TestCase
             ->map(fn ($entries, $date) => isset($entries['08']) ? ['date' => $date, 'code' => $entries['08']] : null)
             ->filter()
             ->values();
-        $maintenanceDates = $trainEight->where('code', 'A')->pluck('date')->values();
+        $maintenanceDates = $trainEight->whereIn('code', ['A', 'B1', 'B2', 'B3', 'G'])->pluck('date')->values();
         $overhaulDates = $trainEight->where('code', '9Y')->pluck('date')->values();
 
         $this->assertNotEmpty($maintenanceDates);
-        $this->assertEmpty($trainEight->whereIn('code', ['B1', 'B2', 'B3', 'G']));
+        $this->assertCount(2, $trainEight->where('code', 'G'));
         $this->assertTrue($maintenanceDates->every(fn ($date) => Carbon::parse($date)->lt(Carbon::parse($overhaulDates->first()))));
     }
 
