@@ -687,9 +687,9 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 
   // balance
   const annual         = balance?.annual  ?? 21
-  const casual         = balance?.casual  ?? 6
-  const annualRemain   = balance?.annual_remaining  ?? annual
-  const casualRemain   = balance?.casual_remaining  ?? casual
+  const casual         = balance?.casual  ?? 7
+  const annualRemain   = balance?.annual_remaining_effective ?? balance?.annual_remaining ?? annual
+  const casualRemain   = balance?.casual_remaining_effective ?? balance?.casual_remaining ?? casual
   const consumedAnnual = annual  - annualRemain
   const consumedCasual = casual  - casualRemain
 
@@ -1320,10 +1320,10 @@ export default function AttendanceTab() {
     finally { setExportAllBusy(false) }
   }
 
-  const annualRemain = balance ? (balance.annual_remaining ?? balance.annual ?? 21) : '—'
-  const casualRemain = balance ? (balance.casual_remaining ?? balance.casual  ?? 6)  : '—'
+  const annualRemain = balance ? (balance.annual_remaining_effective ?? balance.annual_remaining ?? balance.annual ?? 21) : '—'
+  const casualRemain = balance ? (balance.casual_remaining_effective ?? balance.casual_remaining ?? balance.casual ?? 7) : '—'
   const annualTotal  = balance?.annual ?? 21
-  const casualTotal  = balance?.casual ?? 6
+  const casualTotal  = balance?.casual ?? 7
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
