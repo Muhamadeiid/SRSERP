@@ -637,7 +637,7 @@ class LeaveRequestController extends Controller
                 : null;
             $trackingNo = $locked->tracking_no ?: $this->generateTrackingNo($locked->type, $employee);
 
-            $leaveRequest->update(array_merge($changes, [
+            $locked->update(array_merge($changes, [
                 'tracking_no' => $trackingNo,
                 'status' => 'approved',
                 'approved_by' => $user->id,
@@ -1218,14 +1218,29 @@ class LeaveRequestController extends Controller
             ], 422);
         }
 
-        $v = Validator::make($request->all(), [
-            'tracking_no' => 'required|string|max:64',
+        $trackingNo = strtoupper(trim((string) $request->input('tracking_no')));
+        $typePrefix = $leaveRequest->type === 'lrf' ? 'LRF' : 'OTR';
+
+        $v = Validator::make(['tracking_no' => $trackingNo], [
+            'tracking_no' => [
+                'required',
+                'string',
+                'max:64',
+                'regex:/^' . $typePrefix . '-[A-Z0-9]+-\d+$/',
+                'unique:leave_requests,tracking_no,' . $leaveRequest->id,
+            ],
+        ], [
+            'tracking_no.regex' => "Tracking number must look like {$typePrefix}-EG1-001.",
+            'tracking_no.unique' => 'This tracking number is already assigned to another request.',
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
         }
 
-        $leaveRequest->update(['tracking_no' => $request->input('tracking_no')]);
+        DB::transaction(function () use ($leaveRequest, $trackingNo) {
+            $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+            $locked->update(['tracking_no' => $trackingNo]);
+        });
 
         return response()->json([
             'success' => true,
@@ -1394,16 +1409,16 @@ class LeaveRequestController extends Controller
     {
         $prefix = $this->trackingPrefix($type, $employee);
 
-        $latestTrackingNo = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
+        $trackingNumbers = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
             ->whereNotNull('tracking_no')
-            ->orderByDesc('tracking_no')
             ->lockForUpdate()
-            ->value('tracking_no');
+            ->pluck('tracking_no');
 
-        $tail = $latestTrackingNo
-            ? substr((string) $latestTrackingNo, strlen($prefix))
-            : '';
-        $next = (ctype_digit($tail) ? (int) $tail : 0) + 1;
+        $largest = $trackingNumbers->reduce(function (int $max, string $trackingNo) use ($prefix) {
+            $tail = substr($trackingNo, strlen($prefix));
+            return ctype_digit($tail) ? max($max, (int) $tail) : $max;
+        }, 0);
+        $next = $largest + 1;
 
         return $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
     }

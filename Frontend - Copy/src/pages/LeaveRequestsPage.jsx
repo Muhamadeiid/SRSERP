@@ -2560,10 +2560,11 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     if (!value) { alert('Tracking number cannot be empty'); return }
     setSavingTracking(true)
     try {
-      await updateLeaveTrackingNo(req.id, value)
-      req.tracking_no = value          // optimistic local update
+      const response = await updateLeaveTrackingNo(req.id, value)
+      const updated = response?.data || { ...req, tracking_no: value }
+      setTrackingDraft(updated.tracking_no || value)
       setEditingTracking(false)
-      onUpdated?.()
+      await onUpdated?.(updated)
     } catch (e) {
       alert(e.message || 'Failed to update tracking number')
     } finally {
@@ -3313,6 +3314,19 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
     return true
   }, [])
 
+  const handleRequestUpdated = useCallback(async (updated) => {
+    if (!updated?.id) {
+      await fetchRequests()
+      return
+    }
+    setRequests(current => current.map(request =>
+      String(request.id) === String(updated.id) ? { ...request, ...updated } : request
+    ))
+    setViewReq(current => String(current?.id) === String(updated.id)
+      ? { ...current, ...updated }
+      : current)
+  }, [fetchRequests])
+
   const applyOptimisticStatus = useCallback((id, status) => {
     const previous = requests.find(request => String(request.id) === String(id))
     setRequests(current => current.map(request =>
@@ -3992,7 +4006,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           currentUserId={user?.id}
           isDirectManager={Boolean(viewReq.is_direct_manager || viewReq.can_approve_manager || isDirectManagerOf(viewReq))}
           hasHrApprovalAccess={Boolean(viewReq.can_approve_hr || isHrApprover)}
-          onUpdated={fetchRequests}
+          onUpdated={handleRequestUpdated}
           focusApproval={focusApproval}
         />
       )}

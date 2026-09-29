@@ -107,5 +107,72 @@ class HrLeaveClassificationTest extends TestCase
             ->putJson("/api/leave-requests/{$overtime->id}/tracking-no", ['tracking_no' => 'OTR-GZ-007'])
             ->assertOk()
             ->assertJsonPath('data.tracking_no', 'OTR-GZ-007');
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leave->id,
+            'tracking_no' => 'LRF-EG1-014',
+        ]);
+    }
+
+    public function test_manual_tracking_number_controls_the_next_approved_request_number(): void
+    {
+        $hr = User::create([
+            'name' => 'Tracking HR Officer',
+            'email' => 'hr-sequence@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'hr',
+        ]);
+        $admin = User::create([
+            'name' => 'Depot Admin',
+            'email' => 'depot-sequence@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'admin',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Sequence Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+        LeaveBalance::create([
+            'employee_id' => $employee->id,
+            'annual' => 21,
+            'casual' => 7,
+            'sick' => 90,
+            'early' => 0,
+        ]);
+        $manual = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-01',
+            'days' => 1,
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($hr)
+            ->putJson("/api/leave-requests/{$manual->id}/tracking-no", ['tracking_no' => ' lrf-eg1-014 '])
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'LRF-EG1-014');
+
+        $next = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'start_date' => '2026-10-15',
+            'end_date' => '2026-10-15',
+            'days' => 1,
+            'status' => 'hr_approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/leave-requests/{$next->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'LRF-EG1-015');
     }
 }
