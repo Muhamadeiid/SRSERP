@@ -902,7 +902,7 @@ export default function AttendanceTab() {
   const [overviewErr,    setOverviewErr]    = useState(null)
   const [overviewMetricFilter, setOverviewMetricFilter] = useState(() => {
     const requested = new URLSearchParams(location.search).get('status')
-    return ['present', 'late', 'absent', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all'
+    return ['present', 'late', 'absent', 'missing_checkout', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all'
   })
   const [overviewTotalWorkforce, setOverviewTotalWorkforce] = useState(0)
   const [overviewSort, setOverviewSort] = useState({ key: null, direction: null })
@@ -935,7 +935,7 @@ export default function AttendanceTab() {
 
   useEffect(() => {
     const requested = new URLSearchParams(location.search).get('status')
-    setOverviewMetricFilter(['present', 'late', 'absent', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all')
+    setOverviewMetricFilter(['present', 'late', 'absent', 'missing_checkout', 'leave', 'company_paid', 'day_off', 'overtime'].includes(requested) ? requested : 'all')
   }, [location.search])
 
   useEffect(() => {
@@ -1021,6 +1021,20 @@ export default function AttendanceTab() {
     && !rec.check_in
     && !rec.check_out
 
+  const isMissingCheckOutOnOverview = rec => {
+    if (isOnLeaveOnOverview(rec.employee_id) || !rec.check_in || rec.check_out || rec.status === 'off') return false
+    const today = todayStr()
+    if (overviewDate < today) return true
+    if (overviewDate > today) return false
+
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+    const expectedEnd = isInterventionEmployee(rec.employee)
+      ? toMin(rec.check_in) + (policyNumber(attendancePolicy, 'attendance_intervention_expected_hours') * 60)
+      : policyTimeMin(attendancePolicy, 'attendance_regular_ot_start_time')
+    return currentMinutes >= expectedEnd
+  }
+
   const isOnSiteOnOverview = rec =>
     !isOnLeaveOnOverview(rec.employee_id)
     && Boolean(rec.check_in || rec.check_out)
@@ -1029,6 +1043,7 @@ export default function AttendanceTab() {
   const ovPresent = overviewRecs.filter(r => isOnSiteOnOverview(r)).length
   const ovLate    = overviewRecs.filter(r => isOverviewLate(r)).length
   const ovAbsent  = overviewRecs.filter(isAbsentOnOverview).length
+  const ovMissingCheckOut = overviewRecs.filter(isMissingCheckOutOnOverview).length
   const ovOnLeave = regularLeaveEmployeeIds.size
   const ovCompanyPaid = companyPaidEmployeeIds.size
   const ovDayOff  = overviewRecs.filter(r => r.status === 'off' && !isOnLeaveOnOverview(r.employee_id)).length
@@ -1039,6 +1054,7 @@ export default function AttendanceTab() {
       || (overviewMetricFilter === 'present' && isOnSiteOnOverview(rec))
       || (overviewMetricFilter === 'late' && isOverviewLate(rec))
       || (overviewMetricFilter === 'absent' && isAbsentOnOverview(rec))
+      || (overviewMetricFilter === 'missing_checkout' && isMissingCheckOutOnOverview(rec))
       || (overviewMetricFilter === 'leave' && regularLeaveEmployeeIds.has(Number(rec.employee_id)))
       || (overviewMetricFilter === 'company_paid' && isCompanyPaidOnOverview(rec.employee_id))
       || (overviewMetricFilter === 'day_off' && rec.status === 'off' && !isOnLeaveOnOverview(rec.employee_id))
@@ -1073,6 +1089,7 @@ export default function AttendanceTab() {
     if (key === 'status') {
       if (isCompanyPaidOnOverview(rec.employee_id)) return 'company paid'
       if (isOnLeaveOnOverview(rec.employee_id)) return 'on leave'
+      if (isMissingCheckOutOnOverview(rec)) return 'missing check out'
       return effectiveOverviewStatus(rec) ?? ''
     }
     return overviewRecs.indexOf(rec)
@@ -1367,11 +1384,12 @@ export default function AttendanceTab() {
           )}
 
           {/* ── Overview summary cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-8 gap-3">
             {[
               ['present',  'Present',       `${ovPresent} / ${overviewTotalWorkforce || overviewRecs.length}`, 'bg-green-50  text-green-700  border-green-200'],
               ['late',     'Late',          ovLate,       'bg-yellow-50 text-yellow-700 border-yellow-200'],
               ['absent',   'Absent',        ovAbsent,     'bg-red-50    text-red-600    border-red-200'],
+              ['missing_checkout', 'Missing Check Out', ovMissingCheckOut, ovMissingCheckOut > 0 ? 'bg-red-600 text-white border-red-700' : 'bg-red-50 text-red-700 border-red-300'],
               ['leave',    'On Leave',      ovOnLeave,    'bg-violet-50 text-violet-700 border-violet-200'],
               ['company_paid', 'Company Paid / Mission', ovCompanyPaid, 'bg-cyan-50 text-cyan-700 border-cyan-200'],
               ['day_off',  'Day Off',       ovDayOff,     'bg-neutral-100 text-neutral-700 border-neutral-300'],
@@ -1425,17 +1443,20 @@ export default function AttendanceTab() {
                       const onLeaveInfo = fullDayOverviewLeaves.find(l => Number(l.employee_id) === Number(rec.employee_id))
                       const isOnLeave   = !!onLeaveInfo
                       const isCompanyPaid = Boolean(onLeaveInfo?.company_paid)
+                      const isMissingCheckOut = isMissingCheckOutOnOverview(rec)
                       const displayedStatus = effectiveOverviewStatus(rec)
                       const cfg = isCompanyPaid
                         ? { label: 'Company Paid', cls: 'bg-cyan-100 text-cyan-700 border-cyan-200' }
                         : isOnLeave
                         ? { label: 'On Leave', cls: 'bg-violet-100 text-violet-700 border-violet-200' }
+                        : isMissingCheckOut
+                        ? { label: 'Missing Check Out', cls: 'bg-red-600 text-white border-red-700' }
                         : (STATUS_CFG[displayedStatus] ?? { label: displayedStatus, cls: 'bg-neutral-100 text-neutral-500 border-neutral-200' })
                       return (
                         <tr key={rec.id}
                           onClick={() => emp && openDetail(emp)}
                           className={`border-b border-neutral-100 cursor-pointer transition-colors hover:bg-primary/5 group ${
-                            isCompanyPaid ? 'bg-cyan-50/60' : isOnLeave ? 'bg-violet-50/60' : (i%2===0?'bg-white':'bg-neutral-50/60')
+                            isCompanyPaid ? 'bg-cyan-50/60' : isOnLeave ? 'bg-violet-50/60' : isMissingCheckOut ? 'bg-red-50' : (i%2===0?'bg-white':'bg-neutral-50/60')
                           }`}>
                           {/* # */}
                           <td className="px-3 py-2.5 text-center text-neutral-400 font-semibold w-10">{i+1}</td>
@@ -1469,10 +1490,12 @@ export default function AttendanceTab() {
                               : <span className="text-neutral-300">—</span>}
                           </td>
                           {/* Check Out */}
-                          <td className="px-3 py-2.5 font-mono font-semibold text-blue-600 whitespace-nowrap">
+                          <td className={`px-3 py-2.5 font-mono font-semibold whitespace-nowrap ${isMissingCheckOut ? 'text-red-700 bg-red-100/70' : 'text-blue-600'}`}>
                             {rec.check_out
                               ? fmt12(rec.check_out)
-                              : <span className="text-neutral-300">—</span>}
+                              : isMissingCheckOut
+                                ? <span className="font-black">Missing</span>
+                                : <span className="text-neutral-300">—</span>}
                           </td>
                           {/* Work Hrs */}
                           <td className="px-3 py-2.5 text-center font-bold font-mono text-secondary-700">
