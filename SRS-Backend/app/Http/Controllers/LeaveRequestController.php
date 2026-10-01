@@ -635,7 +635,7 @@ class LeaveRequestController extends Controller
             $employee = $locked->employee_id
                 ? Employee::withTrashed()->find($locked->employee_id)
                 : null;
-            $trackingNo = $locked->tracking_no ?: $this->generateTrackingNo($locked->type, $employee);
+            $trackingNo = $this->assignTrackingNoByFormDate($locked, $employee);
 
             $locked->update(array_merge($changes, [
                 'tracking_no' => $trackingNo,
@@ -1171,7 +1171,8 @@ class LeaveRequestController extends Controller
             ->where('id', '!=', $cancelled->id)
             ->where('tracking_no', 'like', $prefix . '%')
             ->whereNotIn('status', ['cancelled', 'rejected', 'rescheduled'])
-            ->orderByRaw('COALESCE(approved_at, created_at) ASC')
+            ->orderByRaw("CASE WHEN type = 'otr' THEN COALESCE(ot_date, request_date, DATE(created_at)) ELSE COALESCE(request_date, DATE(created_at)) END ASC")
+            ->orderBy('created_at')
             ->orderBy('id')
             ->lockForUpdate()
             ->get(['id']);
@@ -1405,22 +1406,64 @@ class LeaveRequestController extends Controller
         }
     }
 
-    private function generateTrackingNo(string $type, ?Employee $employee = null): string
+    /**
+     * Assign tracking numbers by the date written on the form, regardless of
+     * final-approval order. Existing numeric slots are preserved so a manually
+     * seeded series such as 014 continues as 015, 016, and so on.
+     */
+    private function assignTrackingNoByFormDate(LeaveRequest $leaveRequest, ?Employee $employee = null): string
     {
-        $prefix = $this->trackingPrefix($type, $employee);
+        $prefix = $this->trackingPrefix($leaveRequest->type, $employee);
 
-        $trackingNumbers = LeaveRequest::where('tracking_no', 'like', $prefix . '%')
-            ->whereNotNull('tracking_no')
+        $requests = LeaveRequest::query()
+            ->where(function ($query) use ($prefix, $leaveRequest) {
+                $query->where('tracking_no', 'like', $prefix . '%')
+                    ->orWhere('id', $leaveRequest->id);
+            })
+            ->whereNotIn('status', ['cancelled', 'rejected', 'rescheduled'])
+            ->orderByRaw("CASE WHEN type = 'otr' THEN COALESCE(ot_date, request_date, DATE(created_at)) ELSE COALESCE(request_date, DATE(created_at)) END ASC")
+            ->orderBy('created_at')
+            ->orderBy('id')
             ->lockForUpdate()
-            ->pluck('tracking_no');
+            ->get(['id', 'tracking_no']);
 
-        $largest = $trackingNumbers->reduce(function (int $max, string $trackingNo) use ($prefix) {
-            $tail = substr($trackingNo, strlen($prefix));
-            return ctype_digit($tail) ? max($max, (int) $tail) : $max;
-        }, 0);
-        $next = $largest + 1;
+        $slots = $requests
+            ->map(function (LeaveRequest $request) use ($prefix) {
+                $trackingNo = (string) $request->tracking_no;
+                $tail = str_starts_with($trackingNo, $prefix)
+                    ? substr($trackingNo, strlen($prefix))
+                    : '';
 
-        return $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+                return ctype_digit($tail) ? (int) $tail : null;
+            })
+            ->filter(fn ($slot) => $slot !== null)
+            ->unique()
+            ->sort()
+            ->values();
+
+        $next = ((int) ($slots->last() ?? 0)) + 1;
+        while ($slots->count() < $requests->count()) {
+            $slots->push($next++);
+        }
+
+        foreach ($requests as $request) {
+            DB::table('leave_requests')->where('id', $request->id)->update([
+                'tracking_no' => "__TRACKING_FORM_DATE__{$request->id}",
+            ]);
+        }
+
+        $assigned = null;
+        foreach ($requests->values() as $index => $request) {
+            $trackingNo = $prefix . str_pad((string) $slots[$index], 3, '0', STR_PAD_LEFT);
+            DB::table('leave_requests')->where('id', $request->id)->update([
+                'tracking_no' => $trackingNo,
+            ]);
+            if ((int) $request->id === (int) $leaveRequest->id) {
+                $assigned = $trackingNo;
+            }
+        }
+
+        return $assigned ?? $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
     }
 
     private function trackingPrefix(string $type, ?Employee $employee = null): string

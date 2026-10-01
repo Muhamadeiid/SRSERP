@@ -175,4 +175,103 @@ class HrLeaveClassificationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.tracking_no', 'LRF-EG1-015');
     }
+
+    public function test_tracking_sequence_uses_leave_request_date_instead_of_approval_date(): void
+    {
+        $admin = User::create([
+            'name' => 'Date Sequence Admin',
+            'email' => 'date-sequence-admin@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'admin',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Date Sequence Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+        LeaveBalance::create([
+            'employee_id' => $employee->id,
+            'annual' => 21,
+            'casual' => 7,
+            'sick' => 90,
+            'early' => 0,
+        ]);
+        $later = LeaveRequest::create([
+            'tracking_no' => 'LRF-EG1-014',
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'request_date' => '2026-10-10',
+            'start_date' => '2026-10-20',
+            'end_date' => '2026-10-20',
+            'days' => 1,
+            'status' => 'approved',
+        ]);
+        $earlier = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'request_date' => '2026-10-01',
+            'start_date' => '2026-10-15',
+            'end_date' => '2026-10-15',
+            'days' => 1,
+            'status' => 'hr_approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/leave-requests/{$earlier->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'LRF-EG1-014');
+
+        $this->assertSame('LRF-EG1-015', $later->fresh()->tracking_no);
+    }
+
+    public function test_tracking_sequence_uses_overtime_form_date_instead_of_approval_date(): void
+    {
+        $admin = User::create([
+            'name' => 'Overtime Date Admin',
+            'email' => 'overtime-date-admin@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'admin',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Overtime Date Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+        $later = LeaveRequest::create([
+            'tracking_no' => 'OTR-EG1-007',
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'otr',
+            'ot_date' => '2026-10-10',
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'hours' => 2,
+            'status' => 'approved',
+        ]);
+        $earlier = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'otr',
+            'ot_date' => '2026-10-01',
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'hours' => 2,
+            'status' => 'hr_approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/leave-requests/{$earlier->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'OTR-EG1-007');
+
+        $this->assertSame('OTR-EG1-008', $later->fresh()->tracking_no);
+    }
 }
