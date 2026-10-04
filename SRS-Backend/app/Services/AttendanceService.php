@@ -175,6 +175,21 @@ class AttendanceService
                 continue;
             }
 
+            // A reviewed manual day is authoritative, including deliberately
+            // missing punches and status overrides. Keep the raw device logs
+            // without replacing that decision on new or duplicate uploads.
+            $manual = Attendance::where('employee_id', $employee->id)
+                ->whereDate('date', $date)
+                ->where('is_manual', true)
+                ->exists();
+            if ($manual) {
+                foreach ($newLogs as $log) {
+                    $log->update(['processed' => true]);
+                }
+                $processedCount++;
+                continue;
+            }
+
             $expectedHours  = $this->getExpectedHours($employee);
             $isIntervention = $employee->isIntervention();
 

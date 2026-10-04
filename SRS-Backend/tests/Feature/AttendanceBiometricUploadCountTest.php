@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\Attendance;
+use App\Services\AttendanceService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -71,5 +73,32 @@ class AttendanceBiometricUploadCountTest extends TestCase
             ->assertJsonPath('data.punch_codes_count', 2)
             ->assertJsonPath('data.imported', 0)
             ->assertJsonPath('data.processed', 2);
+
+        $employee = Employee::where('punch_code', $codeOne)->firstOrFail();
+        $manual = app(AttendanceService::class)->createManualEntry([
+            'employee_id' => $employee->id,
+            'date' => $date,
+            'check_in' => '08:00',
+            'check_out' => '18:00',
+            'status' => 'permission',
+            'notes' => 'Reviewed manual correction',
+        ], $user->id);
+        $before = $manual->fresh()->getAttributes();
+
+        // Both a duplicate upload and a later upload containing new punches
+        // must preserve every field of the manually reviewed day.
+        foreach ([$content, $content . "\n{$codeOne} {$date} 19:00:00 1 5 TEST01 0\n{$codeTwo} {$date} 19:00:00 1 5 TEST02 0"] as $upload) {
+            $this->postJson('/api/attendance/upload', [
+                'file' => UploadedFile::fake()->createWithContent('attendance.dat', $upload),
+            ])->assertOk();
+            $this->assertSame($before, $manual->fresh()->getAttributes());
+        }
+        $this->assertDatabaseHas('attendance_logs', [
+            'punch_code' => $codeOne,
+            'timestamp' => $date . ' 19:00:00',
+            'processed' => true,
+        ]);
+        $this->assertSame('19:00:00', Attendance::where('employee_id', Employee::where('punch_code', $codeTwo)->firstOrFail()->id)
+            ->whereDate('date', $date)->firstOrFail()->check_out);
     }
 }
