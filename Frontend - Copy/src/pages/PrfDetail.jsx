@@ -61,7 +61,7 @@ export default function PrfDetail() {
   const isApproved       = prf?.status === 'approved'
   const isProcurementUser = ['procurement', 'purchasing', 'admin'].includes(user?.role)
   const backPath         = user?.role === 'admin' ? '/procurement' : '/'
-  const canCreatePO      = isApproved && ['admin', 'procurement', 'purchasing'].includes(user?.role)
+  const canCreatePO      = isApproved && user?.role === 'admin'
   const hasLinkedPO      = !!prf?.purchase_order
 
   const saveNumber = async () => {
@@ -160,7 +160,7 @@ export default function PrfDetail() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="w-full p-4 sm:p-6 lg:p-7 space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">

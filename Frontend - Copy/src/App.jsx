@@ -244,7 +244,7 @@ export default function App() {
           <Route path="/purchase-request/new" element={<PrfNewPage />} />
           <Route path="/purchase-request/:id" element={<PrfDetail />} />
           <Route path="/purchase-order/new/:prfId" element={
-            <ProtectedRoute roles={['admin', 'procurement', 'purchasing']} redirect="/">
+            <ProtectedRoute roles={['admin']} redirect="/">
               <PoNewPage />
             </ProtectedRoute>
           } />

@@ -72,8 +72,8 @@ class PurchaseOrderController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
-        if (! $this->canManage()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (! auth()->user()?->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Only administrators can create purchase orders'], 403);
         }
 
         $v = Validator::make($request->all(), [

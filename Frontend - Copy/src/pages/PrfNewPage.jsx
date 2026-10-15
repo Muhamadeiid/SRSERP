@@ -132,7 +132,7 @@ export default function PrfNewPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="w-full p-4 sm:p-6 lg:p-7 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-extrabold text-secondary-700 flex items-center gap-2">
