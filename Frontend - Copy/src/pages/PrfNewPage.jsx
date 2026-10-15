@@ -11,6 +11,7 @@ import { PRF_TEMPLATES } from '../utils/prfTemplates'
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
 const DELIVERY_LOCATIONS = ['Ganz depot', 'Tura workshop', 'Kozzika', 'Katamya']
+const EHS_REQUIREMENTS = ['SDS', 'No EHS Required']
 const LEGACY_DELIVERY_LOCATIONS = {
   Ganz: 'Ganz depot',
   Tura: 'Tura workshop',
@@ -22,7 +23,7 @@ const EMPTY_ITEM = {
   technical_specifications: '',
   quantity: '',
   unit: 'pcs',
-  ehs_requirements: '',
+  ehs_requirements: 'No EHS Required',
   required_by_date: '',
 }
 
@@ -79,7 +80,7 @@ export default function PrfNewPage() {
             technical_specifications: item.technical_specifications ?? '',
             quantity: String(item.quantity ?? ''),
             unit: item.unit ?? 'pcs',
-            ehs_requirements: item.ehs_requirements ?? '',
+            ehs_requirements: item.ehs_requirements === 'SDS' ? 'SDS' : 'No EHS Required',
             required_by_date: item.required_by_date ? String(item.required_by_date).slice(0, 10) : '',
           })),
         })
@@ -96,7 +97,12 @@ export default function PrfNewPage() {
     setForm(f => {
       // Replace the first fully-empty row, otherwise append
       const emptyIdx = f.items.findIndex(it => !it.description.trim())
-      const newItem = { ...EMPTY_ITEM, ...tpl, quantity: String(tpl.quantity) }
+      const newItem = {
+        ...EMPTY_ITEM,
+        ...tpl,
+        quantity: String(tpl.quantity),
+        ehs_requirements: 'No EHS Required',
+      }
       const items = emptyIdx >= 0
         ? f.items.map((it, i) => i === emptyIdx ? newItem : it)
         : [...f.items, newItem]
@@ -331,7 +337,17 @@ export default function PrfNewPage() {
                     <td className="px-2 py-2 border border-neutral-200"><input value={it.technical_specifications} onChange={e => updateItem(i, 'technical_specifications', e.target.value)} placeholder="Specs / model" className="w-full px-2 py-1 outline-none text-xs" /></td>
                     <td className="px-2 py-2 border border-neutral-200"><input type="number" min="0" step="0.01" value={it.quantity} onChange={e => updateItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 outline-none text-xs text-center" /></td>
                     <td className="px-2 py-2 border border-neutral-200"><input value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} placeholder="pcs" className="w-full px-2 py-1 outline-none text-xs text-center" /></td>
-                    <td className="px-2 py-2 border border-neutral-200"><input value={it.ehs_requirements} onChange={e => updateItem(i, 'ehs_requirements', e.target.value)} placeholder="—" className="w-full px-2 py-1 outline-none text-xs" /></td>
+                    <td className="px-2 py-2 border border-neutral-200">
+                      <select
+                        value={it.ehs_requirements}
+                        onChange={e => updateItem(i, 'ehs_requirements', e.target.value)}
+                        className="w-full px-2 py-1 bg-white outline-none text-xs"
+                      >
+                        {EHS_REQUIREMENTS.map(requirement => (
+                          <option key={requirement} value={requirement}>{requirement}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-2 py-2 border border-neutral-200"><input type="date" value={it.required_by_date} onChange={e => updateItem(i, 'required_by_date', e.target.value)} className="w-full px-2 py-1 outline-none text-xs" /></td>
                     <td className="px-1 py-2 text-center border border-neutral-200">
                       <button type="button" onClick={() => removeRow(i)} disabled={form.items.length === 1}

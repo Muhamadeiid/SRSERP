@@ -138,7 +138,7 @@ class PrfController extends Controller
             'items.*.technical_specifications' => 'nullable|string|max:2000',
             'items.*.quantity'              => 'required|numeric|min:0.01',
             'items.*.unit'                  => 'nullable|string|max:50',
-            'items.*.ehs_requirements'      => 'nullable|string|max:1000',
+            'items.*.ehs_requirements'      => 'nullable|in:SDS,No EHS Required',
             'items.*.required_by_date'      => 'nullable|date',
         ]);
 
@@ -206,7 +206,7 @@ class PrfController extends Controller
             'items.*.technical_specifications' => 'nullable|string|max:2000',
             'items.*.quantity'              => 'required|numeric|min:0.01',
             'items.*.unit'                  => 'nullable|string|max:50',
-            'items.*.ehs_requirements'      => 'nullable|string|max:1000',
+            'items.*.ehs_requirements'      => 'nullable|in:SDS,No EHS Required',
             'items.*.required_by_date'      => 'nullable|date',
         ]);
 

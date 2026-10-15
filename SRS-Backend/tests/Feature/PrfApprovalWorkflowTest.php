@@ -84,16 +84,17 @@ class PrfApprovalWorkflowTest extends TestCase
         $prfId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
             'delivery_location' => 'Tura workshop',
-            'items' => [['description' => 'Original item', 'quantity' => 1, 'unit' => 'pcs']],
+            'items' => [['description' => 'Original item', 'quantity' => 1, 'unit' => 'pcs', 'ehs_requirements' => 'SDS']],
         ])->assertCreated()->json('data.id');
 
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
             'delivery_location' => 'Ganz depot',
-            'items' => [['description' => 'Updated item', 'quantity' => 2, 'unit' => 'pcs']],
+            'items' => [['description' => 'Updated item', 'quantity' => 2, 'unit' => 'pcs', 'ehs_requirements' => 'No EHS Required']],
         ])->assertOk()
             ->assertJsonPath('data.delivery_location', 'Ganz depot')
-            ->assertJsonPath('data.items.0.description', 'Updated item');
+            ->assertJsonPath('data.items.0.description', 'Updated item')
+            ->assertJsonPath('data.items.0.ehs_requirements', 'No EHS Required');
 
         Sanctum::actingAs($otherUser);
         $this->putJson("/api/procurement/prfs/{$prfId}", [
