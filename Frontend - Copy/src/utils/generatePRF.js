@@ -23,7 +23,9 @@ const T_TOP = 0, T_CATEGORY = 1, T_ITEMS = 2, T_DELIVERY = 3, T_CONTACT = 4, T_N
 const MIN_ITEM_ROWS = 7
 const EMU_PER_INCH = 914400
 const NOTES_IMAGE_MAX_H = 1.0  // inches
-const SIGNATURE_MAX_H = 0.38   // inches
+// Fixed signature box (inches) — fits the 1.83in approval column with padding
+const SIGNATURE_W = 1.5
+const SIGNATURE_H = 0.45
 
 // Template label → system category value (system spells some labels differently)
 const CATEGORY_ALIASES = {
@@ -186,6 +188,56 @@ function naturalSize(uri) {
     img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 })
     img.onerror = () => resolve(null)
     img.src = uri
+  })
+}
+
+// Crop a signature to its visible ink (ignoring transparent / near-white margins)
+// and centre it in a canvas with the fixed signature box's aspect ratio. Without
+// this, signatures saved with different padding print at visibly different sizes.
+function normalizeSignature(dataUri) {
+  const img = decodeDataUri(dataUri)
+  if (!img) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const el = new Image()
+    el.onerror = () => resolve(null)
+    el.onload = () => {
+      const w = el.naturalWidth, h = el.naturalHeight
+      if (!w || !h) return resolve(null)
+      const src = document.createElement('canvas')
+      src.width = w; src.height = h
+      const sctx = src.getContext('2d')
+      sctx.drawImage(el, 0, 0)
+      const px = sctx.getImageData(0, 0, w, h).data
+
+      let minX = w, minY = h, maxX = -1, maxY = -1
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4
+          const ink = px[i + 3] > 24 && (px[i] < 225 || px[i + 1] < 225 || px[i + 2] < 225)
+          if (!ink) continue
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+      if (maxX < 0) return resolve(img.uri)   // nothing detected — use as-is
+
+      const cropW = maxX - minX + 1, cropH = maxY - minY + 1
+      const OUT_H = 180   // ~400 dpi at the 0.45in box height
+      const OUT_W = Math.round(OUT_H * SIGNATURE_W / SIGNATURE_H)
+      const PAD = 0.04
+      const scale = Math.min((OUT_W * (1 - 2 * PAD)) / cropW, (OUT_H * (1 - 2 * PAD)) / cropH)
+      const dw = cropW * scale, dh = cropH * scale
+
+      const out = document.createElement('canvas')
+      out.width = OUT_W; out.height = OUT_H
+      const octx = out.getContext('2d')
+      octx.imageSmoothingQuality = 'high'
+      octx.drawImage(src, minX, minY, cropW, cropH, (OUT_W - dw) / 2, (OUT_H - dh) / 2, dw, dh)
+      resolve(out.toDataURL('image/png'))
+    }
+    el.src = img.uri
   })
 }
 
@@ -363,17 +415,22 @@ async function fillApprovals(tbl, prf, images) {
 
     const blocks = []
 
-    // Column is 1.83in wide; keep the signature inside the cell padding
-    const sigRun = s.sig ? await images.run(doc, s.sig, 1.5, SIGNATURE_MAX_H) : null
+    // Signature only. Every signature is trimmed to its ink and placed in the
+    // same fixed box, so all four render at an identical size.
+    const sigUri = s.sig ? await normalizeSignature(s.sig) : null
+    const sigRun = sigUri ? await images.run(doc, sigUri, SIGNATURE_W, SIGNATURE_H) : null
     if (sigRun) {
       const p = proto.cloneNode(true); clearRuns(p)
-      setAlign(p, 'center'); setSpacing(p, { before: 40, after: 0, line: 240 })
+      setAlign(p, 'center'); setSpacing(p, { before: 40, after: 40, line: 240 })
       p.appendChild(sigRun)
-      blocks.push(p)
+      proto.replaceWith(p)
+      continue
     }
+
+    // Approved by someone without a stored e-signature: show who and when instead
     if (s.name) {
       const p = proto.cloneNode(true); clearRuns(p)
-      setAlign(p, 'center'); setSpacing(p, { before: sigRun ? 0 : 40, after: 0, line: 240 })
+      setAlign(p, 'center'); setSpacing(p, { before: 40, after: 0, line: 240 })
       p.appendChild(textRun(doc, runPropsFrom(proto, { size: 18 }), s.name))
       blocks.push(p)
     }
