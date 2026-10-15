@@ -243,11 +243,6 @@ export default function App() {
           {/* Purchase requests are an employee service; the Procurement module itself remains admin-only. */}
           <Route path="/purchase-request/new" element={<PrfNewPage />} />
           <Route path="/purchase-request/:id" element={<PrfDetail />} />
-          <Route path="/purchase-order/new/:prfId" element={
-            <ProtectedRoute roles={['admin', 'procurement', 'purchasing']} redirect="/">
-              <PoNewPage />
-            </ProtectedRoute>
-          } />
           <Route path="/purchase-order/:id" element={<PoDetail />} />
           <Route path="/goods-inspection/:id" element={<IgiDetail />} />
           {/* Release Note (SRS-INV-P01-F06) — any authenticated user can raise one */}

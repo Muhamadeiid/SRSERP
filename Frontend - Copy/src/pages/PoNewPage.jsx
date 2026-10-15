@@ -139,7 +139,7 @@ export default function PoNewPage() {
       }
       const res = await createPo(payload)
       setSubmitted(res?.data ?? null)
-      setTimeout(() => navigate(`/purchase-order/${res?.data?.id}`), 900)
+      setTimeout(() => navigate(`/procurement/po/${res?.data?.id}`), 900)
     } catch (e2) {
       setErr(e2.message || 'Failed to create PO')
     } finally {
