@@ -399,10 +399,10 @@ async function fillApprovals(tbl, prf, images) {
 
   // Requester → Procurement Specialist → EHS Manager → Depot Manager
   const slots = [
-    { sig: prf?.requester?.e_signature, name: prf?.requester?.name, date: prf?.created_at ?? prf?.date },
-    { sig: proc?.approver?.e_signature,  name: proc?.approver?.name,  date: proc?.acted_at },
-    { sig: ehs?.approver?.e_signature,   name: ehs?.approver?.name,   date: ehs?.acted_at },
-    { sig: depot?.approver?.e_signature, name: depot?.approver?.name, date: depot?.acted_at },
+    { sig: prf?.requester?.e_signature, name: prf?.requester?.name },
+    { sig: proc?.approver?.e_signature,  name: proc?.approver?.name },
+    { sig: ehs?.approver?.e_signature,   name: ehs?.approver?.name },
+    { sig: depot?.approver?.e_signature, name: depot?.approver?.name },
   ]
   const cells = kids(kids(tbl, 'tr')[2], 'tc')
 
@@ -413,36 +413,22 @@ async function fillApprovals(tbl, prf, images) {
     kids(tc, 'p').slice(1).forEach(p => p.remove())
     if (!s.name && !s.sig) continue
 
-    const blocks = []
+    const p = proto.cloneNode(true); clearRuns(p)
+    setAlign(p, 'center'); setSpacing(p, { before: 40, after: 40, line: 240 })
 
     // Signature only. Every signature is trimmed to its ink and placed in the
     // same fixed box, so all four render at an identical size.
     const sigUri = s.sig ? await normalizeSignature(s.sig) : null
     const sigRun = sigUri ? await images.run(doc, sigUri, SIGNATURE_W, SIGNATURE_H) : null
     if (sigRun) {
-      const p = proto.cloneNode(true); clearRuns(p)
-      setAlign(p, 'center'); setSpacing(p, { before: 40, after: 40, line: 240 })
       p.appendChild(sigRun)
-      proto.replaceWith(p)
+    } else if (s.name) {
+      // Approved by someone without a stored e-signature: show who approved instead
+      p.appendChild(textRun(doc, runPropsFrom(proto, { size: 18 }), s.name))
+    } else {
       continue
     }
-
-    // Approved by someone without a stored e-signature: show who and when instead
-    if (s.name) {
-      const p = proto.cloneNode(true); clearRuns(p)
-      setAlign(p, 'center'); setSpacing(p, { before: 40, after: 0, line: 240 })
-      p.appendChild(textRun(doc, runPropsFrom(proto, { size: 18 }), s.name))
-      blocks.push(p)
-    }
-    if (s.date) {
-      const p = proto.cloneNode(true); clearRuns(p)
-      setAlign(p, 'center'); setSpacing(p, { before: 0, after: 40, line: 240 })
-      p.appendChild(textRun(doc, runPropsFrom(proto, { size: 16 }), fmtDate(s.date)))
-      blocks.push(p)
-    }
-    if (!blocks.length) continue
-    proto.replaceWith(blocks[0])
-    blocks.slice(1).forEach(b => tc.appendChild(b))
+    proto.replaceWith(p)
   }
 }
 
