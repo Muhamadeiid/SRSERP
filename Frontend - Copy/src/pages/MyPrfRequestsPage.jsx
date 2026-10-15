@@ -9,8 +9,8 @@ const fmt = value => value
 
 const stageText = {
   pending_procurement: 'Waiting for Procurement',
-  pending_ehs: 'Procurement approved · Waiting for EHS',
-  pending_depot: 'EHS approved · Waiting for Depot Manager',
+  pending_ehs: 'Procurement approved · Waiting for EHS Manager',
+  pending_depot: 'EHS Manager approved · Waiting for Depot Manager',
   approved: 'Fully approved',
   rejected: 'Rejected',
   cancelled: 'Cancelled',

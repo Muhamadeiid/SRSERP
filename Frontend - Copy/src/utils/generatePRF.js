@@ -122,7 +122,7 @@ export async function generatePRF(prf) {
     approvals.find(a => a.role === role && a.action === 'approved') || null
 
   const procApprovalA  = findApproval('procurement')
-  const ehsApprovalA   = findApproval('ehs')
+  const ehsApprovalA   = findApproval('ehs_manager') || findApproval('ehs')
   const depotApprovalA = findApproval('depot_manager')
 
   const selectedCats = Array.isArray(prf?.material_category) ? prf.material_category : []

@@ -19,7 +19,8 @@ class PrfApprovalWorkflowTest extends TestCase
     {
         $requester = $this->user('staff');
         $procurement = $this->user('procurement');
-        $ehs = $this->user('ehs');
+        $ehsOfficer = $this->user('ehs');
+        $ehs = $this->user('ehs_manager');
         $depot = $this->user('depot_manager');
 
         Sanctum::actingAs($requester);
@@ -54,7 +55,12 @@ class PrfApprovalWorkflowTest extends TestCase
         $this->assertSame(0, $this->unreadFor($procurement, $prfId));
         $this->assertSame(1, $this->unreadFor($ehs, $prfId));
 
+        Sanctum::actingAs($ehsOfficer);
+        $this->postJson("/api/procurement/prfs/{$prfId}/approve")
+            ->assertForbidden();
+
         // A repeated click from the previous approver cannot approve the next stage.
+        Sanctum::actingAs($procurement);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
             ->assertForbidden();
         $this->assertSame(1, PrfApproval::where('prf_id', $prfId)->count());

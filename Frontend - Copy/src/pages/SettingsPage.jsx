@@ -672,6 +672,7 @@ function PermissionMatrixPanel() {
     ccp:           { label: 'CCP',           bg: 'bg-cyan-50',   text: 'text-cyan-700',  dot: 'bg-cyan-400' },
     procurement:   { label: 'Procurement',   bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500' },
     ehs:           { label: 'EHS',           bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
+    ehs_manager:   { label: 'EHS Manager',   bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500' },
   }
 
   const grantsCount = Object.values(data.grants ?? {}).reduce((s, arr) => s + (arr?.length ?? 0), 0)

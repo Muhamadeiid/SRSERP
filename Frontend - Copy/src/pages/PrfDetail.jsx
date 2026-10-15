@@ -17,6 +17,7 @@ const fmtFullDay = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday: '
 const STAGE_LABEL = {
   procurement:   'Procurement',
   ehs:           'EHS / Safety',
+  ehs_manager:   'EHS Manager',
   depot_manager: 'Depot Manager',
 }
 
@@ -397,13 +398,13 @@ export default function PrfDetail() {
             rejected={prf.status === 'rejected' && !approvalsByRole.procurement}
           />
           <ApprovalBox
-            label="EHS / Safety"
-            name={approvalsByRole.ehs?.approver?.name}
-            date={approvalsByRole.ehs?.acted_at}
-            sig={approvalsByRole.ehs?.approver?.e_signature}
-            done={!!approvalsByRole.ehs}
+            label="EHS Manager"
+            name={(approvalsByRole.ehs_manager ?? approvalsByRole.ehs)?.approver?.name}
+            date={(approvalsByRole.ehs_manager ?? approvalsByRole.ehs)?.acted_at}
+            sig={(approvalsByRole.ehs_manager ?? approvalsByRole.ehs)?.approver?.e_signature}
+            done={!!(approvalsByRole.ehs_manager ?? approvalsByRole.ehs)}
             current={prf.status === 'pending_ehs'}
-            rejected={prf.status === 'rejected' && !!approvalsByRole.procurement && !approvalsByRole.ehs}
+            rejected={prf.status === 'rejected' && !!approvalsByRole.procurement && !(approvalsByRole.ehs_manager ?? approvalsByRole.ehs)}
           />
           <ApprovalBox
             label="Depot Manager"
@@ -412,7 +413,7 @@ export default function PrfDetail() {
             sig={approvalsByRole.depot_manager?.approver?.e_signature}
             done={!!approvalsByRole.depot_manager}
             current={prf.status === 'pending_depot'}
-            rejected={prf.status === 'rejected' && !!approvalsByRole.ehs && !approvalsByRole.depot_manager}
+            rejected={prf.status === 'rejected' && !!(approvalsByRole.ehs_manager ?? approvalsByRole.ehs) && !approvalsByRole.depot_manager}
           />
         </div>
       </div>

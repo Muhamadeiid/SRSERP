@@ -108,7 +108,7 @@ class User extends Authenticatable
 
     public function isEHS(): bool
     {
-        return $this->role === 'ehs' || $this->role === 'admin';
+        return in_array($this->role, ['ehs', 'ehs_manager', 'admin'], true);
     }
 
     public function isDepotManager(): bool

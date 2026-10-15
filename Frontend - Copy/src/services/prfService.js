@@ -45,7 +45,7 @@ export const updatePrfNumber = (id, prf_number) =>
 export const PRF_STATUS_LABELS = {
   draft:                'Draft',
   pending_procurement:  'Pending Procurement',
-  pending_ehs:          'Pending EHS',
+  pending_ehs:          'Pending EHS Manager',
   pending_depot:        'Pending Depot Manager',
   approved:             'Approved',
   rejected:             'Rejected',
@@ -80,7 +80,7 @@ export const MATERIAL_CATEGORIES = [
 // Map a current PRF status to the role allowed to act on it
 export const STATUS_TO_ROLE = {
   pending_procurement: 'procurement',
-  pending_ehs:         'ehs',
+  pending_ehs:         'ehs_manager',
   pending_depot:       'depot_manager',
 }
 

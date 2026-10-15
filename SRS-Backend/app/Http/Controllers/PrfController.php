@@ -34,7 +34,7 @@ class PrfController extends Controller
     // authority check, so approval rights are managed from the Permission Matrix.
     private const PIPELINE = [
         'pending_procurement' => ['role' => 'procurement',   'permission' => 'prf.approve_procurement', 'next' => 'pending_ehs',    'label' => 'Procurement'],
-        'pending_ehs'         => ['role' => 'ehs',           'permission' => 'prf.approve_ehs',         'next' => 'pending_depot',  'label' => 'EHS / Safety'],
+        'pending_ehs'         => ['role' => 'ehs_manager',   'permission' => 'prf.approve_ehs',         'next' => 'pending_depot',  'label' => 'EHS Manager'],
         'pending_depot'       => ['role' => 'depot_manager', 'permission' => 'prf.approve_depot',       'next' => 'approved',       'label' => 'Depot Manager'],
     ];
 
@@ -61,7 +61,7 @@ class PrfController extends Controller
         } elseif ($user->isAdmin()) {
             // full visibility
         } elseif (
-            in_array($user->role, ['procurement', 'purchasing', 'ehs', 'depot_manager'], true)
+            in_array($user->role, ['procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
             || $user->hasPermission('prf.approve_procurement')
             || $user->hasPermission('prf.approve_ehs')
             || $user->hasPermission('prf.approve_depot')
@@ -110,7 +110,7 @@ class PrfController extends Controller
     {
         $user = auth()->user();
         $canViewAll = $user->isAdmin()
-            || in_array($user->role, ['procurement', 'purchasing', 'ehs', 'depot_manager'], true)
+            || in_array($user->role, ['procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
             || $user->hasPermission('procurement.access')
             || $user->hasPermission('prf.approve_procurement')
             || $user->hasPermission('prf.approve_ehs')
