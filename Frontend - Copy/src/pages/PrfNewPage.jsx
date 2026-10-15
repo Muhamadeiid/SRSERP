@@ -165,6 +165,10 @@ export default function PrfNewPage() {
       setErr('Please add at least one item with a description')
       return
     }
+    if (form.material_category.length === 0) {
+      setErr('Please select at least one Material Category')
+      return
+    }
 
     setSaving(true)
     try {
@@ -235,7 +239,10 @@ export default function PrfNewPage() {
 
         {/* ── Material Category (8 options, 2 columns × 4 rows — matches PDF) ── */}
         <div className="px-4 py-4 border-b-2 border-neutral-200">
-          <p className="text-xs font-bold text-secondary-700 mb-3">Material Category:</p>
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-xs font-bold text-secondary-700">Material Category:</p>
+            <span className="text-[10px] font-bold text-red-600">Required</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
             {MATERIAL_CATEGORIES.map(cat => (
               <label key={cat}

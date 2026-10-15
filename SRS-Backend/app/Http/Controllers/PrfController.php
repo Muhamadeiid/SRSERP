@@ -14,9 +14,21 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class PrfController extends Controller
 {
+    private const MATERIAL_CATEGORIES = [
+        'Components and Parts',
+        'Safety Equipment',
+        'Consumables',
+        'Office Supply / Furniture',
+        'Tools and Equipment',
+        'IT Equipment',
+        'Electronics',
+        'Others',
+    ];
+
     // ── Stage configuration (sequential pipeline) ───────────────
     // 'role' stays for notifications (who to email). 'permission' is the actual
     // authority check, so approval rights are managed from the Permission Matrix.
@@ -129,8 +141,8 @@ class PrfController extends Controller
             'delivery_contact'              => 'nullable|string|max:255',
             'requester_phone'               => 'nullable|string|max:50',
             'requester_email'               => 'nullable|email|max:255',
-            'material_category'             => 'nullable|array',
-            'material_category.*'           => 'string|max:100',
+            'material_category'             => 'required|array|min:1',
+            'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
             'notes_image'                   => 'nullable|string',   // base64 data-URI (e.g. data:image/png;base64,...)
             'items'                         => 'required|array|min:1',
@@ -197,8 +209,8 @@ class PrfController extends Controller
             'delivery_contact'              => 'nullable|string|max:255',
             'requester_phone'               => 'nullable|string|max:50',
             'requester_email'               => 'nullable|email|max:255',
-            'material_category'             => 'nullable|array',
-            'material_category.*'           => 'string|max:100',
+            'material_category'             => 'required|array|min:1',
+            'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
             'notes_image'                   => 'nullable|string',
             'items'                         => 'required|array|min:1',

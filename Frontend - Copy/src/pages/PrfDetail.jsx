@@ -285,7 +285,20 @@ export default function PrfDetail() {
           </div>
         </div>
         <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50/50">
-          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide mb-2">Material Category</p>
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide mb-2">Selected Material Categories</p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {Array.isArray(prf.material_category) && prf.material_category.length > 0 ? (
+              prf.material_category.map(cat => (
+                <span key={cat} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-primary/40 bg-primary/10 text-primary text-xs font-bold rounded-lg">
+                  <CheckCircle className="w-4 h-4" />
+                  {cat}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs font-semibold text-red-600">No category was recorded for this legacy request.</span>
+            )}
+          </div>
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide mb-2">All Material Categories</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {MATERIAL_CATEGORIES.map(cat => {
               const selected = Array.isArray(prf.material_category) && prf.material_category.includes(cat)

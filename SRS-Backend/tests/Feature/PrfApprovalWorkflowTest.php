@@ -23,9 +23,16 @@ class PrfApprovalWorkflowTest extends TestCase
         $depot = $this->user('depot_manager');
 
         Sanctum::actingAs($requester);
+        $this->postJson('/api/procurement/prfs', [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Kozzika',
+            'items' => [['description' => 'Missing category', 'quantity' => 1]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('material_category');
+
         $prfId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
             'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
             'items' => [[
                 'description' => 'Workflow test item',
                 'quantity' => 1,
@@ -84,12 +91,14 @@ class PrfApprovalWorkflowTest extends TestCase
         $prfId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
             'delivery_location' => 'Tura workshop',
+            'material_category' => ['Safety Equipment'],
             'items' => [['description' => 'Original item', 'quantity' => 1, 'unit' => 'pcs', 'ehs_requirements' => 'SDS']],
         ])->assertCreated()->json('data.id');
 
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
             'delivery_location' => 'Ganz depot',
+            'material_category' => ['Tools and Equipment'],
             'items' => [['description' => 'Updated item', 'quantity' => 2, 'unit' => 'pcs', 'ehs_requirements' => 'No EHS Required']],
         ])->assertOk()
             ->assertJsonPath('data.delivery_location', 'Ganz depot')
@@ -100,6 +109,7 @@ class PrfApprovalWorkflowTest extends TestCase
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
             'delivery_location' => 'Katamya',
+            'material_category' => ['Others'],
             'items' => [['description' => 'Unauthorized edit', 'quantity' => 1]],
         ])->assertForbidden();
 
@@ -110,6 +120,7 @@ class PrfApprovalWorkflowTest extends TestCase
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
             'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
             'items' => [['description' => 'Too late', 'quantity' => 1]],
         ])->assertForbidden();
         $this->postJson("/api/procurement/prfs/{$prfId}/cancel")->assertForbidden();
@@ -117,6 +128,7 @@ class PrfApprovalWorkflowTest extends TestCase
         $cancelId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
             'delivery_location' => 'Katamya',
+            'material_category' => ['Office Supply / Furniture'],
             'items' => [['description' => 'Cancel me', 'quantity' => 1, 'unit' => 'pcs']],
         ])->assertCreated()->json('data.id');
 
