@@ -55,6 +55,7 @@ const ProcurementLayout = lazyWithRetry(importProcLayout)
 const PrfDashboard      = lazyWithRetry(importPrfDashboard)
 const PrfNewPage        = lazyWithRetry(() => import('./pages/PrfNewPage'))
 const PrfDetail         = lazyWithRetry(() => import('./pages/PrfDetail'))
+const MyPrfRequestsPage = lazyWithRetry(() => import('./pages/MyPrfRequestsPage'))
 const PrfMasterList     = lazyWithRetry(() => import('./pages/PrfMasterList'))
 const PoNewPage         = lazyWithRetry(() => import('./pages/PoNewPage'))
 const PoDetail          = lazyWithRetry(() => import('./pages/PoDetail'))
@@ -241,7 +242,9 @@ export default function App() {
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/incident-reports" element={<IncidentReportsPage />} />
           {/* Purchase requests are an employee service; the Procurement module itself remains admin-only. */}
+          <Route path="/purchase-requests" element={<MyPrfRequestsPage />} />
           <Route path="/purchase-request/new" element={<PrfNewPage />} />
+          <Route path="/purchase-request/:id/edit" element={<PrfNewPage />} />
           <Route path="/purchase-request/:id" element={<PrfDetail />} />
           <Route path="/purchase-order/new/:prfId" element={
             <ProtectedRoute roles={['admin']} redirect="/">

@@ -172,6 +172,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/prfs',                  [PrfController::class, 'index']);
         Route::post('/prfs',                 [PrfController::class, 'store']);
         Route::get('/prfs/{prf}',            [PrfController::class, 'show']);
+        Route::put('/prfs/{prf}',            [PrfController::class, 'update']);
+        Route::post('/prfs/{prf}/cancel',    [PrfController::class, 'cancel']);
         Route::post('/prfs/{prf}/approve',     [PrfController::class, 'approve']);
         Route::post('/prfs/{prf}/reject',      [PrfController::class, 'reject']);
         Route::put('/prfs/{prf}/tracking-no',  [PrfController::class, 'updateTrackingNo']);

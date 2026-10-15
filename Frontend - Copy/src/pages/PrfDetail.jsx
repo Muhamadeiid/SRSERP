@@ -3,11 +3,11 @@ import { useSelector } from 'react-redux'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Loader2, X, Check, Printer, ArrowLeft, FileText, MessageSquare,
-  CheckCircle, XCircle, Clock, Plus,
+  CheckCircle, XCircle, Clock, Plus, Pencil, Ban,
 } from 'lucide-react'
 import {
-  getPrf, approvePrf, rejectPrf, updatePrfNumber,
-  PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage, cleanPrfNumber,
+  getPrf, approvePrf, rejectPrf, updatePrfNumber, cancelPrf,
+  PRF_STATUS_LABELS, PRF_STATUS_STYLES, MATERIAL_CATEGORIES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
 import { createQuotation, getQuotations, getSuppliers } from '../services/procurementRegistryService'
 
@@ -60,9 +60,12 @@ export default function PrfDetail() {
   const canAct           = prf && canActOnStage(user, prf.status)
   const isApproved       = prf?.status === 'approved'
   const isProcurementUser = ['procurement', 'purchasing', 'admin'].includes(user?.role)
-  const backPath         = user?.role === 'admin' ? '/procurement' : '/'
+  const backPath         = user?.role === 'admin' ? '/procurement' : '/purchase-requests'
   const canCreatePO      = isApproved && user?.role === 'admin'
   const hasLinkedPO      = !!prf?.purchase_order
+  const canModify        = String(prf?.requested_by) === String(user?.id)
+    && prf?.status === 'pending_procurement'
+    && (prf?.approvals ?? []).length === 0
 
   const saveNumber = async () => {
     const value = numberDraft.trim()
@@ -120,6 +123,19 @@ export default function PrfDetail() {
   const handlePrint = async () => {
     const { generatePRF } = await import('../utils/generatePRF')
     return generatePRF(prf)
+  }
+
+  const handleCancel = async () => {
+    if (!window.confirm('Cancel this purchase request? This action cannot be undone.')) return
+    setBusy(true)
+    try {
+      const res = await cancelPrf(id)
+      setPrf(res?.data ?? null)
+    } catch (e) {
+      alert(e.message || 'Failed to cancel purchase request')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const saveQuote = async e => {
@@ -202,11 +218,23 @@ export default function PrfDetail() {
                 )}
               </h1>
             )}
-            <p className="text-xs text-neutral-400 mt-0.5">Submitted on {fmtFullDay(prf.created_at)}</p>
+            <p className="text-xs text-neutral-400 mt-0.5">Submitted on {fmtFullDay(prf.created_at)} · Last updated {fmtShort(prf.updated_at)}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {canModify && (
+            <>
+              <button onClick={() => navigate(`/purchase-request/${prf.id}/edit`)} disabled={busy}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 text-secondary text-xs font-bold rounded-lg hover:border-primary hover:text-primary disabled:opacity-50">
+                <Pencil className="w-3.5 h-3.5" /> Edit
+              </button>
+              <button onClick={handleCancel} disabled={busy}
+                className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-100 disabled:opacity-50">
+                <Ban className="w-3.5 h-3.5" /> Cancel
+              </button>
+            </>
+          )}
           <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${PRF_STATUS_STYLES[prf.status]}`}>
             {PRF_STATUS_LABELS[prf.status]}
           </span>
@@ -256,16 +284,31 @@ export default function PrfDetail() {
             <p className="text-xs text-secondary-700 font-semibold">{prf.delivery_contact || '—'}</p>
           </div>
         </div>
-        {Array.isArray(prf.material_category) && prf.material_category.length > 0 && (
-          <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50/50">
-            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide mb-2">Material Category</p>
-            <div className="flex flex-wrap gap-1.5">
-              {prf.material_category.map(cat => (
-                <span key={cat} className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-full">{cat}</span>
-              ))}
-            </div>
+        <div className="px-4 py-3 border-t border-neutral-100 bg-neutral-50/50">
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide mb-2">Material Category</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {MATERIAL_CATEGORIES.map(cat => {
+              const selected = Array.isArray(prf.material_category) && prf.material_category.includes(cat)
+              return (
+                <div
+                  key={cat}
+                  className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-xs font-semibold ${
+                    selected
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-neutral-200 bg-white text-neutral-400'
+                  }`}
+                >
+                  <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center ${
+                    selected ? 'border-primary bg-primary text-white' : 'border-neutral-300'
+                  }`}>
+                    {selected && <Check className="w-3 h-3" />}
+                  </span>
+                  <span>{cat}</span>
+                </div>
+              )
+            })}
           </div>
-        )}
+        </div>
       </div>
 
       {isProcurementUser && <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">

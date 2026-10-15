@@ -81,7 +81,7 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
     },
     {
       label: "Purchase Request",
-      path: "/purchase-request/new",
+      path: "/purchase-requests",
       show: true,
       group: "services",
       icon: <ShoppingCart className="w-[18px] h-[18px] shrink-0" />,

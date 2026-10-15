@@ -25,7 +25,7 @@ class PrfApprovalWorkflowTest extends TestCase
         Sanctum::actingAs($requester);
         $prfId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
-            'delivery_location' => 'Depot',
+            'delivery_location' => 'Kozzika',
             'items' => [[
                 'description' => 'Workflow test item',
                 'quantity' => 1,
@@ -72,6 +72,55 @@ class PrfApprovalWorkflowTest extends TestCase
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
             ->assertStatus(422);
         $this->assertSame(3, PrfApproval::where('prf_id', $prfId)->count());
+    }
+
+    public function test_requester_can_edit_or_cancel_only_before_the_first_approval(): void
+    {
+        $requester = $this->user('staff');
+        $otherUser = $this->user('staff');
+        $procurement = $this->user('procurement');
+
+        Sanctum::actingAs($requester);
+        $prfId = $this->postJson('/api/procurement/prfs', [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Tura',
+            'items' => [['description' => 'Original item', 'quantity' => 1, 'unit' => 'pcs']],
+        ])->assertCreated()->json('data.id');
+
+        $this->putJson("/api/procurement/prfs/{$prfId}", [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Ganz',
+            'items' => [['description' => 'Updated item', 'quantity' => 2, 'unit' => 'pcs']],
+        ])->assertOk()
+            ->assertJsonPath('data.delivery_location', 'Ganz')
+            ->assertJsonPath('data.items.0.description', 'Updated item');
+
+        Sanctum::actingAs($otherUser);
+        $this->putJson("/api/procurement/prfs/{$prfId}", [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Kattamya',
+            'items' => [['description' => 'Unauthorized edit', 'quantity' => 1]],
+        ])->assertForbidden();
+
+        Sanctum::actingAs($procurement);
+        $this->postJson("/api/procurement/prfs/{$prfId}/approve")->assertOk();
+
+        Sanctum::actingAs($requester);
+        $this->putJson("/api/procurement/prfs/{$prfId}", [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Kozzika',
+            'items' => [['description' => 'Too late', 'quantity' => 1]],
+        ])->assertForbidden();
+        $this->postJson("/api/procurement/prfs/{$prfId}/cancel")->assertForbidden();
+
+        $cancelId = $this->postJson('/api/procurement/prfs', [
+            'date' => now()->toDateString(),
+            'delivery_location' => 'Kattamya',
+            'items' => [['description' => 'Cancel me', 'quantity' => 1, 'unit' => 'pcs']],
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/procurement/prfs/{$cancelId}/cancel")
+            ->assertOk()->assertJsonPath('data.status', 'cancelled');
     }
 
     private function unreadFor(User $user, int $prfId): int

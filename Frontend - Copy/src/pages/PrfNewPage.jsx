@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Plus, Trash2, Loader2, CheckCircle, X, FileText, Image as ImageIcon, Upload, Pencil,
   ChevronDown, ChevronUp, Zap,
 } from 'lucide-react'
-import { createPrf, MATERIAL_CATEGORIES } from '../services/prfService'
+import { createPrf, getPrf, updatePrf, MATERIAL_CATEGORIES } from '../services/prfService'
 import { PRF_TEMPLATES } from '../utils/prfTemplates'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
+const DELIVERY_LOCATIONS = ['Kozzika', 'Tura', 'Ganz', 'Kattamya']
 
 const EMPTY_ITEM = {
   description: '',
@@ -23,6 +24,8 @@ const EMPTY_ITEM = {
 export default function PrfNewPage() {
   const { user } = useSelector(s => s.auth)
   const navigate = useNavigate()
+  const { id } = useParams()
+  const isEditing = Boolean(id)
 
   const canSetPrfNumber = user?.role === 'admin' || ['procurement', 'purchasing'].includes(user?.role)
 
@@ -43,6 +46,43 @@ export default function PrfNewPage() {
   const [err, setErr]               = useState('')
   const [templatesOpen, setTemplatesOpen] = useState(true)
   const [addedTemplates, setAddedTemplates] = useState(new Set())
+  const [loading, setLoading] = useState(isEditing)
+
+  useEffect(() => {
+    if (!isEditing) return
+    let active = true
+    getPrf(id)
+      .then(res => {
+        const prf = res?.data
+        if (!active || !prf) return
+        if (prf.status !== 'pending_procurement' || (prf.approvals ?? []).length > 0 || String(prf.requested_by) !== String(user?.id)) {
+          navigate(`/purchase-request/${id}`, { replace: true })
+          return
+        }
+        setForm({
+          prf_number: prf.prf_number ?? '',
+          date: String(prf.date ?? '').slice(0, 10),
+          delivery_location: prf.delivery_location ?? '',
+          delivery_contact: prf.delivery_contact ?? '',
+          requester_phone: prf.requester_phone ?? '',
+          requester_email: prf.requester_email ?? user?.email ?? '',
+          notes: prf.notes ?? '',
+          notes_image: prf.notes_image ?? '',
+          material_category: prf.material_category ?? [],
+          items: (prf.items ?? []).map(item => ({
+            description: item.description ?? '',
+            technical_specifications: item.technical_specifications ?? '',
+            quantity: String(item.quantity ?? ''),
+            unit: item.unit ?? 'pcs',
+            ehs_requirements: item.ehs_requirements ?? '',
+            required_by_date: item.required_by_date ? String(item.required_by_date).slice(0, 10) : '',
+          })),
+        })
+      })
+      .catch(e => setErr(e.message || 'Failed to load purchase request'))
+      .finally(() => active && setLoading(false))
+    return () => { active = false }
+  }, [id, isEditing, navigate, user?.email, user?.id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -119,16 +159,20 @@ export default function PrfNewPage() {
     try {
       const payload = { ...form, items }
       if (!payload.prf_number?.trim()) delete payload.prf_number
-      const res = await createPrf(payload)
+      const res = isEditing ? await updatePrf(id, payload) : await createPrf(payload)
       setSubmitted(res?.data ?? null)
       setTimeout(() => {
         navigate(`/purchase-request/${res?.data?.id}`)
-      }, 900)
+      }, isEditing ? 300 : 900)
     } catch (e2) {
       setErr(e2.message || 'Failed to submit PRF')
     } finally {
       setSaving(false)
     }
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
   }
 
   return (
@@ -137,9 +181,9 @@ export default function PrfNewPage() {
         <div>
           <h1 className="text-xl font-extrabold text-secondary-700 flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            New Purchase Request
+            {isEditing ? 'Edit Purchase Request' : 'New Purchase Request'}
           </h1>
-          <p className="text-sm text-neutral-400 mt-0.5">Submit a new PRF for procurement approval</p>
+          <p className="text-sm text-neutral-400 mt-0.5">{isEditing ? 'Update your request before the first approval' : 'Submit a new PRF for procurement approval'}</p>
         </div>
         <button onClick={() => navigate(-1)}
           className="px-4 py-2 text-xs font-bold text-neutral-500 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-all">
@@ -305,7 +349,10 @@ export default function PrfNewPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-neutral-200">
             <div className="px-4 py-3">
               <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">Delivery Location</p>
-              <input value={form.delivery_location} onChange={e => set('delivery_location', e.target.value)} placeholder="e.g. Kozzika Depot" className={INPUT} />
+              <select value={form.delivery_location} onChange={e => set('delivery_location', e.target.value)} className={INPUT}>
+                <option value="">Select delivery location</option>
+                {DELIVERY_LOCATIONS.map(location => <option key={location} value={location}>{location}</option>)}
+              </select>
             </div>
             <div className="px-4 py-3">
               <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">Contact</p>
@@ -398,7 +445,7 @@ export default function PrfNewPage() {
           </p>
           <button type="submit" disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-60">
-            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</> : 'Submit Request'}
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : isEditing ? 'Save Changes' : 'Submit Request'}
           </button>
         </div>
       </form>
@@ -409,7 +456,7 @@ export default function PrfNewPage() {
             <CheckCircle className="w-5 h-5 text-green-500" />
           </div>
           <div>
-            <p className="text-sm font-bold text-secondary-700">PRF Submitted!</p>
+            <p className="text-sm font-bold text-secondary-700">{isEditing ? 'PRF Updated!' : 'PRF Submitted!'}</p>
             <p className="text-xs text-neutral-400 mt-0.5">{submitted.prf_number} — Awaiting procurement review.</p>
           </div>
         </div>

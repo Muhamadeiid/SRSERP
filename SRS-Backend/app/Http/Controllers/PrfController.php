@@ -39,8 +39,14 @@ class PrfController extends Controller
             'approvals.approver:id,name,e_signature,role',
         ]);
 
+        if ($request->boolean('mine')) {
+            $query->where('requested_by', $user->id);
+        }
+
         // Visibility rules
-        if ($user->isAdmin()) {
+        if ($request->boolean('mine')) {
+            // Explicit personal view always shows the signed-in user's requests only.
+        } elseif ($user->isAdmin()) {
             // full visibility
         } elseif (
             in_array($user->role, ['procurement', 'purchasing', 'ehs', 'depot_manager'], true)
@@ -119,7 +125,7 @@ class PrfController extends Controller
         $v = Validator::make($request->all(), [
             'prf_number'                    => 'nullable|string|max:64|unique:prfs,prf_number',
             'date'                          => 'nullable|date',
-            'delivery_location'             => 'nullable|string|max:255',
+            'delivery_location'             => 'nullable|in:Kozzika,Tura,Ganz,Kattamya',
             'delivery_contact'              => 'nullable|string|max:255',
             'requester_phone'               => 'nullable|string|max:50',
             'requester_email'               => 'nullable|email|max:255',
@@ -177,6 +183,102 @@ class PrfController extends Controller
                 'success' => true,
                 'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
             ], 201);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  UPDATE / CANCEL — requester only, before the first approval
+    // ─────────────────────────────────────────────────────────────
+    public function update(Request $request, Prf $prf): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'date'                          => 'nullable|date',
+            'delivery_location'             => 'nullable|in:Kozzika,Tura,Ganz,Kattamya',
+            'delivery_contact'              => 'nullable|string|max:255',
+            'requester_phone'               => 'nullable|string|max:50',
+            'requester_email'               => 'nullable|email|max:255',
+            'material_category'             => 'nullable|array',
+            'material_category.*'           => 'string|max:100',
+            'notes'                         => 'nullable|string|max:2000',
+            'notes_image'                   => 'nullable|string',
+            'items'                         => 'required|array|min:1',
+            'items.*.description'           => 'required|string|max:500',
+            'items.*.technical_specifications' => 'nullable|string|max:2000',
+            'items.*.quantity'              => 'required|numeric|min:0.01',
+            'items.*.unit'                  => 'nullable|string|max:50',
+            'items.*.ehs_requirements'      => 'nullable|string|max:1000',
+            'items.*.required_by_date'      => 'nullable|date',
+        ]);
+
+        if ($v->fails()) {
+            return response()->json(['success' => false, 'errors' => $v->errors()], 422);
+        }
+
+        return DB::transaction(function () use ($prf, $v) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            if (!$this->requesterCanModify($lockedPrf)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This purchase request can no longer be edited',
+                ], 403);
+            }
+
+            $data = $v->validated();
+            $lockedPrf->update([
+                'date'              => $data['date'] ?? $lockedPrf->date,
+                'delivery_location' => $data['delivery_location'] ?? null,
+                'delivery_contact'  => $data['delivery_contact'] ?? null,
+                'requester_phone'   => $data['requester_phone'] ?? null,
+                'requester_email'   => $data['requester_email'] ?? auth()->user()->email,
+                'material_category' => $data['material_category'] ?? [],
+                'notes'             => $data['notes'] ?? null,
+                'notes_image'       => $data['notes_image'] ?? null,
+            ]);
+
+            $lockedPrf->items()->delete();
+            foreach ($data['items'] as $i => $row) {
+                PrfItem::create([
+                    'prf_id'                   => $lockedPrf->id,
+                    'sn'                       => $i + 1,
+                    'description'              => $row['description'],
+                    'technical_specifications' => $row['technical_specifications'] ?? null,
+                    'quantity'                 => $row['quantity'],
+                    'unit'                     => $row['unit'] ?? 'pcs',
+                    'ehs_requirements'         => $row['ehs_requirements'] ?? null,
+                    'required_by_date'         => $row['required_by_date'] ?? null,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Purchase request updated',
+                'data' => $lockedPrf->fresh(['requester', 'items', 'approvals.approver']),
+            ]);
+        });
+    }
+
+    public function cancel(Prf $prf): JsonResponse
+    {
+        return DB::transaction(function () use ($prf) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            if (!$this->requesterCanModify($lockedPrf)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This purchase request can no longer be cancelled',
+                ], 403);
+            }
+
+            $voidNumber = str_ends_with($lockedPrf->prf_number, '-VOID')
+                ? $lockedPrf->prf_number
+                : $lockedPrf->prf_number . '-VOID';
+            $lockedPrf->update(['status' => 'cancelled', 'prf_number' => $voidNumber]);
+            Notification::resolveFor('prf_id', $lockedPrf->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Purchase request cancelled',
+                'data' => $lockedPrf->fresh(['requester', 'items', 'approvals.approver']),
+            ]);
         });
     }
 
@@ -347,6 +449,13 @@ class PrfController extends Controller
             return true;
         }
         return $user->role === $stage['role'];
+    }
+
+    private function requesterCanModify(Prf $prf): bool
+    {
+        return $prf->requested_by === auth()->id()
+            && $prf->status === 'pending_procurement'
+            && !$prf->approvals()->exists();
     }
 
     private function notifyStageApprovers(Prf $prf, string $stageStatus): void
