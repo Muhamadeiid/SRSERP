@@ -42,7 +42,12 @@ class PrfController extends Controller
         // Visibility rules
         if ($user->isAdmin()) {
             // full visibility
-        } elseif ($user->role === 'procurement' || $user->role === 'ehs' || $user->role === 'depot_manager') {
+        } elseif (
+            in_array($user->role, ['procurement', 'purchasing', 'ehs', 'depot_manager'], true)
+            || $user->hasPermission('prf.approve_procurement')
+            || $user->hasPermission('prf.approve_ehs')
+            || $user->hasPermission('prf.approve_depot')
+        ) {
             // approvers see everything
         } else {
             // requester sees own only
@@ -180,22 +185,7 @@ class PrfController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function approve(Request $request, Prf $prf): JsonResponse
     {
-        $user  = auth()->user();
-        $stage = self::PIPELINE[$prf->status] ?? null;
-
-        if (!$stage) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This PRF is not awaiting approval',
-            ], 422);
-        }
-
-        if (!$this->userCanActInStage($user, $stage)) {
-            return response()->json([
-                'success' => false,
-                'message' => "Only {$stage['label']} can approve at this stage",
-            ], 403);
-        }
+        $user = auth()->user();
 
         $v = Validator::make($request->all(), [
             'comment' => 'nullable|string|max:1000',
@@ -204,9 +194,26 @@ class PrfController extends Controller
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
         }
 
-        return DB::transaction(function () use ($prf, $user, $stage, $request) {
+        return DB::transaction(function () use ($prf, $user, $request) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            $stage = self::PIPELINE[$lockedPrf->status] ?? null;
+
+            if (!$stage) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This PRF is not awaiting approval',
+                ], 422);
+            }
+
+            if (!$this->userCanActInStage($user, $stage)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Only {$stage['label']} can approve at this stage",
+                ], 403);
+            }
+
             PrfApproval::create([
-                'prf_id'      => $prf->id,
+                'prf_id'      => $lockedPrf->id,
                 'role'        => $stage['role'],
                 'action'      => 'approved',
                 'approver_id' => $user->id,
@@ -214,20 +221,20 @@ class PrfController extends Controller
                 'acted_at'    => now(),
             ]);
 
-            $prf->update(['status' => $stage['next']]);
+            $lockedPrf->update(['status' => $stage['next']]);
 
             // Clear this stage's "awaiting approval" alerts, then hand over.
-            Notification::resolveFor('prf_id', $prf->id);
+            Notification::resolveFor('prf_id', $lockedPrf->id);
             if ($stage['next'] === 'approved') {
-                $this->notifyRequesterFinalApproved($prf, $user);
+                $this->notifyRequesterFinalApproved($lockedPrf, $user);
             } else {
-                $this->notifyStageApprovers($prf, $stage['next']);
+                $this->notifyStageApprovers($lockedPrf, $stage['next']);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Approved',
-                'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
+                'data'    => $lockedPrf->fresh(['requester', 'items', 'approvals.approver']),
             ]);
         });
     }
@@ -237,22 +244,7 @@ class PrfController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function reject(Request $request, Prf $prf): JsonResponse
     {
-        $user  = auth()->user();
-        $stage = self::PIPELINE[$prf->status] ?? null;
-
-        if (!$stage) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This PRF cannot be rejected at its current state',
-            ], 422);
-        }
-
-        if (!$this->userCanActInStage($user, $stage)) {
-            return response()->json([
-                'success' => false,
-                'message' => "Only {$stage['label']} can reject at this stage",
-            ], 403);
-        }
+        $user = auth()->user();
 
         $v = Validator::make($request->all(), [
             'comment' => 'required|string|max:1000',
@@ -261,9 +253,26 @@ class PrfController extends Controller
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
         }
 
-        return DB::transaction(function () use ($prf, $user, $stage, $request) {
+        return DB::transaction(function () use ($prf, $user, $request) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            $stage = self::PIPELINE[$lockedPrf->status] ?? null;
+
+            if (!$stage) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This PRF cannot be rejected at its current state',
+                ], 422);
+            }
+
+            if (!$this->userCanActInStage($user, $stage)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Only {$stage['label']} can reject at this stage",
+                ], 403);
+            }
+
             PrfApproval::create([
-                'prf_id'      => $prf->id,
+                'prf_id'      => $lockedPrf->id,
                 'role'        => $stage['role'],
                 'action'      => 'rejected',
                 'approver_id' => $user->id,
@@ -272,19 +281,19 @@ class PrfController extends Controller
             ]);
 
             // Void the number so the next PRF can reuse it
-            $originalNumber = $prf->prf_number;
+            $originalNumber = $lockedPrf->prf_number;
             $voidNumber     = str_ends_with($originalNumber, '-VOID') ? $originalNumber : $originalNumber . '-VOID';
 
-            $prf->update(['status' => 'rejected', 'prf_number' => $voidNumber]);
+            $lockedPrf->update(['status' => 'rejected', 'prf_number' => $voidNumber]);
 
-            Notification::resolveFor('prf_id', $prf->id);
-            if ($prf->requested_by) {
+            Notification::resolveFor('prf_id', $lockedPrf->id);
+            if ($lockedPrf->requested_by) {
                 Notification::notifyUser(
-                    $prf->requested_by,
+                    $lockedPrf->requested_by,
                     'prf_rejected',
                     "PRF Rejected — {$originalNumber}",
                     "Your PRF was rejected by {$user->name} ({$stage['label']}): {$request->input('comment')}",
-                    ['prf_id' => $prf->id],
+                    ['prf_id' => $lockedPrf->id],
                     true
                 );
             }
@@ -292,7 +301,7 @@ class PrfController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Rejected',
-                'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
+                'data'    => $lockedPrf->fresh(['requester', 'items', 'approvals.approver']),
             ]);
         });
     }
@@ -334,6 +343,9 @@ class PrfController extends Controller
         if (!empty($stage['permission']) && $user->hasPermission($stage['permission'])) {
             return true;
         }
+        if ($stage['role'] === 'procurement' && $user->role === 'purchasing') {
+            return true;
+        }
         return $user->role === $stage['role'];
     }
 
@@ -342,9 +354,25 @@ class PrfController extends Controller
         $stage = self::PIPELINE[$stageStatus] ?? null;
         if (!$stage) return;
 
-        $approvers = User::where('role', $stage['role'])
+        $permittedRoles = DB::table('role_permissions')
+            ->where('permission_key', $stage['permission'])
+            ->pluck('role');
+
+        $approvers = User::query()
             ->where('is_active', true)
+            ->where('role', '!=', 'admin')
+            ->where(function ($query) use ($stage, $permittedRoles) {
+                $query->where('role', $stage['role'])
+                    ->orWhereIn('role', $permittedRoles);
+                if ($stage['role'] === 'procurement') {
+                    $query->orWhere('role', 'purchasing');
+                }
+            })
             ->get();
+
+        if ($approvers->isEmpty()) {
+            $approvers = User::where('role', 'admin')->where('is_active', true)->get();
+        }
 
         $title = "New PRF — Awaiting your approval ({$stage['label']})";
         $body  = "{$prf->requester?->name} submitted PRF {$prf->prf_number}. Awaiting your approval.";

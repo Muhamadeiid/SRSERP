@@ -61,7 +61,7 @@ export default function PrfDetail() {
   const isApproved       = prf?.status === 'approved'
   const isProcurementUser = ['procurement', 'purchasing', 'admin'].includes(user?.role)
   const backPath         = user?.role === 'admin' ? '/procurement' : '/'
-  const canCreatePO      = isApproved && ['admin', 'depot_manager', 'procurement', 'purchasing'].includes(user?.role)
+  const canCreatePO      = isApproved && ['admin', 'procurement', 'purchasing'].includes(user?.role)
   const hasLinkedPO      = !!prf?.purchase_order
 
   const saveNumber = async () => {
@@ -217,13 +217,13 @@ export default function PrfDetail() {
             </button>
           )}
           {canCreatePO && !hasLinkedPO && (
-            <button onClick={() => navigate(`/procurement/po/new/${prf.id}`)}
+            <button onClick={() => navigate(`/purchase-order/new/${prf.id}`)}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-all">
               <FileText className="w-3.5 h-3.5" /> Create PO
             </button>
           )}
           {hasLinkedPO && (
-            <button onClick={() => navigate(`/procurement/po/${prf.purchase_order.id}`)}
+            <button onClick={() => navigate(`/purchase-order/${prf.purchase_order.id}`)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 text-secondary text-xs font-bold rounded-lg hover:bg-neutral-50 transition-all">
               <FileText className="w-3.5 h-3.5" /> View PO
             </button>

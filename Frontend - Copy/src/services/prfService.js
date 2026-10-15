@@ -86,5 +86,12 @@ export const STATUS_TO_ROLE = {
 export function canActOnStage(user, status) {
   if (!user || !STATUS_TO_ROLE[status]) return false
   if (user.role === 'admin') return true
+  const permission = {
+    pending_procurement: 'prf.approve_procurement',
+    pending_ehs: 'prf.approve_ehs',
+    pending_depot: 'prf.approve_depot',
+  }[status]
   return user.role === STATUS_TO_ROLE[status]
+    || (status === 'pending_procurement' && user.role === 'purchasing')
+    || (Array.isArray(user.permissions) && user.permissions.includes(permission))
 }
