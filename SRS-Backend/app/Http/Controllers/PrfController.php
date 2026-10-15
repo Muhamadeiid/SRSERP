@@ -125,7 +125,7 @@ class PrfController extends Controller
         $v = Validator::make($request->all(), [
             'prf_number'                    => 'nullable|string|max:64|unique:prfs,prf_number',
             'date'                          => 'nullable|date',
-            'delivery_location'             => 'nullable|in:Kozzika,Tura,Ganz,Kattamya',
+            'delivery_location'             => 'nullable|in:Ganz depot,Tura workshop,Kozzika,Katamya',
             'delivery_contact'              => 'nullable|string|max:255',
             'requester_phone'               => 'nullable|string|max:50',
             'requester_email'               => 'nullable|email|max:255',
@@ -193,7 +193,7 @@ class PrfController extends Controller
     {
         $v = Validator::make($request->all(), [
             'date'                          => 'nullable|date',
-            'delivery_location'             => 'nullable|in:Kozzika,Tura,Ganz,Kattamya',
+            'delivery_location'             => 'nullable|in:Ganz depot,Tura workshop,Kozzika,Katamya',
             'delivery_contact'              => 'nullable|string|max:255',
             'requester_phone'               => 'nullable|string|max:50',
             'requester_email'               => 'nullable|email|max:255',

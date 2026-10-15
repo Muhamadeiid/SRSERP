@@ -10,7 +10,12 @@ import { PRF_TEMPLATES } from '../utils/prfTemplates'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
-const DELIVERY_LOCATIONS = ['Kozzika', 'Tura', 'Ganz', 'Kattamya']
+const DELIVERY_LOCATIONS = ['Ganz depot', 'Tura workshop', 'Kozzika', 'Katamya']
+const LEGACY_DELIVERY_LOCATIONS = {
+  Ganz: 'Ganz depot',
+  Tura: 'Tura workshop',
+  Kattamya: 'Katamya',
+}
 
 const EMPTY_ITEM = {
   description: '',
@@ -62,7 +67,7 @@ export default function PrfNewPage() {
         setForm({
           prf_number: prf.prf_number ?? '',
           date: String(prf.date ?? '').slice(0, 10),
-          delivery_location: prf.delivery_location ?? '',
+          delivery_location: LEGACY_DELIVERY_LOCATIONS[prf.delivery_location] ?? prf.delivery_location ?? '',
           delivery_contact: prf.delivery_contact ?? '',
           requester_phone: prf.requester_phone ?? '',
           requester_email: prf.requester_email ?? user?.email ?? '',

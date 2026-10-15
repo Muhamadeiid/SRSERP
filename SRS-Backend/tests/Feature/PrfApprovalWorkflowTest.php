@@ -83,22 +83,22 @@ class PrfApprovalWorkflowTest extends TestCase
         Sanctum::actingAs($requester);
         $prfId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
-            'delivery_location' => 'Tura',
+            'delivery_location' => 'Tura workshop',
             'items' => [['description' => 'Original item', 'quantity' => 1, 'unit' => 'pcs']],
         ])->assertCreated()->json('data.id');
 
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
-            'delivery_location' => 'Ganz',
+            'delivery_location' => 'Ganz depot',
             'items' => [['description' => 'Updated item', 'quantity' => 2, 'unit' => 'pcs']],
         ])->assertOk()
-            ->assertJsonPath('data.delivery_location', 'Ganz')
+            ->assertJsonPath('data.delivery_location', 'Ganz depot')
             ->assertJsonPath('data.items.0.description', 'Updated item');
 
         Sanctum::actingAs($otherUser);
         $this->putJson("/api/procurement/prfs/{$prfId}", [
             'date' => now()->toDateString(),
-            'delivery_location' => 'Kattamya',
+            'delivery_location' => 'Katamya',
             'items' => [['description' => 'Unauthorized edit', 'quantity' => 1]],
         ])->assertForbidden();
 
@@ -115,7 +115,7 @@ class PrfApprovalWorkflowTest extends TestCase
 
         $cancelId = $this->postJson('/api/procurement/prfs', [
             'date' => now()->toDateString(),
-            'delivery_location' => 'Kattamya',
+            'delivery_location' => 'Katamya',
             'items' => [['description' => 'Cancel me', 'quantity' => 1, 'unit' => 'pcs']],
         ])->assertCreated()->json('data.id');
 
