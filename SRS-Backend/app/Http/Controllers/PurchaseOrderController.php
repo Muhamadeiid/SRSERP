@@ -121,22 +121,23 @@ class PurchaseOrderController extends Controller
             }
         }
 
-        if ($prf->status !== 'approved') {
-            return response()->json([
-                'success' => false,
-                'message' => 'A PO can only be created for a fully approved PRF',
-            ], 422);
-        }
-
-        // Only one PO per PRF
-        if ($prf->purchaseOrder()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A Purchase Order already exists for this PRF',
-            ], 422);
-        }
-
         return DB::transaction(function () use ($data, $prf) {
+            $prf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+
+            if ($prf->status !== 'approved') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A PO can only be created for a fully approved PRF',
+                ], 422);
+            }
+
+            if ($prf->purchaseOrder()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A Purchase Order already exists for this PRF',
+                ], 422);
+            }
+
             $po = PurchaseOrder::create([
                 'po_number'        => $data['po_number'] ?? PurchaseOrder::generateNumber(),
                 'prf_id'           => $prf->id,

@@ -69,19 +69,17 @@ class Prf extends Model
         $year   = $year ?: (int) date('Y');
         $prefix = "PRF-EG1-{$year}-";
 
-        // Only look at active (non-VOID) numbers to determine the sequence
-        $last = static::where('prf_number', 'like', $prefix . '%')
+        // Use the highest numeric sequence, not the latest row. A manually
+        // entered 0123 therefore makes the next automatic number 0124.
+        $highest = static::where('prf_number', 'like', $prefix . '%')
             ->where('prf_number', 'not like', '%-VOID')
-            ->orderByDesc('id')
-            ->value('prf_number');
+            ->pluck('prf_number')
+            ->map(fn (string $number) => substr($number, strlen($prefix)))
+            ->filter(fn (string $tail) => ctype_digit($tail))
+            ->map(fn (string $tail) => (int) $tail)
+            ->max();
 
-        $next = 1;
-        if ($last) {
-            $tail = substr($last, strlen($prefix));
-            if (is_numeric($tail)) {
-                $next = ((int) $tail) + 1;
-            }
-        }
+        $next = ($highest ?? 0) + 1;
 
         // Skip any number already taken (e.g. by a VOID PRF that was manually overridden)
         do {

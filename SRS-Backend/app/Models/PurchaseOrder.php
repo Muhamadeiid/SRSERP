@@ -89,17 +89,14 @@ class PurchaseOrder extends Model
         $year   = $year ?: (int) date('Y');
         $prefix = "POF-EG1-{$year}-";
 
-        $last = static::where('po_number', 'like', $prefix . '%')
-            ->orderByDesc('id')
-            ->value('po_number');
+        $highest = static::where('po_number', 'like', $prefix . '%')
+            ->pluck('po_number')
+            ->map(fn (string $number) => substr($number, strlen($prefix)))
+            ->filter(fn (string $tail) => ctype_digit($tail))
+            ->map(fn (string $tail) => (int) $tail)
+            ->max();
 
-        $next = 1;
-        if ($last) {
-            $tail = substr($last, strlen($prefix));
-            if (is_numeric($tail)) {
-                $next = ((int) $tail) + 1;
-            }
-        }
+        $next = ($highest ?? 0) + 1;
 
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }

@@ -190,6 +190,7 @@ class PrfController extends Controller
             }
 
             $this->notifyStageApprovers($prf, 'pending_procurement');
+            $this->notifyFutureStageApprovers($prf);
 
             return response()->json([
                 'success' => true,
@@ -426,18 +427,32 @@ class PrfController extends Controller
     public function updateTrackingNo(Request $request, Prf $prf): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->isAdmin() && !in_array($user->role, ['procurement', 'purchasing'], true)) {
+        if (!$user->isAdmin() && !in_array($user->role, ['depot_manager', 'procurement', 'purchasing'], true)) {
             return response()->json(['success' => false, 'message' => 'Only Procurement can edit the tracking number'], 403);
         }
 
         $v = Validator::make($request->all(), [
-            'prf_number' => 'required|string|max:64|unique:prfs,prf_number,' . $prf->id,
+            'prf_number' => 'required|string|max:64',
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
         }
 
-        $prf->update(['prf_number' => $request->input('prf_number')]);
+        $input = trim((string) $request->input('prf_number'));
+        $year = (int) ($prf->date?->format('Y') ?: now()->year);
+        if (ctype_digit($input)) {
+            $input = "PRF-EG1-{$year}-" . str_pad($input, 4, '0', STR_PAD_LEFT);
+        } elseif (preg_match('/^PRF-EG1-(\d{4})-(\d+)$/i', $input, $matches)) {
+            $input = 'PRF-EG1-' . $matches[1] . '-' . str_pad($matches[2], 4, '0', STR_PAD_LEFT);
+        } else {
+            return response()->json(['success' => false, 'message' => 'Enter a sequence number such as 123 or a full PRF number'], 422);
+        }
+
+        if (Prf::where('prf_number', $input)->where('id', '!=', $prf->id)->exists()) {
+            return response()->json(['success' => false, 'message' => 'This PRF number is already in use'], 422);
+        }
+
+        $prf->update(['prf_number' => $input]);
 
         return response()->json([
             'success' => true,
@@ -515,6 +530,36 @@ class PrfController extends Controller
                 } catch (\Throwable $e) {
                     Log::warning("PRF mail to {$approver->email} failed: " . $e->getMessage());
                 }
+            }
+        }
+    }
+
+    private function notifyFutureStageApprovers(Prf $prf): void
+    {
+        foreach (['pending_ehs', 'pending_depot'] as $stageStatus) {
+            $stage = self::PIPELINE[$stageStatus];
+            $permittedRoles = DB::table('role_permissions')
+                ->where('permission_key', $stage['permission'])
+                ->pluck('role');
+
+            $observers = User::query()
+                ->where('is_active', true)
+                ->where('role', '!=', 'admin')
+                ->where(function ($query) use ($stage, $permittedRoles) {
+                    $query->where('role', $stage['role'])
+                        ->orWhereIn('role', $permittedRoles);
+                })
+                ->get();
+
+            foreach ($observers as $observer) {
+                Notification::notifyUser(
+                    $observer->id,
+                    'prf_submitted',
+                    "New PRF submitted — {$prf->prf_number}",
+                    "A new PRF was submitted by {$prf->requester?->name}. It is currently waiting for Procurement approval; your {$stage['label']} approval will become available when the previous stages are complete.",
+                    ['prf_id' => $prf->id, 'path' => "/purchase-request/{$prf->id}"],
+                    true
+                );
             }
         }
     }

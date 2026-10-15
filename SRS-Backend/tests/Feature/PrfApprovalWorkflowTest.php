@@ -42,7 +42,8 @@ class PrfApprovalWorkflowTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.status', 'pending_procurement')->json('data.id');
 
         $this->assertSame(1, $this->unreadFor($procurement, $prfId));
-        $this->assertSame(0, $this->unreadFor($ehs, $prfId));
+        $this->assertSame(1, $this->unreadFor($ehs, $prfId));
+        $this->assertSame(1, $this->unreadFor($depot, $prfId));
 
         Sanctum::actingAs($ehs);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
@@ -140,6 +141,33 @@ class PrfApprovalWorkflowTest extends TestCase
 
         $this->postJson("/api/procurement/prfs/{$cancelId}/cancel")
             ->assertOk()->assertJsonPath('data.status', 'cancelled');
+    }
+
+    public function test_manual_tracking_number_advances_the_next_automatic_number(): void
+    {
+        $requester = $this->user('staff');
+        $procurement = $this->user('procurement');
+
+        Sanctum::actingAs($requester);
+        $firstId = $this->postJson('/api/procurement/prfs', [
+            'date' => '2026-10-15',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
+            'items' => [['description' => 'Tracked item', 'quantity' => 1]],
+        ])->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($procurement);
+        $this->putJson("/api/procurement/prfs/{$firstId}/tracking-no", [
+            'prf_number' => '123',
+        ])->assertOk()->assertJsonPath('data.prf_number', 'PRF-EG1-2026-0123');
+
+        Sanctum::actingAs($requester);
+        $this->postJson('/api/procurement/prfs', [
+            'date' => '2026-10-15',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
+            'items' => [['description' => 'Next tracked item', 'quantity' => 1]],
+        ])->assertCreated()->assertJsonPath('data.prf_number', 'PRF-EG1-2026-0124');
     }
 
     private function unreadFor(User $user, int $prfId): int

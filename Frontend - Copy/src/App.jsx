@@ -98,9 +98,9 @@ const HR_FULL_DEPTS = []
 // Dashboard / Inventory: Admin & Depot Manager only
 const DASH_ROLES    = ['admin', 'depot_manager']
 
-// Procurement full module: Admin, Depot Manager, Purchasing only
-// Procurement is temporarily restricted to the Super Admin account only.
-const PROC_ROLES    = ['admin']
+// Procurement PRF visibility: Admin, Depot Manager, and Procurement Specialist.
+const PROC_ROLES    = ['admin', 'depot_manager', 'procurement']
+const ADMIN_ROLES   = ['admin']
 
 // Everyone (all authenticated users — no roles prop = just needs to be logged in)
 
@@ -394,7 +394,7 @@ export default function App() {
           <Route path="notification-settings" element={<NotificationPreferencesPage />} />
         </Route>
 
-        {/* Procurement — temporarily restricted to Super Admin only. */}
+        {/* Procurement PRF dashboard and master list. */}
         <Route path="/procurement" element={
           <ProtectedRoute roles={PROC_ROLES} redirect="/">
             <ProcurementLayout />
@@ -411,7 +411,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="po/new/:prfId" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute roles={ADMIN_ROLES} redirect="/procurement">
               <PoNewPage />
             </ProtectedRoute>
           } />
@@ -421,7 +421,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="igi/new/:poId" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute roles={ADMIN_ROLES} redirect="/procurement">
               <IgiNewPage />
             </ProtectedRoute>
           } />
@@ -431,13 +431,13 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="records" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute roles={ADMIN_ROLES} redirect="/procurement">
               <ProcurementRecordsPage />
             </ProtectedRoute>
           } />
           <Route path="notifications" element={<NotificationCenterPage />} />
           <Route path="notification-settings" element={<NotificationPreferencesPage />} />
-          {/* The parent route enforces Super Admin access for every child route. */}
+          {/* The parent route limits this area to the current Procurement roles. */}
           <Route path="new" element={<PrfNewPage />} />
           <Route path=":id" element={<PrfDetail  />} />
         </Route>

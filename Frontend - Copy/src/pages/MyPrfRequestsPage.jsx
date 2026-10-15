@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { ClipboardList, Eye, Loader2, Pencil, Plus } from 'lucide-react'
 import { cleanPrfNumber, getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES } from '../services/prfService'
@@ -18,6 +19,9 @@ const stageText = {
 
 export default function MyPrfRequestsPage() {
   const navigate = useNavigate()
+  const { user } = useSelector(state => state.auth)
+  const canReviewAll = ['admin', 'procurement', 'purchasing', 'ehs_manager', 'depot_manager'].includes(user?.role)
+    || ['prf.approve_procurement', 'prf.approve_ehs', 'prf.approve_depot'].some(permission => user?.permissions?.includes(permission))
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -26,14 +30,14 @@ export default function MyPrfRequestsPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await getPrfs({ mine: 1 })
+      const res = await getPrfs(canReviewAll ? {} : { mine: 1 })
       setRequests(res?.data ?? [])
     } catch (e) {
       setError(e.message || 'Failed to load purchase requests')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [canReviewAll])
 
   useEffect(() => { load() }, [load])
 
@@ -42,9 +46,11 @@ export default function MyPrfRequestsPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-extrabold text-secondary-700 flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-primary" /> My Purchase Requests
+            <ClipboardList className="w-5 h-5 text-primary" /> {canReviewAll ? 'Purchase Requests' : 'My Purchase Requests'}
           </h1>
-          <p className="text-sm text-neutral-400 mt-0.5">Track approvals and updates for your submitted PRFs</p>
+          <p className="text-sm text-neutral-400 mt-0.5">
+            {canReviewAll ? 'Track submitted PRFs and their current approval stage' : 'Track approvals and updates for your submitted PRFs'}
+          </p>
         </div>
         <button onClick={() => navigate('/purchase-request/new')}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90">
@@ -68,17 +74,20 @@ export default function MyPrfRequestsPage() {
             <table className="w-full min-w-[880px] text-xs">
               <thead className="bg-neutral-50 border-b border-neutral-100">
                 <tr>
-                  {['PRF Number', 'Submitted', 'Delivery', 'Current Stage', 'Last Updated', 'Items', 'Actions'].map(label => (
+                  {['PRF Number', 'Requested By', 'Submitted', 'Delivery', 'Current Stage', 'Last Updated', 'Items', 'Actions'].map(label => (
                     <th key={label} className="px-4 py-3 text-left text-[10px] font-bold uppercase text-neutral-400">{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {requests.map(request => {
-                  const canEdit = request.status === 'pending_procurement' && (request.approvals ?? []).length === 0
+                  const canEdit = String(request.requested_by) === String(user?.id)
+                    && request.status === 'pending_procurement'
+                    && (request.approvals ?? []).length === 0
                   return (
                     <tr key={request.id} className="hover:bg-neutral-50/70">
                       <td className="px-4 py-3 font-mono font-bold text-secondary-700">{cleanPrfNumber(request.prf_number)}</td>
+                      <td className="px-4 py-3 text-neutral-600 font-semibold">{request.requester?.name || '—'}</td>
                       <td className="px-4 py-3 text-neutral-600">{fmt(request.created_at)}</td>
                       <td className="px-4 py-3 text-neutral-600">{request.delivery_location || '—'}</td>
                       <td className="px-4 py-3">
