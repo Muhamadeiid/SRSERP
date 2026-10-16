@@ -1249,7 +1249,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Export ALL employees — one sheet per employee.
+     * Export all employees into two project sheets (Ganz and Line 1).
      *
      * GET /api/attendance/export-all
      */
@@ -1262,13 +1262,10 @@ class AttendanceController extends Controller
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0); // remove default blank sheet
 
-        foreach ($employees as $idx => $employee) {
-            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet(
-                $spreadsheet,
-                mb_substr(preg_replace('/[\/\\\?\*\[\]:]+/', '_', $employee->name), 0, 31)
-            );
-            $spreadsheet->addSheet($sheet, $idx);
-            $this->buildEmployeeSheet($sheet, $employee, $startDate, $endDate);
+        foreach ($this->employeesByProjectSheet($employees) as $sheetName => $projectEmployees) {
+            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, $sheetName);
+            $spreadsheet->addSheet($sheet);
+            $this->buildProjectAttendanceSheet($sheet, $projectEmployees, $startDate, $endDate);
         }
 
         if ($spreadsheet->getSheetCount() === 0) {
@@ -1285,6 +1282,143 @@ class AttendanceController extends Controller
             $filename,
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
         );
+    }
+
+    /**
+     * Budget values are sometimes stored as the project key and sometimes as
+     * the numeric budget code. Unrecognised values stay visible in Line 1 so an
+     * employee is never silently omitted from payroll exports.
+     */
+    private function attendanceProjectSheet(?string $projectBudget): string
+    {
+        $budget = strtoupper(trim((string) $projectBudget));
+        $compact = preg_replace('/[^A-Z0-9]/', '', $budget);
+
+        if (str_starts_with($compact, 'GZ') || str_starts_with($compact, '0052')) {
+            return 'Ganz';
+        }
+
+        return 'Line 1';
+    }
+
+    private function employeesByProjectSheet($employees): array
+    {
+        $groups = ['Ganz' => collect(), 'Line 1' => collect()];
+
+        foreach ($employees as $employee) {
+            $groups[$this->attendanceProjectSheet($employee->project_budget)]->push($employee);
+        }
+
+        return $groups;
+    }
+
+    private function buildProjectAttendanceSheet(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        $employees,
+        string $startDate,
+        string $endDate
+    ): void {
+        $headers = [
+            'IBS No.', 'Employee Name', 'Project Budget', 'Department', 'Location',
+            'Date', 'Day', 'Check In', 'Check Out', 'Work Hrs.', 'Overtime Hrs.',
+            'Late (Min.)', 'Status', 'Deduction (Hrs.)', 'Notes',
+        ];
+        $thin = ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '9CA3AF']];
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+
+        $sheet->setCellValue('A1', $sheet->getTitle() . " Attendance {$startDate} to {$endDate}");
+        $sheet->mergeCells("A1:{$lastCol}1");
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E3A2F']],
+            'font' => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getRowDimension(1)->setRowHeight(24);
+
+        foreach ($headers as $index => $header) {
+            $column = Coordinate::stringFromColumnIndex($index + 1);
+            $sheet->setCellValue("{$column}2", $header);
+        }
+        $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']],
+            'font' => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+            'borders' => ['allBorders' => $thin],
+        ]);
+        $sheet->getRowDimension(2)->setRowHeight(28);
+
+        $row = 3;
+        foreach ($employees as $employee) {
+            $attendances = $this->attendanceService->getAttendance([
+                'employee_id' => $employee->id,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ])->keyBy(fn ($attendance) => $attendance->date?->format('Y-m-d'));
+            $deductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
+
+            $date = Carbon::parse($startDate);
+            $lastDate = Carbon::parse($endDate);
+            while ($date->lte($lastDate)) {
+                $dateKey = $date->toDateString();
+                $record = $attendances->get($dateKey);
+                $dayOff = $record?->status === 'off' || !$employee->isWorkingDay($date->copy());
+                $deductionHours = $deductions[$dateKey]['deduction_hours'] ?? null;
+                $time = static function ($value): string {
+                    if (!$value) return '';
+                    if ($value instanceof Carbon) return $value->format('H:i');
+                    $text = (string) $value;
+                    return substr(strlen($text) > 8 ? substr($text, -8) : $text, 0, 5);
+                };
+
+                $values = [
+                    $employee->ibs_code ?? '',
+                    $employee->name ?? '',
+                    $employee->project_budget ?? '',
+                    $employee->department ?? '',
+                    $employee->work_location ?? '',
+                    $date->format('j-M-Y'),
+                    $date->format('D'),
+                    $time($record?->check_in),
+                    $time($record?->check_out),
+                    $record?->work_hours ?? ($dayOff ? 0 : ''),
+                    $record?->overtime_hours ?? 0,
+                    $record?->late_minutes ?? 0,
+                    $record?->status ?? ($dayOff ? 'off' : 'not_recorded'),
+                    $deductionHours ?? '',
+                    $record?->notes ?? '',
+                ];
+                foreach ($values as $index => $value) {
+                    $column = Coordinate::stringFromColumnIndex($index + 1);
+                    $sheet->setCellValue("{$column}{$row}", $value);
+                }
+
+                $fill = $dayOff ? 'D5D5D5' : ($row % 2 === 0 ? 'F3F4F6' : 'FFFFFF');
+                $sheet->getStyle("A{$row}:{$lastCol}{$row}")->applyFromArray([
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $fill]],
+                    'font' => ['name' => 'Arial', 'size' => 9],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                    'borders' => ['allBorders' => $thin],
+                ]);
+                $sheet->getStyle("F{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $row++;
+                $date->addDay();
+            }
+        }
+
+        if ($row === 3) {
+            $sheet->setCellValue('A3', 'No employees found for this project.');
+            $sheet->mergeCells("A3:{$lastCol}3");
+        }
+
+        foreach ([16, 34, 18, 18, 18, 14, 10, 12, 12, 12, 14, 12, 16, 17, 35] as $index => $width) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($index + 1))->setWidth($width);
+        }
+        $sheet->setAutoFilter("A2:{$lastCol}2");
+        $sheet->freezePane('A3');
+        $sheet->getPageSetup()
+            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+            ->setFitToWidth(1)->setFitToHeight(0)->setFitToPage(true);
     }
 
     /**
@@ -1738,9 +1872,9 @@ class AttendanceController extends Controller
 
         $salaryContext = $this->loadSalaryContext($employees, $startDate, $endDate);
 
-        $rows = [];
+        $rowsBySheet = ['Ganz' => [], 'Line 1' => []];
         foreach ($employees as $employee) {
-            $rows[] = $this->calcSalaryRow(
+            $rowsBySheet[$this->attendanceProjectSheet($employee->project_budget)][] = $this->calcSalaryRow(
                 $employee,
                 $salaryContext['attendances']->get($employee->id, collect()),
                 $startDate,
@@ -1753,24 +1887,52 @@ class AttendanceController extends Controller
         }
 
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Internal Salary sheet');
+        $spreadsheet->removeSheetByIndex(0);
+        foreach ($rowsBySheet as $sheetName => $rows) {
+            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, $sheetName);
+            $spreadsheet->addSheet($sheet);
+            $this->buildInternalSalarySheet($sheet, $rows, $startDate, $endDate);
+        }
+        $spreadsheet->setActiveSheetIndex(0);
 
+        $writer   = new Xlsx($spreadsheet);
+        $filename = "Internal_Salary_{$startDate}_{$endDate}.xlsx";
+
+        return response()->streamDownload(
+            fn() => $writer->save('php://output'),
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
+    }
+
+    private function buildInternalSalarySheet(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        array $rows,
+        string $startDate,
+        string $endDate
+    ): void {
         $sheet->getPageSetup()
-              ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
-              ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
 
-        $C_HDR  = '4472C4';
-        $thin   = ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '000000']];
+        $C_HDR = '4472C4';
+        $thin = ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '000000']];
 
         $headers = ['IBS No.', 'Emp. Name', 'Morning overtime (Hrs.)', 'Night overtime (Hrs.)',
                      'Double Pay overtime (Hrs.)', 'Deduction (Hrs.)', 'Remarks'];
+
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->setCellValue('A1', $sheet->getTitle() . " Internal Salary {$startDate} to {$endDate}");
+        $sheet->mergeCells("A1:{$lastCol}1");
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
+            'font' => ['name' => 'Arial', 'bold' => true, 'size' => 12],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
 
         foreach ($headers as $ci => $hdr) {
             $col = Coordinate::stringFromColumnIndex($ci + 1);
             $sheet->setCellValue("{$col}2", $hdr);
         }
-        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
         $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $C_HDR]],
             'font'      => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
@@ -1805,15 +1967,7 @@ class AttendanceController extends Controller
         $sheet->getColumnDimension('E')->setWidth(26);
         $sheet->getColumnDimension('F')->setWidth(16);
         $sheet->getColumnDimension('G')->setWidth(14);
-
-        $writer   = new Xlsx($spreadsheet);
-        $filename = "Internal_Salary_{$startDate}_{$endDate}.xlsx";
-
-        return response()->streamDownload(
-            fn() => $writer->save('php://output'),
-            $filename,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-        );
+        $sheet->freezePane('A3');
     }
 
     private function loadSalaryContext($employees, string $startDate, string $endDate): array

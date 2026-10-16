@@ -1947,7 +1947,7 @@ export default function AttendanceTab() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="font-bold text-secondary-700">Export All Employees</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Each employee in a separate sheet</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Two sheets grouped by Project Budget: Ganz and Line 1</p>
               </div>
               <button onClick={() => setShowExportAllPicker(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
                 <X className="w-4 h-4" />

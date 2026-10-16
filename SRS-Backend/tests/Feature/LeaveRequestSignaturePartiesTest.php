@@ -114,6 +114,36 @@ class LeaveRequestSignaturePartiesTest extends TestCase
             ->assertJsonPath('data.signature_parties.depot_manager.e_signature', $signature);
 
         $leave->update([
+            'manager_approved_by' => null,
+            'manager_approved_at' => null,
+            'hr_approved_by' => null,
+            'hr_approved_at' => null,
+        ]);
+
+        $this->getJson("/api/leave-requests/{$leave->id}")
+            ->assertOk()
+            ->assertJsonPath('data.signature_parties.direct_manager.e_signature', $signature)
+            ->assertJsonPath('data.signature_parties.hr.e_signature', $signature)
+            ->assertJsonPath('data.signature_parties.depot_manager.e_signature', $signature);
+
+        $overtime = LeaveRequest::create([
+            'tracking_no' => "OTR-SIG-{$suffix}",
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'direct_manager_name' => $manager->name,
+            'type' => 'otr',
+            'status' => 'approved',
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+
+        $this->getJson("/api/leave-requests/{$overtime->id}")
+            ->assertOk()
+            ->assertJsonPath('data.signature_parties.direct_manager.e_signature', $signature)
+            ->assertJsonPath('data.signature_parties.hr.e_signature', $signature)
+            ->assertJsonPath('data.signature_parties.depot_manager.e_signature', $signature);
+
+        $leave->update([
             'status' => 'hr_approved',
             'approved_by' => null,
             'approved_at' => null,

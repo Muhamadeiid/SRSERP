@@ -233,6 +233,52 @@ class HrLeaveClassificationTest extends TestCase
             ->assertJsonPath('data.tracking_no', 'LRF-EG1-1001');
     }
 
+    public function test_overtime_tracking_sequence_continues_beyond_three_digits(): void
+    {
+        $admin = User::create([
+            'name' => 'Four Digit Overtime Admin',
+            'email' => 'four-digit-overtime-admin@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'admin',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Four Digit Overtime Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+
+        foreach ([999, 1000] as $sequence) {
+            LeaveRequest::create([
+                'tracking_no' => 'OTR-EG1-' . $sequence,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'type' => 'otr',
+                'ot_date' => '2026-10-' . ($sequence === 999 ? '01' : '02'),
+                'start_time' => '17:00',
+                'end_time' => '19:00',
+                'hours' => 2,
+                'status' => 'approved',
+            ]);
+        }
+
+        $next = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'otr',
+            'ot_date' => '2026-10-03',
+            'start_time' => '17:00',
+            'end_time' => '19:00',
+            'hours' => 2,
+            'status' => 'hr_approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/leave-requests/{$next->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'OTR-EG1-1001');
+    }
+
     public function test_tracking_sequence_uses_leave_request_date_instead_of_approval_date(): void
     {
         $admin = User::create([
