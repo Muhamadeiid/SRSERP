@@ -874,7 +874,7 @@ class LeaveRequestController extends Controller
                 'cancelled_by' => $user->id,
             ]);
 
-            $this->releaseAndResequenceTracking($locked);
+            $this->releaseAndCloseTrackingGap($locked);
 
             return $locked;
         });
@@ -937,7 +937,7 @@ class LeaveRequestController extends Controller
                 'cancellation_rejection_reason' => null,
             ]);
 
-            $this->releaseAndResequenceTracking($locked);
+            $this->releaseAndCloseTrackingGap($locked);
 
             return [$locked, $balanceRestored];
         });
@@ -1146,11 +1146,11 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Release the official number of a finally-cancelled request and close the
-     * resulting gap inside that exact request/project series. The released
-     * number remains on the cancelled row as an audit reference only.
+     * Preserve the cancelled request's number for audit, then move only later
+     * numbers down by one slot. This closes the released gap without restarting
+     * the whole series from 001 when numbering has already reached 1000+.
      */
-    private function releaseAndResequenceTracking(LeaveRequest $cancelled): void
+    private function releaseAndCloseTrackingGap(LeaveRequest $cancelled): void
     {
         $released = trim((string) $cancelled->tracking_no);
         if ($released === '') {
@@ -1167,28 +1167,35 @@ class LeaveRequestController extends Controller
         }
 
         $prefix = $matches[1];
-        $requests = LeaveRequest::query()
+        $releasedSequence = (int) $matches[2];
+        $later = LeaveRequest::query()
             ->where('id', '!=', $cancelled->id)
             ->where('tracking_no', 'like', $prefix . '%')
             ->whereNotIn('status', ['cancelled', 'rejected', 'rescheduled'])
-            ->orderByRaw("CASE WHEN type = 'otr' THEN COALESCE(ot_date, request_date, DATE(created_at)) ELSE COALESCE(request_date, DATE(created_at)) END ASC")
-            ->orderBy('created_at')
-            ->orderBy('id')
             ->lockForUpdate()
-            ->get(['id']);
+            ->get(['id', 'tracking_no'])
+            ->map(function (LeaveRequest $request) use ($prefix) {
+                $tail = substr((string) $request->tracking_no, strlen($prefix));
 
-        // Two passes keep this safe even if an installation still has a
-        // unique index on tracking_no: free every old number before assigning
-        // the compact sequence.
-        foreach ($requests as $request) {
-            DB::table('leave_requests')->where('id', $request->id)->update([
-                'tracking_no' => "__TRACKING_RESEQUENCE__{$request->id}",
+                return ctype_digit($tail)
+                    ? ['id' => $request->id, 'sequence' => (int) $tail]
+                    : null;
+            })
+            ->filter(fn ($request) => $request !== null && $request['sequence'] > $releasedSequence)
+            ->sortBy('sequence')
+            ->values();
+
+        // Free the existing values first so this remains safe with the unique
+        // tracking-number index, then shift every later number exactly one slot.
+        foreach ($later as $request) {
+            DB::table('leave_requests')->where('id', $request['id'])->update([
+                'tracking_no' => "__TRACKING_SHIFT__{$request['id']}",
             ]);
         }
 
-        foreach ($requests->values() as $index => $request) {
-            DB::table('leave_requests')->where('id', $request->id)->update([
-                'tracking_no' => $prefix . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+        foreach ($later as $request) {
+            DB::table('leave_requests')->where('id', $request['id'])->update([
+                'tracking_no' => $prefix . str_pad((string) ($request['sequence'] - 1), 3, '0', STR_PAD_LEFT),
             ]);
         }
     }

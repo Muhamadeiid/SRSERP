@@ -176,6 +176,63 @@ class HrLeaveClassificationTest extends TestCase
             ->assertJsonPath('data.tracking_no', 'LRF-EG1-015');
     }
 
+    public function test_tracking_sequence_continues_beyond_three_digits(): void
+    {
+        $admin = User::create([
+            'name' => 'Four Digit Sequence Admin',
+            'email' => 'four-digit-sequence-admin@srs.test',
+            'password' => bcrypt('test-only'),
+            'role' => 'admin',
+        ]);
+        $employee = Employee::create([
+            'name' => 'Four Digit Sequence Employee',
+            'position' => 'Technician',
+            'department' => 'CM',
+            'status' => 'On Site',
+        ]);
+        LeaveBalance::create([
+            'employee_id' => $employee->id,
+            'annual' => 21,
+            'casual' => 7,
+            'sick' => 90,
+            'early' => 0,
+        ]);
+
+        foreach ([999, 1000] as $sequence) {
+            LeaveRequest::create([
+                'tracking_no' => 'LRF-EG1-' . $sequence,
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'type' => 'lrf',
+                'leave_type' => 'annual',
+                'paid' => true,
+                'request_date' => '2026-10-' . ($sequence === 999 ? '01' : '02'),
+                'start_date' => '2026-10-' . ($sequence === 999 ? '10' : '11'),
+                'end_date' => '2026-10-' . ($sequence === 999 ? '10' : '11'),
+                'days' => 1,
+                'status' => 'approved',
+            ]);
+        }
+
+        $next = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'type' => 'lrf',
+            'leave_type' => 'annual',
+            'paid' => true,
+            'request_date' => '2026-10-03',
+            'start_date' => '2026-10-12',
+            'end_date' => '2026-10-12',
+            'days' => 1,
+            'status' => 'hr_approved',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/leave-requests/{$next->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.tracking_no', 'LRF-EG1-1001');
+    }
+
     public function test_tracking_sequence_uses_leave_request_date_instead_of_approval_date(): void
     {
         $admin = User::create([

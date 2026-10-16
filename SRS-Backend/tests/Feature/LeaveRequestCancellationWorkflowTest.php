@@ -301,12 +301,12 @@ class LeaveRequestCancellationWorkflowTest extends TestCase
         $this->assertSame($depot->id, $request->fresh()->cancelled_by);
     }
 
-    public function test_final_cancellation_releases_number_and_resequences_its_series(): void
+    public function test_final_cancellation_reuses_the_number_without_restarting_a_four_digit_series(): void
     {
         [$employee, $depot] = $this->users();
         $prefix = 'LRF-GZ' . Str::upper(Str::random(6)) . '-';
 
-        $requests = collect([1, 2, 3])->map(function (int $sequence) use ($employee, $prefix) {
+        $requests = collect([999, 1000, 1001])->map(function (int $sequence) use ($employee, $prefix) {
             return LeaveRequest::create([
                 'tracking_no' => $prefix . str_pad((string) $sequence, 3, '0', STR_PAD_LEFT),
                 'user_id' => $employee->id,
@@ -328,9 +328,9 @@ class LeaveRequestCancellationWorkflowTest extends TestCase
         ])->assertOk();
 
         $this->assertNull($requests[1]->fresh()->tracking_no);
-        $this->assertSame($prefix . '002', $requests[1]->fresh()->cancelled_tracking_no);
-        $this->assertSame($prefix . '001', $requests[0]->fresh()->tracking_no);
-        $this->assertSame($prefix . '002', $requests[2]->fresh()->tracking_no);
+        $this->assertSame($prefix . '1000', $requests[1]->fresh()->cancelled_tracking_no);
+        $this->assertSame($prefix . '999', $requests[0]->fresh()->tracking_no);
+        $this->assertSame($prefix . '1000', $requests[2]->fresh()->tracking_no);
     }
 
     private function users(): array
