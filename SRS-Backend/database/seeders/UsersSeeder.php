@@ -10,6 +10,9 @@ class UsersSeeder extends Seeder
 {
     public function run(): void
     {
+        if (!app()->environment(['local', 'testing'])) {
+            throw new \RuntimeException('Demo users are disabled outside local/testing. Use srs:create-admin for initial setup.');
+        }
         $users = [
             // Admin
             ['name' => 'Admin User',          'email' => 'admin@srs.com',          'role' => 'admin',         'department' => 'admin'],

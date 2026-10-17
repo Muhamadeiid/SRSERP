@@ -125,12 +125,23 @@ class CalendarEventController extends Controller
 
     public function update(Request $request, CalendarEvent $calendarEvent): JsonResponse
     {
+        return DB::transaction(fn () => $this->updateLocked($request, CalendarEvent::whereKey($calendarEvent->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function updateLocked(Request $request, CalendarEvent $calendarEvent): JsonResponse
+    {
         abort_unless($calendarEvent->created_by === $request->user()->id || $request->user()->isAdmin(), 403);
         $data = $this->validatedPayload($request, true);
         $merged = array_merge($calendarEvent->only([
             'type', 'title', 'notes', 'event_date', 'event_time', 'duration_min', 'is_all_day',
             'leave_end_date', 'recurrence_type', 'recurrence_interval', 'recurrence_weekdays', 'recurrence_until',
         ]), $data);
+        if (!array_key_exists('participants', $data)) {
+            $merged['participants'] = $calendarEvent->participants()->get()->map(fn ($participant) => [
+                'user_id' => $participant->id,
+                'role' => $participant->pivot->role,
+            ])->all();
+        }
         $this->authorizePayload($request->user(), $merged);
         if (array_key_exists('checklist', $data)) $data['checklist'] = $this->normalizeChecklist($data['checklist']);
         // A reminder is meaningless without a start time; drop it when the event becomes all-day.

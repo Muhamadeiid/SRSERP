@@ -184,6 +184,11 @@ class ReleaseNoteController extends Controller
      */
     public function update(Request $request, ReleaseNote $releaseNote): JsonResponse
     {
+        return DB::transaction(fn () => $this->updateLocked($request, ReleaseNote::whereKey($releaseNote->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function updateLocked(Request $request, ReleaseNote $releaseNote): JsonResponse
+    {
         $user     = auth()->user();
         $fulfils  = $this->canFulfil($user);
         $prepares = $this->canPrepare($user);

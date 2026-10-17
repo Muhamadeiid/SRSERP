@@ -10,6 +10,9 @@ class AdminSeeder extends Seeder
 {
     public function run(): void
     {
+        if (!app()->environment(['local', 'testing'])) {
+            throw new \RuntimeException('Default admin is disabled outside local/testing. Use srs:create-admin for initial setup.');
+        }
         User::firstOrCreate(
             ['email' => 'admin@srs.com'],
             [

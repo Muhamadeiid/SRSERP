@@ -475,6 +475,9 @@ class LeaveRequestController extends Controller
         $depotEmployee = $depotManager
             ? Employee::active()->where('user_id', $depotManager->id)->first(['id', 'name', 'e_signature'])
             : null;
+        $finallyApproved = in_array($leave->status, ['approved', 'cancellation_pending', 'amendment_pending'], true)
+            && $leave->approved_at;
+        $signable = !in_array($leave->status, ['rejected', 'cancelled'], true);
         $leave->setAttribute('signature_parties', [
             'employee' => $leave->employee ? [
                 'id' => $leave->employee->id,
@@ -490,7 +493,7 @@ class LeaveRequestController extends Controller
                 'id' => $directManagerEmployee?->id ?? $directManagerUser?->id,
                 'name' => $leave->direct_manager_name ?: ($directManagerEmployee?->name ?? $directManagerUser?->name),
                 'role' => $directManagerUser?->role,
-                'e_signature' => ($leave->manager_approved_at || $leave->approved_at)
+                'e_signature' => ($signable && ($leave->manager_approved_at || $finallyApproved))
                     ? ($directManagerEmployee?->e_signature ?: $directManagerUser?->e_signature)
                     : null,
             ] : null,
@@ -500,7 +503,7 @@ class LeaveRequestController extends Controller
                 'role' => $hrOfficer->role,
                 // Signatures uploaded from Workforce belong to the employee
                 // record and are the authoritative source for HR forms.
-                'e_signature' => ($leave->hr_approved_at || $leave->approved_at)
+                'e_signature' => ($signable && ($leave->hr_approved_at || $finallyApproved))
                     ? ($hrEmployee?->e_signature ?: $hrOfficer->e_signature)
                     : null,
             ] : null,
@@ -508,7 +511,7 @@ class LeaveRequestController extends Controller
                 'id' => $depotManager->id,
                 'name' => $depotEmployee?->name ?: $depotManager->name,
                 'role' => $depotManager->role,
-                'e_signature' => $leave->approved_at
+                'e_signature' => $finallyApproved
                     ? ($depotEmployee?->e_signature ?: $depotManager->e_signature)
                     : null,
             ] : null,
@@ -673,7 +676,7 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
-        if (in_array($leaveRequest->status, ['approved', 'rejected', 'cancelled'], true)) {
+        if (!in_array($leaveRequest->status, ['pending', 'manager_approved', 'hr_approved'], true)) {
             return response()->json(['success' => false, 'message' => 'Request is already finalized'], 422);
         }
 
@@ -682,12 +685,21 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
         }
 
-        $leaveRequest->update($changes);
+        DB::transaction(function () use ($leaveRequest, $changes) {
+            $current = LeaveRequest::whereKey($leaveRequest->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($current->status, ['pending', 'manager_approved', 'hr_approved'], true), 422, 'Request is already finalized');
+            $current->update($changes);
+        });
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
 
     public function reject(Request $request, LeaveRequest $leaveRequest): JsonResponse
+    {
+        return DB::transaction(fn () => $this->rejectLocked($request, LeaveRequest::whereKey($leaveRequest->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function rejectLocked(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();
         $canHrAct = ($user->role === 'hr' || $user->hasPermission('leaves.approve_hr'))
@@ -695,7 +707,7 @@ class LeaveRequestController extends Controller
         if (!in_array($user->role, ['admin', 'depot_manager']) && !$this->isDirectManager($leaveRequest, $user->id) && !$canHrAct) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        if (in_array($leaveRequest->status, ['approved', 'rejected', 'cancelled'])) {
+        if (!in_array($leaveRequest->status, ['pending', 'manager_approved', 'hr_approved'], true)) {
             return response()->json(['success' => false, 'message' => 'Request already processed'], 422);
         }
 
@@ -711,7 +723,7 @@ class LeaveRequestController extends Controller
             'tracking_no' => null,
             'status' => 'rejected',
             'approved_by' => $user->id,
-            'approved_at' => now(),
+            'approved_at' => null,
             'rejection_reason' => trim($validated['reason']),
             'rejected_by' => $user->id,
             'rejected_at' => now(),
@@ -1259,6 +1271,7 @@ class LeaveRequestController extends Controller
 
     public function calendar(): JsonResponse
     {
+        abort_unless(auth()->user()->isHR(), 403);
         $this->deductions->processDue();
 
         $requests = LeaveRequest::where('type', 'lrf')

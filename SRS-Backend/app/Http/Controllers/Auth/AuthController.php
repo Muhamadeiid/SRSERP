@@ -8,12 +8,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AuthController extends Controller
 {
     public function login(Request $request)
+    {
+        return DB::transaction(fn () => $this->loginLocked($request));
+    }
+
+    private function loginLocked(Request $request)
     {
         $request->merge([
             'email' => strtolower(trim((string) $request->input('email'))),
@@ -24,7 +30,7 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::whereRaw('LOWER(TRIM(email)) = ?', [$request->email])->first();
+        $user = User::whereRaw('LOWER(TRIM(email)) = ?', [$request->email])->lockForUpdate()->first();
         $password = (string) $request->password;
         $passwordMatches = $user && Hash::check($password, $user->password);
 

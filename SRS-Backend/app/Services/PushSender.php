@@ -41,7 +41,7 @@ class PushSender
                     'publicKey'  => $public,
                     'privateKey' => $private,
                 ],
-            ], ['TTL' => config('webpush.ttl')], config('webpush.timeout', 3));
+            ], ['TTL' => config('webpush.ttl')], config('webpush.timeout', 3), ['allow_redirects' => false]);
         } catch (\Throwable $e) {
             Log::warning('PushSender init failed: ' . $e->getMessage());
             return;
@@ -54,6 +54,9 @@ class PushSender
         ]);
 
         foreach ($subs as $sub) {
+            if (!PushEndpointPolicy::allows($sub->endpoint)) {
+                continue;
+            }
             $subscription = Subscription::create([
                 'endpoint'        => $sub->endpoint,
                 'publicKey'       => $sub->p256dh_key,

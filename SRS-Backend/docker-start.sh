@@ -52,9 +52,11 @@ fi
 echo "[SRS] Running migrations..."
 php artisan migrate --force
 
-# Seed default users
-echo "[SRS] Seeding default users..."
-php artisan db:seed --class=UsersSeeder --force
+# Demo identities must never be recreated on a production restart.
+if [ "$APP_ENV" = "local" ] || [ "$APP_ENV" = "testing" ]; then
+    echo "[SRS] Seeding development users..."
+    php artisan db:seed --class=UsersSeeder --force
+fi
 
 # Cache config for performance
 php artisan config:cache

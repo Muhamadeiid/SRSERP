@@ -136,8 +136,8 @@ export default function PrfNewPage() {
   const handleNotesImage = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (PNG / JPG)')
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+      alert('Please upload a PNG, JPG, WEBP or GIF image')
       return
     }
     if (file.size > 2 * 1024 * 1024) {
@@ -413,7 +413,7 @@ export default function PrfNewPage() {
             {!form.notes_image ? (
               <label className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold text-primary bg-white hover:bg-primary/5 border border-primary/30 rounded-lg cursor-pointer transition-all">
                 <Upload className="w-3 h-3" /> Attach Image
-                <input type="file" accept="image/*" onChange={handleNotesImage} className="hidden" />
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleNotesImage} className="hidden" />
               </label>
             ) : (
               <button type="button" onClick={() => set('notes_image', '')}

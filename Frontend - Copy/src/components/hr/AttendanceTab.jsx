@@ -5,6 +5,7 @@ import { getEmployees } from '../../services/employeeService'
 import { getLeaveBalance } from '../../services/leaveService'
 import { getSettings } from '../../services/settingsService'
 import { useLookups } from '../../hooks/useLookups'
+import { escapeHtml as esc } from '../../utils/escapeHtml'
 import {
   Search, Upload, Download, RefreshCw, Printer,
   Loader2, X, Pencil, Plus, CalendarDays, Save, ClipboardPaste,
@@ -696,7 +697,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
   const infoRow = (l,v,hi=false) =>
     `<tr style="${hi?'background:#dbeafe':''}">
       <td class="lbl">${l}</td>
-      <td class="val" style="${hi?'color:#1d4ed8':''}">${v??''}</td>
+      <td class="val" style="${hi?'color:#1d4ed8':''}">${esc(v)}</td>
     </tr>`
 
   const rowsHtml = rows.map((r,i) => {
@@ -709,8 +710,8 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
     const txtClr = off?'color:#9ca3af;':''
     return `<tr style="background:${rowBg};${txtClr}">
       <td>${i+1}</td>
-      <td style="white-space:nowrap">${fmtDate(r.dateStr)}</td>
-      <td>${r.dayName}</td>
+      <td style="white-space:nowrap">${esc(fmtDate(r.dateStr))}</td>
+      <td>${esc(r.dayName)}</td>
       <td>${rec?.check_in  ? fmt12P(rec.check_in)  : ''}</td>
       <td>${rec?.check_out ? fmt12P(rec.check_out) : ''}</td>
       <td style="font-weight:bold">${workStr}</td>
@@ -723,12 +724,12 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
       <td style="font-weight:bold;color:${ot?'#1d4ed8':''}">${ot ? ot.total : '0'}</td>
       <td style="color:#dc2626">${dedMin>0 ? dedMin/60 : ''}</td>
       <td style="color:#dc2626">${dedMin>0 ? dedMin    : ''}</td>
-      <td style="text-align:left;color:#6b7280;font-size:6pt">${rec?.notes??''}</td>
+      <td style="text-align:left;color:#6b7280;font-size:6pt">${esc(rec?.notes)}</td>
     </tr>`
   }).join('')
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Attendance — ${employee.name}</title>
+<title>Attendance — ${esc(employee.name)}</title>
 <style>
   @page { size: A4 landscape; margin:0; }
   *{ margin:0; padding:0; box-sizing:border-box; }
@@ -783,9 +784,9 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
     <div class="title-ar">سجل حضور الموظفين الشهري</div>
   </div>
   <div class="top-meta">
-    <div><b>IBS No:</b> ${employee.ibs_code||'—'}</div>
-    <div><b>Period:</b> ${fmtDate(startDate)} → ${fmtDate(endDate)}</div>
-    <div><b>Dept:</b> ${employee.department||'—'}</div>
+    <div><b>IBS No:</b> ${esc(employee.ibs_code||'—')}</div>
+    <div><b>Period:</b> ${esc(fmtDate(startDate))} → ${esc(fmtDate(endDate))}</div>
+    <div><b>Dept:</b> ${esc(employee.department||'—')}</div>
   </div>
 </div>
 
@@ -873,6 +874,7 @@ function printReport(employee, balance, startDate, endDate, rows, policy = ATTEN
 </div></body></html>`
 
   const w = window.open('', '_blank', 'width=1150,height=820')
+  if (!w) return
   w.document.write(html)
   w.document.close()
   w.focus()

@@ -1,12 +1,18 @@
 import api from './axios'
+import axios from 'axios'
+import { API_BASE_URL } from '../config/api'
 
 export const login = async (email, password) => {
   const { data } = await api.post('/auth/login', { email, password })
   return data
 }
 
-export const logoutApi = async () => {
-  await api.post('/auth/logout')
+export const logoutApi = async (token) => {
+  // Do not let a late logout response clear a different, newly signed-in session.
+  await axios.post(`${API_BASE_URL}/auth/logout`, {}, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    timeout: 5000,
+  })
 }
 
 export const getMe = async () => {

@@ -398,12 +398,16 @@ export async function generateLRF(d, { download = true } = {}) {
   }
 
   // Resolve each signature slot to a docx image (PNG bytes). Runs in parallel.
+  const signable = !['rejected', 'cancelled'].includes(d.status)
+  const finallyApproved = ['approved', 'cancellation_pending', 'amendment_pending'].includes(d.status)
+  const managerSigned = signable && (finallyApproved || d.manager_approved_at)
+  const hrSigned = signable && (finallyApproved || d.hr_approved_at)
   const [empSig, altSig, mgrSig, hrSig, depotSig] = await Promise.all([
     signatureToImage(employeeParty?.e_signature),
     signatureToImage(alternateParty?.e_signature),
-    signatureToImage(managerIsDepot ? null : (directManager?.e_signature || d.manager_signature)),
-    signatureToImage(hrParty?.e_signature || d.hr_signature),
-    signatureToImage(depotParty?.e_signature || d.depot_signature),
+    signatureToImage(managerIsDepot || !managerSigned ? null : (directManager?.e_signature || d.manager_signature)),
+    signatureToImage(hrSigned ? (hrParty?.e_signature || d.hr_signature) : null),
+    signatureToImage(finallyApproved ? (depotParty?.e_signature || d.depot_signature) : null),
   ])
   const sigImages = { employee: empSig, alternate: altSig, direct: mgrSig, hr: hrSig, depot: depotSig }
 

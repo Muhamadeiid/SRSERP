@@ -179,6 +179,11 @@ class IgiController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function update(Request $request, IncomingGoodsInspection $igi): JsonResponse
     {
+        return DB::transaction(fn () => $this->updateLocked($request, IncomingGoodsInspection::whereKey($igi->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function updateLocked(Request $request, IncomingGoodsInspection $igi): JsonResponse
+    {
         $user = auth()->user();
         if ($request->has('status') || $request->has('approval_status')) {
             return response()->json(['message' => 'IGI status can only change through the approval or rejected-goods workflow'], 422);
@@ -273,6 +278,11 @@ class IgiController extends Controller
 
     public function submitForApproval(IncomingGoodsInspection $igi): JsonResponse
     {
+        return DB::transaction(fn () => $this->submitLocked(IncomingGoodsInspection::whereKey($igi->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function submitLocked(IncomingGoodsInspection $igi): JsonResponse
+    {
         $user = auth()->user();
         if (!$this->canAccess($user)) return response()->json(['message'=>'Forbidden'],403);
         if ($igi->approval_status !== 'draft') return response()->json(['message'=>'IGI is already in approval or closed'],422);
@@ -290,6 +300,11 @@ class IgiController extends Controller
     }
 
     public function decide(Request $request, IncomingGoodsInspection $igi): JsonResponse
+    {
+        return DB::transaction(fn () => $this->decideLocked($request, IncomingGoodsInspection::whereKey($igi->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function decideLocked(Request $request, IncomingGoodsInspection $igi): JsonResponse
     {
         $user=auth()->user();
         $data=$request->validate(['action'=>'required|in:approve,reject','comment'=>'nullable|string|max:2000']);

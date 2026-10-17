@@ -194,6 +194,12 @@ class PurchaseOrderController extends Controller
     // ─────────────────────────────────────────────────────────────
     public function update(Request $request, PurchaseOrder $po): JsonResponse
     {
+        return DB::transaction(fn () => $this->updateLocked($request, PurchaseOrder::whereKey($po->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function updateLocked(Request $request, PurchaseOrder $po): JsonResponse
+    {
+        abort_if($po->status === 'cancelled', 422, 'Cancelled purchase orders cannot be changed');
         if (! $this->canManage()) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
@@ -354,6 +360,12 @@ class PurchaseOrderController extends Controller
 
     public function submitForApproval(PurchaseOrder $po): JsonResponse
     {
+        return DB::transaction(fn () => $this->submitLocked(PurchaseOrder::whereKey($po->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function submitLocked(PurchaseOrder $po): JsonResponse
+    {
+        abort_if($po->status === 'cancelled', 422, 'Cancelled purchase orders cannot be submitted');
         if (! $this->canManage()) return response()->json(['message' => 'Only Procurement can submit a PO for approval'], 403);
         if ($po->approval_status !== 'draft' && $po->approval_status !== 'rejected') {
             return response()->json(['message' => 'PO is already in the approval cycle'], 422);
@@ -397,6 +409,12 @@ class PurchaseOrderController extends Controller
 
     public function decide(Request $request, PurchaseOrder $po): JsonResponse
     {
+        return DB::transaction(fn () => $this->decideLocked($request, PurchaseOrder::whereKey($po->id)->lockForUpdate()->firstOrFail()));
+    }
+
+    private function decideLocked(Request $request, PurchaseOrder $po): JsonResponse
+    {
+        abort_if($po->status === 'cancelled', 422, 'Cancelled purchase orders cannot be approved');
         $user = auth()->user();
         $data = $request->validate(['action' => 'required|in:approve,reject', 'comment' => 'nullable|string|max:2000']);
         $stages = [

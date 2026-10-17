@@ -19,6 +19,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(new \App\Support\FormulaSafeValueBinder());
     }
 }

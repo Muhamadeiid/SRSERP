@@ -38,10 +38,10 @@ use App\Http\Controllers\ReleaseNoteController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public ────────────────────────────────────────────────────────────────────
-Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // ── Authenticated (all roles) ─────────────────────────────────────────────────
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::class])->group(function () {
 
     // Incident reports: all users can submit; reviewers see and complete all reports.
     Route::get('/incident-reports', [IncidentReportController::class, 'index']);

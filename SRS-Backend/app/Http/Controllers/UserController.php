@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -89,7 +90,12 @@ class UserController extends Controller
             $data['department'] = strtolower(trim($data['department']));
         }
 
-        $user->update($data);
+        DB::transaction(function () use ($user, $data) {
+            $user->update($data);
+            if (!$user->is_active) {
+                $user->tokens()->delete();
+            }
+        });
         if (array_key_exists('manager_id', $data)) {
             \App\Services\ManagerHierarchyService::syncFromUser($user->fresh());
         }
@@ -140,13 +146,14 @@ class UserController extends Controller
     {
         $dm = User::where('role', 'depot_manager')
             ->where('is_active', true)
-            ->first(['id', 'name', 'email', 'role', 'e_signature']);
+            ->first(['id', 'name', 'role']);
 
+        // Name only: these endpoints are open to every signed-in user, so they
+        // must never hand out the officer's e-signature image or contact details.
         if ($dm) {
-            $employee = Employee::active()->where('user_id', $dm->id)->first(['name', 'e_signature']);
-            if ($employee) {
-                $dm->setAttribute('name', $employee->name ?: $dm->name);
-                $dm->setAttribute('e_signature', $employee->e_signature ?: $dm->e_signature);
+            $employeeName = Employee::active()->where('user_id', $dm->id)->value('name');
+            if ($employeeName) {
+                $dm->setAttribute('name', $employeeName);
             }
         }
 
@@ -162,13 +169,14 @@ class UserController extends Controller
     {
         $hr = User::where('role', 'hr')
             ->where('is_active', true)
-            ->first(['id', 'name', 'email', 'role', 'e_signature']);
+            ->first(['id', 'name', 'role']);
 
+        // Name only: these endpoints are open to every signed-in user, so they
+        // must never hand out the officer's e-signature image or contact details.
         if ($hr) {
-            $employee = Employee::active()->where('user_id', $hr->id)->first(['name', 'e_signature']);
-            if ($employee) {
-                $hr->setAttribute('name', $employee->name ?: $hr->name);
-                $hr->setAttribute('e_signature', $employee->e_signature ?: $hr->e_signature);
+            $employeeName = Employee::active()->where('user_id', $hr->id)->value('name');
+            if ($employeeName) {
+                $hr->setAttribute('name', $employeeName);
             }
         }
 
@@ -269,7 +277,10 @@ class UserController extends Controller
             ], 409);
         }
 
-        $user->update(['password' => Hash::make($data['password'])]);
+        DB::transaction(function () use ($user, $data) {
+            $user->update(['password' => Hash::make($data['password'])]);
+            $user->tokens()->delete();
+        });
 
         return response()->json([
             'message' => 'Password reset successfully',

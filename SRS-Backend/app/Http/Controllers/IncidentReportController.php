@@ -220,8 +220,8 @@ class IncidentReportController extends Controller
     {
         $columns = $withSignatures ? 'id,name,e_signature' : 'id,name';
         $employeeColumns = $withSignatures
-            ? 'id,name,position,department,e_signature'
-            : 'id,name,position,department';
+            ? 'id,name,position,department,user_id,e_signature'
+            : 'id,name,position,department,user_id';
         return [
             "requester:{$columns}", "requesterEmployee:{$employeeColumns}", "followUpUser:{$columns}",
             "hrGeneralist:{$columns}", "depotManager:{$columns}",

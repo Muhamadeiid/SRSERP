@@ -8,6 +8,7 @@ import {
   Printer, RotateCcw, Trash2, Filter, Monitor, FileDown, Upload, Download,
 } from 'lucide-react'
 import ITAssetsTab from './ITAssetsTab'
+import { escapeHtml as esc } from '../../utils/escapeHtml'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const DEPARTMENTS = [
@@ -311,23 +312,23 @@ function printClearance(data) {
   const deptRows = by_department.map(dept => `
     <tr style="background:#1e3a2f;color:#fff">
       <td colspan="6" style="padding:5px 8px;font-weight:bold;font-size:9pt">
-        ${dept.department} &nbsp;(${dept.count} item${dept.count !== 1 ? 's' : ''})
+        ${esc(dept.department)} &nbsp;(${esc(dept.count)} item${dept.count !== 1 ? 's' : ''})
       </td>
     </tr>
     ${dept.assets.map((a, i) => `
       <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
         <td style="padding:4px 8px;border:1px solid #e5e7eb">${i + 1}</td>
-        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-weight:600">${a.asset_name}</td>
-        <td style="padding:4px 8px;border:1px solid #e5e7eb;color:#6b7280">${a.asset_category ?? '—'}</td>
-        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${a.asset_code ?? '—'}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-weight:600">${esc(a.asset_name)}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;color:#6b7280">${esc(a.asset_category ?? '—')}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${esc(a.asset_code ?? '—')}</td>
         <td style="padding:4px 8px;border:1px solid #e5e7eb">${a.received_date ? new Date(a.received_date + 'T00:00:00').toLocaleDateString('en-GB') : '—'}</td>
-        <td style="padding:4px 8px;border:1px solid #e5e7eb;color:${a.condition === 'Good' ? '#16a34a' : a.condition === 'Damaged' ? '#ea580c' : '#dc2626'};font-weight:600">${a.condition}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;color:${a.condition === 'Good' ? '#16a34a' : a.condition === 'Damaged' ? '#ea580c' : '#dc2626'};font-weight:600">${esc(a.condition)}</td>
       </tr>
     `).join('')}
   `).join('')
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Employee Clearance — ${employee.name}</title>
+<title>Employee Clearance — ${esc(employee.name)}</title>
 <style>
   @page { size: A4 portrait; margin: 15mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -359,10 +360,10 @@ function printClearance(data) {
     </div>
   </div>
   <div class="header-info">
-    <div class="info-cell"><div class="lbl">Employee Name</div><div class="val">${employee.name}</div></div>
-    <div class="info-cell"><div class="lbl">IBS Code</div><div class="val">${employee.ibs_code ?? '—'}</div></div>
-    <div class="info-cell"><div class="lbl">Department</div><div class="val">${employee.department ?? '—'}</div></div>
-    <div class="info-cell"><div class="lbl">Position</div><div class="val">${employee.position ?? '—'}</div></div>
+    <div class="info-cell"><div class="lbl">Employee Name</div><div class="val">${esc(employee.name)}</div></div>
+    <div class="info-cell"><div class="lbl">IBS Code</div><div class="val">${esc(employee.ibs_code ?? '—')}</div></div>
+    <div class="info-cell"><div class="lbl">Department</div><div class="val">${esc(employee.department ?? '—')}</div></div>
+    <div class="info-cell"><div class="lbl">Position</div><div class="val">${esc(employee.position ?? '—')}</div></div>
   </div>
 </div>
 
@@ -412,6 +413,7 @@ ${active_count > 0 ? `
 </body></html>`
 
   const w = window.open('', '_blank', 'width=900,height=700')
+  if (!w) return
   w.document.write(html)
   w.document.close()
   w.focus()

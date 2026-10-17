@@ -668,7 +668,7 @@ class AttendanceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Attendance status saved; biometric punch times were kept unchanged.',
-                'data' => $biometric->fresh()->load(['employee', 'creator']),
+                'data' => $biometric->fresh()->load(['employee:id,name,arabic_name,ibs_code,position,department,work_location', 'creator:id,name']),
             ]);
         }
 
@@ -683,7 +683,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Daily attendance saved.',
-            'data' => $attendance->load(['employee', 'creator']),
+            'data' => $attendance->load(['employee:id,name,arabic_name,ibs_code,position,department,work_location', 'creator:id,name']),
         ]);
     }
 

@@ -20,7 +20,11 @@ class PushController extends Controller
     public function subscribe(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'endpoint'   => ['required', 'string', 'max:500'],
+            'endpoint'   => ['required', 'string', 'max:500', function ($attribute, $value, $fail) {
+                if (!\App\Services\PushEndpointPolicy::allows($value)) {
+                    $fail('A supported HTTPS browser push endpoint is required.');
+                }
+            }],
             'p256dh_key' => ['required', 'string', 'max:200'],
             'auth_key'   => ['required', 'string', 'max:100'],
             'user_agent' => ['nullable', 'string', 'max:300'],

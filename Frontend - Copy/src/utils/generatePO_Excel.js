@@ -1,4 +1,5 @@
 import { saveAs } from 'file-saver'
+import { poApprovalCycle } from './poApprovalCycle'
 
 const HEADER_GREY = 'FFD9D9D9'
 const LIGHT_GREY  = 'FFF2F2F2'
@@ -39,6 +40,7 @@ function applyBorder(ws, startRow, startCol, endRow, endCol) {
 const COLS = [4, 22, 8, 9, 7, 6, 10, 10, 12]  // widths in chars
 
 export async function generatePO_Excel(po) {
+  const cycle = poApprovalCycle(po)
   const ExcelJS = (await import('exceljs')).default
   const wb  = new ExcelJS.Workbook()
   wb.creator = 'Rotem SRS'
@@ -76,7 +78,7 @@ export async function generatePO_Excel(po) {
   c11.border    = ALL_MED
 
   const c13 = ws.getCell(row, 3)
-  c13.value = 'Purchase Order'
+  c13.value = cycle.isDraft ? 'Purchase Order - DRAFT' : 'Purchase Order'
   c13.font      = boldFont(18)
   c13.alignment = center
   c13.fill      = fill(WHITE)
@@ -275,7 +277,7 @@ export async function generatePO_Excel(po) {
   const sigLabels = ['Requester', 'Procurement', 'Logistics Manager /', 'Depot Manager', 'MD']
   const sigValues = [
     po.prf?.requester?.name ?? '',
-    po.creator?.name ?? '',
+    (cycle.hasRejection ? cycle.approval('procurement')?.approver?.name : po.creator?.name) ?? '',
     '',
     '',
     '',

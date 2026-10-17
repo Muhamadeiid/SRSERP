@@ -4,6 +4,7 @@ import {
   HeightRule, ImageRun,
 } from 'docx'
 import { saveAs } from 'file-saver'
+import { poApprovalCycle } from './poApprovalCycle'
 
 // ── Page constants (A4 landscape) ─────────────────────────────────────────
 const PAGE_W    = 16838
@@ -67,6 +68,7 @@ function cell(children, opts = {}) {
 
 // ── Main export ────────────────────────────────────────────────────────────
 export async function generatePO(po) {
+  const cycle = poApprovalCycle(po)
   const logoBytes = await loadLogoBytes()
   const items     = po.items ?? []
   const subtotal  = items.reduce((s, it) => s + (it.total ?? 0), 0)
@@ -85,7 +87,7 @@ export async function generatePO(po) {
       ),
       // Title
       cell(
-        [para([bold('Purchase Order', 26)], AlignmentType.CENTER)],
+        [para([bold(cycle.isDraft ? 'Purchase Order - DRAFT' : 'Purchase Order', 26)], AlignmentType.CENTER)],
         { width: Math.round(CONTENT_W * 0.50), borders: ALL_B, shade: 'FFFFFF' }
       ),
       // Arabic title
@@ -207,7 +209,7 @@ export async function generatePO(po) {
   })
 
   // ── Signatures row ───────────────────────────────────────────────────────
-  const approvedAt = stage => (po.approvals ?? []).find(a => a.stage === stage && a.action === 'approve')
+  const approvedAt = cycle.approval
   const sigLabels  = ['Requester', 'Procurement', 'Logistics Manager /', 'Depot Manager', 'MD']
   const procApproval = approvedAt('procurement')
   const depotApproval = approvedAt('depot_manager')

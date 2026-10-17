@@ -143,6 +143,13 @@ class LeaveRequestSignaturePartiesTest extends TestCase
             ->assertJsonPath('data.signature_parties.hr.e_signature', $signature)
             ->assertJsonPath('data.signature_parties.depot_manager.e_signature', $signature);
 
+        $leave->update(['status' => 'rejected']);
+        $this->getJson("/api/leave-requests/{$leave->id}")
+            ->assertOk()
+            ->assertJsonPath('data.signature_parties.direct_manager.e_signature', null)
+            ->assertJsonPath('data.signature_parties.hr.e_signature', null)
+            ->assertJsonPath('data.signature_parties.depot_manager.e_signature', null);
+
         $leave->update([
             'status' => 'hr_approved',
             'approved_by' => null,

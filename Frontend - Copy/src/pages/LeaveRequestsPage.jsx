@@ -65,196 +65,196 @@ async function downloadRequestWord(req) {
   return generateRequestWord(await fetchRequestDetails(req))
 }
 
-async function printRequestWord(req) {
-  const printWindow = window.open('', '_blank', 'width=900,height=1200')
-  if (!printWindow) {
-    alert('Please allow pop-ups to print this request.')
-    return
+// docx-preview lays the form out with browser rules, which differ from Word's in
+// three ways that made the printed form taller than the downloaded file:
+//  - tables auto-size their columns instead of using the widths in the file
+//  - a paragraph's line box uses the page's 16px font instead of its runs' size
+//  - a row's "at least" height excludes the cell's top/bottom margins in Word
+//    (an "exact" row only adds the top margin), but docx-preview treats every
+//    row height as the full box, so the height rule is read from the file itself
+async function readRowHeightRules(blob) {
+  try {
+    const { default: JSZip } = await import('jszip')
+    const xml = await (await JSZip.loadAsync(blob)).file('word/document.xml').async('string')
+    const rules = []
+    const rowStart = /<w:tr[\s>]/g
+    let match
+    while ((match = rowStart.exec(xml))) {
+      const firstCell = xml.indexOf('<w:tc', match.index)
+      const rowProps = xml.slice(match.index, firstCell === -1 ? undefined : firstCell)
+      rules.push(rowProps.match(/<w:trHeight[^>]*w:hRule="(\w+)"/)?.[1] ?? 'atLeast')
+    }
+    return rules
+  } catch {
+    return []
   }
+}
 
-  printWindow.document.write('<!doctype html><html><head><title>Preparing print...</title></head><body style="font-family:Arial,sans-serif;padding:24px">Preparing the form...</body></html>')
-  printWindow.document.close()
+function matchWordLayout(section, rowRules = []) {
+  section.querySelectorAll('table').forEach((table) => {
+    table.style.tableLayout = 'fixed'
+  })
+  section.querySelectorAll('p').forEach((paragraph) => {
+    const sizes = Array.from(paragraph.querySelectorAll('span'))
+      .map((span) => parseFloat(span.style.fontSize))
+      .filter(Boolean)
+    const size = sizes.length ? Math.max(...sizes) : 10
+    paragraph.style.fontSize = `${size}pt`
+    // Absolute line height, like Word's single spacing for Arial (1.15 em). A
+    // relative value grows when Arabic text falls back to a taller font.
+    paragraph.style.lineHeight = `${(size * 1.15).toFixed(2)}pt`
+    // The forms use one right-aligned tab stop (Arabic heading 100 twips before
+    // the right margin). docx-preview prints the tab as a plain space instead.
+    const tab = Array.from(paragraph.children).find((child) => child.textContent === '\t')
+    if (tab) {
+      Object.assign(paragraph.style, { display: 'flex', alignItems: 'flex-start', paddingRight: '5pt' })
+      tab.textContent = ''
+      tab.style.flex = '1'
+    }
+  })
+  // Arabic runs fall back to a font with a different baseline, which makes a
+  // one-line paragraph taller than its line height. Pin such lines to one line
+  // height (text keeps its baseline; glyphs may overhang, as they do in Word).
+  section.querySelectorAll('p').forEach((paragraph) => {
+    const lineHeightPx = parseFloat(paragraph.style.lineHeight) / 0.75
+    const actual = paragraph.getBoundingClientRect().height
+    if (actual > lineHeightPx && actual < lineHeightPx * 1.5) {
+      paragraph.style.height = `${paragraph.style.lineHeight}`
+      paragraph.style.overflow = 'visible'
+    }
+  })
+
+  // The browser draws a 0.5pt cell border as a whole pixel (0.75pt), so every row
+  // grows a little and the drift adds up down the page. Take it back from the
+  // cell's bottom margin.
+  section.querySelectorAll('td').forEach((cell) => {
+    const specified = parseFloat(cell.style.borderTopWidth) || parseFloat(cell.style.borderBottomWidth)
+    if (!specified || !/pt$/.test(cell.style.borderTopWidth || cell.style.borderBottomWidth)) return
+    const view = cell.ownerDocument.defaultView
+    const style = view.getComputedStyle(cell)
+    const drawnPt = parseFloat(style.borderBottomWidth) * 0.75
+    const excess = drawnPt - specified
+    const padding = parseFloat(style.paddingBottom) * 0.75
+    if (excess > 0 && padding > excess) cell.style.paddingBottom = `${(padding - excess).toFixed(2)}pt`
+  })
+
+  // Height rules are read from document.xml, which holds the body rows only; the
+  // header and footer tables live in their own parts and are all "at least" rows
+  const bodyRows = Array.from((section.querySelector(':scope > article') ?? section).querySelectorAll('tr'))
+  const rulesMatch = rowRules.length === bodyRows.length
+  section.querySelectorAll('tr').forEach((row) => {
+    const index = bodyRows.indexOf(row)
+    const height = parseFloat(row.style.height)
+    if (!height || !row.cells.length) return
+    const view = row.ownerDocument.defaultView
+    // Use the largest cell margins: docx-preview's placeholder cells for merged
+    // rows carry none
+    const margins = Array.from(row.cells).map((cell) => {
+      const style = view.getComputedStyle(cell)
+      return { top: parseFloat(style.paddingTop), bottom: parseFloat(style.paddingBottom), border: parseFloat(style.borderTopWidth) }
+    })
+    const top = Math.max(...margins.map((m) => m.top))
+    const bottom = Math.max(...margins.map((m) => m.bottom))
+    const border = Math.max(...margins.map((m) => m.border))
+    const exact = rulesMatch && index !== -1 && rowRules[index] === 'exact'
+    const extraPx = exact ? top : top + bottom + border
+    row.style.height = `${height + extraPx * 0.75}pt`
+  })
+}
+
+async function printRequestWord(req) {
+  // The form is rendered in a hidden frame, laid out to match Word, and that frame
+  // is printed directly: text stays vector and nothing is re-drawn as an image.
+  // (Printing a pop-up on a timer used to catch the page before layout finished
+  // and spill it onto two pages; html2canvas also shifted text onto cell borders.)
+  document.querySelectorAll('iframe[data-request-print]').forEach((old) => old.remove())
+  const printFrame = document.createElement('iframe')
+  printFrame.setAttribute('data-request-print', '')
+  printFrame.setAttribute('aria-hidden', 'true')
+  Object.assign(printFrame.style, {
+    position: 'fixed', left: '-10000px', top: '0', width: '210mm', height: '297mm', border: '0',
+  })
+  document.body.appendChild(printFrame)
+  const printDocument = printFrame.contentDocument
+  printDocument.open()
+  printDocument.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>')
+  printDocument.close()
 
   try {
-    const [
-      fullRequest,
-      { renderAsync: renderWordDocument },
-      { default: html2canvas },
-      { jsPDF },
-    ] = await Promise.all([
+    const [fullRequest, { renderAsync: renderWordDocument }] = await Promise.all([
       fetchRequestDetails(req),
       import('docx-preview'),
-      import('html2canvas'),
-      import('jspdf'),
     ])
     const blob = await generateRequestWord(fullRequest, { download: false })
 
-    const printTitle = req.tracking_no || (req.type === 'lrf' ? 'Leave Request' : 'Overtime Request')
-    printWindow.document.title = printTitle
-    try {
-      const safeTitle = String(printTitle).replace(/[^a-z0-9_-]+/gi, '-')
-      printWindow.history.replaceState({}, printTitle, `/print/${safeTitle}`)
-    } catch (_) {}
-    printWindow.document.body.innerHTML = '<div id="word-print-root"></div>'
-    const style = printWindow.document.createElement('style')
+    printDocument.title = req.tracking_no || (req.type === 'lrf' ? 'Leave Request' : 'Overtime Request')
+    printDocument.body.innerHTML = '<div id="word-print-root"></div>'
+    const style = printDocument.createElement('style')
     style.textContent = `
       @page { size: A4 portrait; margin: 0; }
-      * { box-sizing: border-box; }
       html, body {
-        width: 210mm !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-        overflow: hidden !important;
+        margin: 0;
+        padding: 0;
+        background: #fff;
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
-      }
-      #word-print-root {
-        width: 210mm !important;
-        height: 296mm !important;
-        overflow: hidden !important;
       }
       .docx-wrapper { background: #fff !important; padding: 0 !important; }
       .docx-wrapper > section.docx { margin: 0 !important; box-shadow: none !important; }
       @media print {
-        html, body {
-          width: 210mm !important;
-          height: 296mm !important;
-          overflow: hidden !important;
-        }
-        .docx-wrapper {
-          position: relative !important;
-          width: 210mm !important;
-          height: 296mm !important;
-          padding: 0 !important;
-          overflow: hidden !important;
-          break-after: avoid !important;
-          page-break-after: avoid !important;
-        }
-        .docx-wrapper > section.docx {
-          position: absolute !important;
-          inset: 0 auto auto 0 !important;
-          transform: none !important;
-          transform-origin: top left !important;
-          break-after: avoid-page !important;
-          page-break-after: avoid !important;
-          overflow: hidden !important;
-        }
+        /* exactly one sheet: never let rounding start a blank second page */
+        html, body, #word-print-root { width: 210mm; height: 297mm; overflow: hidden; }
       }
     `
-    printWindow.document.head.appendChild(style)
 
     await renderWordDocument(
       blob,
-      printWindow.document.getElementById('word-print-root'),
-      printWindow.document.head,
+      printDocument.getElementById('word-print-root'),
+      printDocument.head,
       {
         inWrapper: true,
-        hideWrapperOnPrint: true,
         breakPages: false,
         renderHeaders: true,
         renderFooters: true,
         useBase64URL: true,
       },
     )
+    // docx-preview empties the style container before rendering, so the page
+    // rules must be added afterwards or the printer falls back to Letter/margins
+    printDocument.head.appendChild(style)
 
-    await printWindow.document.fonts?.ready
+    await printDocument.fonts?.ready
     await Promise.all(
-      Array.from(printWindow.document.images)
+      Array.from(printDocument.images)
         .filter((image) => !image.complete)
         .map((image) => new Promise((resolve) => {
           image.addEventListener('load', resolve, { once: true })
           image.addEventListener('error', resolve, { once: true })
         })),
     )
-    await new Promise((resolve) => printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(resolve)))
+    const nextFrame = () => new Promise((resolve) => printFrame.contentWindow.requestAnimationFrame(() => printFrame.contentWindow.requestAnimationFrame(resolve)))
+    await nextFrame()
 
-    const section = printWindow.document.querySelector('.docx-wrapper > section.docx')
+    const section = printDocument.querySelector('.docx-wrapper > section.docx')
     if (!section) throw new Error('Unable to render the form for printing.')
 
-    const root = printWindow.document.getElementById('word-print-root')
-    const wrapper = printWindow.document.querySelector('.docx-wrapper')
-    Object.assign(root.style, { width: 'auto', height: 'auto', overflow: 'visible' })
-    Object.assign(wrapper.style, { width: 'auto', height: 'auto', overflow: 'visible' })
-    Object.assign(section.style, {
-      position: 'relative',
-      inset: 'auto',
-      zoom: '1',
-      transform: 'none',
-      margin: '0',
-      maxHeight: 'none',
-      overflow: 'visible',
-    })
+    matchWordLayout(section, await readRowHeightRules(blob))
+    await nextFrame()
 
-    const leaveTypeRow = Array.from(section.querySelectorAll('tr'))
-      .find((row) => row.textContent?.toLowerCase().includes('leave type'))
-    if (leaveTypeRow) {
-      const leaveTypeInnerTable = Array.from(leaveTypeRow.querySelectorAll('table'))
-        .find((table) => table.textContent?.toLowerCase().includes('early leave'))
-      const leaveTypeInnerRows = leaveTypeInnerTable
-        ? Array.from(leaveTypeInnerTable.rows)
-        : []
-      const leaveOptionsRow = leaveTypeInnerRows[0]
-      const earlyLeaveRow = leaveTypeInnerRows[1]
-      if (leaveOptionsRow) {
-        Array.from(leaveOptionsRow.querySelectorAll('p')).forEach((paragraph) => {
-          if (paragraph.textContent?.trim().toLowerCase() === 'casual leave') {
-            paragraph.style.setProperty('white-space', 'nowrap', 'important')
-          }
-        })
-      }
-      if (earlyLeaveRow) {
-        earlyLeaveRow.style.setProperty('height', 'auto', 'important')
-        earlyLeaveRow.querySelectorAll(':scope > td').forEach((cell) => {
-          cell.style.setProperty('height', 'auto', 'important')
-          cell.style.setProperty('padding-top', '0', 'important')
-          cell.style.setProperty('padding-bottom', '0', 'important')
-          cell.style.setProperty('vertical-align', 'middle', 'important')
-        })
-        earlyLeaveRow.querySelectorAll(':scope > td > p').forEach((paragraph) => {
-          paragraph.style.setProperty('margin-top', '0', 'important')
-          paragraph.style.setProperty('margin-bottom', '0', 'important')
-          paragraph.style.setProperty('padding-top', '4px', 'important')
-          paragraph.style.setProperty('padding-bottom', '4px', 'important')
-          paragraph.style.setProperty('line-height', '1.15', 'important')
-          paragraph.style.setProperty('white-space', 'nowrap', 'important')
-          paragraph.style.setProperty('box-sizing', 'border-box', 'important')
-        })
-      }
+    // A form with unusually long text can still exceed one sheet: shrink it to fit
+    const sheetHeightPx = (297 / 25.4) * 96
+    if (section.scrollHeight > sheetHeightPx + 1) {
+      section.style.zoom = String(sheetHeightPx / section.scrollHeight)
+      await nextFrame()
     }
 
-    const canvas = await html2canvas(section, {
-      backgroundColor: '#ffffff',
-      scale: 2.5,
-      useCORS: true,
-      logging: false,
-      imageTimeout: 15000,
-    })
-
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
-    const margin = 4
-    const maxWidth = 210 - margin * 2
-    const maxHeight = 297 - margin * 2
-    const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
-    const imageWidth = canvas.width * ratio
-    const imageHeight = canvas.height * ratio
-    const imageX = (210 - imageWidth) / 2
-    const imageY = (297 - imageHeight) / 2
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.97), 'JPEG', imageX, imageY, imageWidth, imageHeight, undefined, 'FAST')
-
-    const pdfUrl = URL.createObjectURL(pdf.output('blob'))
-    printWindow.location.replace(pdfUrl)
-    printWindow.focus()
-    setTimeout(() => {
-      printWindow.print()
-      printWindow.onafterprint = () => {
-        URL.revokeObjectURL(pdfUrl)
-        printWindow.close()
-      }
-    }, 1200)
+    const cleanup = () => printFrame.remove()
+    printFrame.contentWindow.addEventListener('afterprint', () => setTimeout(cleanup, 500), { once: true })
+    setTimeout(cleanup, 10 * 60 * 1000)
+    printFrame.contentWindow.focus()
+    printFrame.contentWindow.print()
   } catch (error) {
-    printWindow.close()
+    printFrame.remove()
     alert(error?.message || 'Unable to prepare the form for printing.')
   }
 }
@@ -2833,9 +2833,9 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               {req.type === 'lrf' && req.alternate_employee_name && (
                 <SigStamp label="Alternate Employee" name={alternateSignatureParty?.name || req.alternate_employee_name} sig={alternateSignatureParty?.e_signature} />
               )}
-              <SigStamp label="Direct Manager" name={directSignatureParty?.name || req.manager_approver?.name} date={req.manager_approved_at} sig={directSignatureParty?.e_signature || req.manager_signature} />
-              <SigStamp label="HR Officer"     name={hrSignatureParty?.name || req.hr_approver?.name}           date={req.hr_approved_at}      sig={hrSignatureParty?.e_signature || req.hr_signature} />
-              <SigStamp label="Depot Manager"  name={depotSignatureParty?.name || req.approver?.name}           date={req.approved_at}         sig={depotSignatureParty?.e_signature || req.depot_signature} />
+              <SigStamp label="Direct Manager" name={directSignatureParty?.name || req.manager_approver?.name} date={req.manager_approved_at} sig={['rejected', 'cancelled'].includes(req.status) ? null : (directSignatureParty?.e_signature || req.manager_signature)} />
+              <SigStamp label="HR Officer"     name={hrSignatureParty?.name || req.hr_approver?.name}           date={req.hr_approved_at}      sig={['rejected', 'cancelled'].includes(req.status) ? null : (hrSignatureParty?.e_signature || req.hr_signature)} />
+              <SigStamp label="Depot Manager"  name={depotSignatureParty?.name || req.approver?.name}           date={['rejected', 'cancelled'].includes(req.status) ? null : req.approved_at} sig={['approved', 'amendment_pending', 'cancellation_pending'].includes(req.status) ? (depotSignatureParty?.e_signature || req.depot_signature) : null} />
             </div>
           </div>
         )}

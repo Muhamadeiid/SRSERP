@@ -1,4 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit'
+import { logoutApi } from '../../services/authService'
+import { terminateSession } from '../../utils/terminateSession'
 
 let _savedUser = null
 try { _savedUser = JSON.parse(localStorage.getItem('srs_user')) } catch (_) { localStorage.removeItem('srs_user') }
@@ -35,7 +37,7 @@ const authSlice = createSlice({
       state.loading = false
       state.error   = action.payload
     },
-    logout(state) {
+    clearSession(state) {
       state.user            = null
       state.token           = null
       state.isAuthenticated = false
@@ -48,5 +50,13 @@ const authSlice = createSlice({
   },
 })
 
-export const { loginStart, loginSuccess, refreshUser, loginFailure, logout, clearError } = authSlice.actions
+export const { loginStart, loginSuccess, refreshUser, loginFailure, clearError } = authSlice.actions
+export const logout = () => (dispatch, getState) => terminateSession(
+  getState().auth.token || localStorage.getItem('srs_token'),
+  {
+    revoke: logoutApi,
+    clear: () => dispatch(authSlice.actions.clearSession()),
+    onUnconfirmed: () => window.alert('Signed out of this browser. Server logout could not be confirmed. Ask your administrator to revoke remaining sessions.'),
+  },
+)
 export default authSlice.reducer

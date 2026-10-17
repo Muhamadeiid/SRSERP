@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux'
 import { Loader2, ArrowLeft, FileText, Printer, ClipboardCheck, Pencil, Check, X, FileSpreadsheet } from 'lucide-react'
 import { decidePo, getPo, submitPoApproval, updatePo, PO_STATUS_LABELS, PO_STATUS_STYLES } from '../services/poService'
 import { IGI_STATUS_LABELS, IGI_STATUS_STYLES } from '../services/igiService'
+import { poApprovalCycle } from '../utils/poApprovalCycle'
 
 const fmt      = (n) => (n == null ? '—' : Number(n).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const fmtShort = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -24,6 +25,7 @@ export default function PoDetail() {
   const [savingNo,    setSavingNo]    = useState(false)
   const [dispatchForm,setDispatchForm]= useState(null)
   const [paymentForm, setPaymentForm] = useState(null)
+  const cycle = poApprovalCycle(po ?? {})
 
   const canEdit       = ['admin', 'procurement', 'purchasing'].includes(user?.role)
   const canApproveStage = (po?.approval_status === 'pending_procurement' && ['admin','procurement','purchasing'].includes(user?.role))
@@ -56,8 +58,9 @@ export default function PoDetail() {
     if (!poNoDraft.trim() || poNoDraft.trim() === po.po_number) { setEditingNo(false); return }
     setSavingNo(true)
     try {
-      const res = await updatePo(id, { po_number: poNoDraft.trim() })
-      setPo(res?.data ?? null)
+      await updatePo(id, { po_number: poNoDraft.trim() })
+      setPo(null)
+      setPo((await getPo(id))?.data ?? null)
       setEditingNo(false)
     } catch (e) {
       alert(e.message)
@@ -69,8 +72,9 @@ export default function PoDetail() {
   const changeStatus = async (status) => {
     setBusy(true)
     try {
-      const res = await updatePo(id, { status })
-      setPo(res?.data ?? null)
+      await updatePo(id, { status })
+      setPo(null)
+      setPo((await getPo(id))?.data ?? null)
     } catch (e) {
       alert(e.message)
     } finally {
@@ -80,27 +84,29 @@ export default function PoDetail() {
 
   const submitApproval = async () => {
     setBusy(true)
-    try { const res=await submitPoApproval(id); setPo(res?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
+    try { await submitPoApproval(id); setPo(null); setPo((await getPo(id))?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
   }
 
   const approvalDecision = async action => {
     setBusy(true)
-    try { const res=await decidePo(id,{action}); setPo(res?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
+    try { await decidePo(id,{action}); setPo(null); setPo((await getPo(id))?.data ?? null) } catch(e){ alert(e.message) } finally { setBusy(false) }
   }
 
   const saveDispatch = async e => {
     e.preventDefault(); setBusy(true)
     try {
-      const res = await updatePo(id, dispatchForm)
-      setPo(res?.data ?? null); setDispatchForm(null)
+      await updatePo(id, dispatchForm)
+      setPo(null)
+      setPo((await getPo(id))?.data ?? null); setDispatchForm(null)
     } catch (e2) { alert(e2.message) } finally { setBusy(false) }
   }
 
   const savePayment = async e => {
     e.preventDefault(); setBusy(true)
     try {
-      const res = await updatePo(id, { ...paymentForm, payment_status: 'paid' })
-      setPo(res?.data ?? null); setPaymentForm(null)
+      await updatePo(id, { ...paymentForm, payment_status: 'paid' })
+      setPo(null)
+      setPo((await getPo(id))?.data ?? null); setPaymentForm(null)
     } catch (e2) { alert(e2.message) } finally { setBusy(false) }
   }
 
@@ -306,15 +312,15 @@ export default function PoDetail() {
       {/* Signatures */}
       <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-neutral-100 bg-neutral-50/50">
-          <p className="text-xs font-bold text-secondary-700">Signatures</p>
+          <p className="text-xs font-bold text-secondary-700">Signatures{cycle.isDraft ? ' - DRAFT' : ''}</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
           {[
             ['Requester', po.prf?.requester?.name, po.prf?.requester?.e_signature, po.created_at],
-            ['Procurement', po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='procurement'&&a.action==='approve')?.acted_at],
+            ['Procurement', cycle.approval('procurement')?.approver?.name, cycle.approval('procurement')?.approver?.e_signature, cycle.approval('procurement')?.acted_at],
             ['Logistics Manager', null, null, null],
-            ['Depot Manager', po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='depot_manager'&&a.action==='approve')?.acted_at],
-            ['MD', po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.approver?.name, po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.approver?.e_signature, po.approvals?.find(a=>a.stage==='managing_director'&&a.action==='approve')?.acted_at],
+            ['Depot Manager', cycle.approval('depot_manager')?.approver?.name, cycle.approval('depot_manager')?.approver?.e_signature, cycle.approval('depot_manager')?.acted_at],
+            ['MD', cycle.approval('managing_director')?.approver?.name, cycle.approval('managing_director')?.approver?.e_signature, cycle.approval('managing_director')?.acted_at],
           ].map(([label, name, signature, date]) => (
             <div key={label} className="px-4 py-6 text-center">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">{label}</p>

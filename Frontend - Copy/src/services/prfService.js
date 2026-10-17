@@ -93,7 +93,5 @@ export function canActOnStage(user, status) {
     pending_ehs: 'prf.approve_ehs',
     pending_depot: 'prf.approve_depot',
   }[status]
-  return user.role === STATUS_TO_ROLE[status]
-    || (status === 'pending_procurement' && user.role === 'purchasing')
-    || (Array.isArray(user.permissions) && user.permissions.includes(permission))
+  return Array.isArray(user.permissions) && user.permissions.includes(permission)
 }

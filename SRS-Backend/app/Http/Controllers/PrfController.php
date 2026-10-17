@@ -38,6 +38,13 @@ class PrfController extends Controller
         'pending_depot'       => ['role' => 'depot_manager', 'permission' => 'prf.approve_depot',       'next' => 'approved',       'label' => 'Depot Manager'],
     ];
 
+    // Notes attachment: a base64 raster-image data URI only. The UI caps uploads
+    // at 2 MB, which is about 2.8 MB once base64-encoded.
+    private const NOTES_IMAGE_RULE = [
+        'nullable', 'string', 'max:2900000',
+        'regex:/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/',
+    ];
+
     // ─────────────────────────────────────────────────────────────
     //  LIST
     // ─────────────────────────────────────────────────────────────
@@ -45,11 +52,14 @@ class PrfController extends Controller
     {
         $user = auth()->user();
 
+        // List views never need e-signatures or the notes attachment; those are
+        // returned only by show() for the single PRF being opened or printed.
         $query = Prf::with([
-            'requester:id,name,email,role,e_signature',
+            'requester:id,name,email,role',
             'items',
-            'approvals.approver:id,name,e_signature,role',
+            'approvals.approver:id,name,role',
         ]);
+        $forList = fn ($prfs) => $prfs->each->makeHidden('notes_image');
 
         if ($request->boolean('mine')) {
             $query->where('requested_by', $user->id);
@@ -88,6 +98,7 @@ class PrfController extends Controller
             $perPage = min(200, max(1, (int) $request->per_page));
             $page    = max(1, (int) $request->input('page', 1));
             $p = $query->paginate($perPage, ['*'], 'page', $page);
+            $forList($p->getCollection());
             return response()->json([
                 'success'    => true,
                 'data'       => $p->items(),
@@ -100,7 +111,7 @@ class PrfController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'data' => $query->get()]);
+        return response()->json(['success' => true, 'data' => $forList($query->get())]);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -144,7 +155,7 @@ class PrfController extends Controller
             'material_category'             => 'required|array|min:1',
             'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
-            'notes_image'                   => 'nullable|string',   // base64 data-URI (e.g. data:image/png;base64,...)
+            'notes_image'                   => self::NOTES_IMAGE_RULE,
             'items'                         => 'required|array|min:1',
             'items.*.description'           => 'required|string|max:500',
             'items.*.technical_specifications' => 'nullable|string|max:2000',
@@ -160,6 +171,14 @@ class PrfController extends Controller
 
         $data = $v->validated();
         $user = auth()->user();
+
+        if (filled($data['prf_number'] ?? null)) {
+            abort_unless($this->canNumberRequests($user), 403, 'Only Procurement can assign a tracking number');
+            $data['prf_number'] = $this->normalizeTrackingNumber($data['prf_number'], (int) (isset($data['date']) ? date('Y', strtotime($data['date'])) : now()->year));
+            if (Prf::where('prf_number', $data['prf_number'])->exists()) {
+                return response()->json(['message' => 'This PRF number is already in use'], 422);
+            }
+        }
 
         return DB::transaction(function () use ($data, $user) {
             $prf = Prf::create([
@@ -213,7 +232,7 @@ class PrfController extends Controller
             'material_category'             => 'required|array|min:1',
             'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
-            'notes_image'                   => 'nullable|string',
+            'notes_image'                   => self::NOTES_IMAGE_RULE,
             'items'                         => 'required|array|min:1',
             'items.*.description'           => 'required|string|max:500',
             'items.*.technical_specifications' => 'nullable|string|max:2000',
@@ -427,7 +446,7 @@ class PrfController extends Controller
     public function updateTrackingNo(Request $request, Prf $prf): JsonResponse
     {
         $user = auth()->user();
-        if (!$user->isAdmin() && !in_array($user->role, ['depot_manager', 'procurement', 'purchasing'], true)) {
+        if (!$this->canNumberRequests($user)) {
             return response()->json(['success' => false, 'message' => 'Only Procurement can edit the tracking number'], 403);
         }
 
@@ -438,15 +457,8 @@ class PrfController extends Controller
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
         }
 
-        $input = trim((string) $request->input('prf_number'));
         $year = (int) ($prf->date?->format('Y') ?: now()->year);
-        if (ctype_digit($input)) {
-            $input = "PRF-EG1-{$year}-" . str_pad($input, 4, '0', STR_PAD_LEFT);
-        } elseif (preg_match('/^PRF-EG1-(\d{4})-(\d+)$/i', $input, $matches)) {
-            $input = 'PRF-EG1-' . $matches[1] . '-' . str_pad($matches[2], 4, '0', STR_PAD_LEFT);
-        } else {
-            return response()->json(['success' => false, 'message' => 'Enter a sequence number such as 123 or a full PRF number'], 422);
-        }
+        $input = $this->normalizeTrackingNumber((string) $request->input('prf_number'), $year);
 
         if (Prf::where('prf_number', $input)->where('id', '!=', $prf->id)->exists()) {
             return response()->json(['success' => false, 'message' => 'This PRF number is already in use'], 422);
@@ -454,11 +466,26 @@ class PrfController extends Controller
 
         $prf->update(['prf_number' => $input]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'PRF number updated',
-            'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
-        ]);
+        return response()->json(['success' => true, 'message' => 'PRF number updated', 'data' => $prf->fresh(['requester', 'items', 'approvals.approver'])]);
+    }
+
+    private function canNumberRequests(User $user): bool
+    {
+        return $user->isAdmin() || in_array($user->role, ['depot_manager', 'procurement', 'purchasing'], true);
+    }
+
+    private function normalizeTrackingNumber(string $input, int $year): string
+    {
+        $input = trim($input);
+        if (ctype_digit($input)) {
+            $input = "PRF-EG1-{$year}-" . str_pad($input, 4, '0', STR_PAD_LEFT);
+        } elseif (preg_match('/^PRF-EG1-(\d{4})-(\d+)$/i', $input, $matches)) {
+            $input = 'PRF-EG1-' . $matches[1] . '-' . str_pad($matches[2], 4, '0', STR_PAD_LEFT);
+        } else {
+            throw \Illuminate\Validation\ValidationException::withMessages(['prf_number' => 'Enter a sequence number such as 123 or a full PRF number']);
+        }
+
+        return $input;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -467,15 +494,7 @@ class PrfController extends Controller
     private function userCanActInStage(User $user, array $stage): bool
     {
         if ($user->isAdmin()) return true;
-        // Permission Matrix drives approval authority; fall back to the legacy
-        // role match so nothing breaks before permissions are granted.
-        if (!empty($stage['permission']) && $user->hasPermission($stage['permission'])) {
-            return true;
-        }
-        if ($stage['role'] === 'procurement' && $user->role === 'purchasing') {
-            return true;
-        }
-        return $user->role === $stage['role'];
+        return !empty($stage['permission']) && $user->hasPermission($stage['permission']);
     }
 
     private function requesterCanModify(Prf $prf): bool
@@ -497,13 +516,7 @@ class PrfController extends Controller
         $approvers = User::query()
             ->where('is_active', true)
             ->where('role', '!=', 'admin')
-            ->where(function ($query) use ($stage, $permittedRoles) {
-                $query->where('role', $stage['role'])
-                    ->orWhereIn('role', $permittedRoles);
-                if ($stage['role'] === 'procurement') {
-                    $query->orWhere('role', 'purchasing');
-                }
-            })
+            ->whereIn('role', $permittedRoles)
             ->get();
 
         if ($approvers->isEmpty()) {
