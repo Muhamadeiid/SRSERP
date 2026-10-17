@@ -33,10 +33,16 @@ class LeaveDeductionService
         $processed = 0;
 
         $eligible = clone $query;
-        $query->reorder()->chunkById(100, function ($requests) use (&$processed, $eligible) {
-            foreach ($requests as $leaveRequest) {
-                $processed += DB::transaction(function () use ($leaveRequest, $eligible) {
-                    $leaveRequest = (clone $eligible)->whereKey($leaveRequest->id)->lockForUpdate()->first();
+        // Deduct in the order the leaves ended (oldest first), so when an employee has
+        // several due requests and not enough balance for all, the earliest leave is
+        // the one that gets deducted. Ids are collected first because chunkById pages
+        // by id and cannot keep an end_date order.
+        $dueIds = (clone $query)->reorder()->orderBy('end_date')->orderBy('id')->pluck('id');
+
+        foreach ($dueIds->chunk(100) as $ids) {
+            foreach ($ids as $leaveRequestId) {
+                $processed += DB::transaction(function () use ($leaveRequestId, $eligible) {
+                    $leaveRequest = (clone $eligible)->whereKey($leaveRequestId)->lockForUpdate()->first();
                     if (!$leaveRequest) return 0;
                     // Serialize balance creation and different due requests for one employee.
                     \App\Models\Employee::withTrashed()->whereKey($leaveRequest->employee_id)->lockForUpdate()->firstOrFail();
@@ -53,7 +59,7 @@ class LeaveDeductionService
                     return 0;
                 }, 3);
             }
-        });
+        }
 
         return $processed;
     }

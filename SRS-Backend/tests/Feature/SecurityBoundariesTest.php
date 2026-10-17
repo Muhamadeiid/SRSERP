@@ -124,6 +124,27 @@ class SecurityBoundariesTest extends TestCase
         $this->assertSame('PRF-EG1-2026-0123', $format->invoke($controller, 'prf-eg1-2026-123', 2025));
     }
 
+    public function test_authorized_manual_and_staff_automatic_prf_creation_remain_usable(): void
+    {
+        foreach (['2026_05_07_212738_create_prfs_table.php', '2026_05_07_212748_create_prf_items_table.php', '2026_05_07_212757_create_prf_approvals_table.php'] as $migration) {
+            (require database_path('migrations/' . $migration))->up();
+        }
+        Schema::table('prfs', fn (Blueprint $table) => $table->text('notes_image')->nullable());
+        $buyer = $this->user('purchasing');
+        $payload = ['prf_number' => '123', 'material_category' => ['Tools and Equipment'], 'items' => [['description' => 'Test item', 'quantity' => 1]]];
+        $number = 'PRF-EG1-' . now()->year . '-0123';
+        $this->withToken($buyer->createToken('buyer')->plainTextToken)->postJson('/api/procurement/prfs', $payload)
+            ->assertCreated()->assertJsonPath('data.prf_number', $number);
+        $this->postJson('/api/procurement/prfs', $payload)->assertStatus(422);
+        $payload['prf_number'] = 'invalid-number';
+        $this->postJson('/api/procurement/prfs', $payload)->assertStatus(422);
+        $staff = $this->user();
+        auth()->forgetGuards();
+        $payload['prf_number'] = '';
+        $this->withToken($staff->createToken('staff')->plainTextToken)->postJson('/api/procurement/prfs', $payload)
+            ->assertCreated()->assertJsonPath('data.prf_number', 'PRF-EG1-' . now()->year . '-0124');
+    }
+
     public function test_signature_policy_removes_nested_victim_images_but_preserves_earned_approvals(): void
     {
         $actor = $this->user();
@@ -199,7 +220,7 @@ class SecurityBoundariesTest extends TestCase
     {
         config(['srs.require_https' => true, 'app.debug' => false]);
         $this->getJson('/api/auth/me')->assertStatus(503);
-        $this->withServerVariables(['HTTPS' => 'on'])->getJson('/api/auth/me')->assertUnauthorized();
+        $this->getJson('https://localhost/api/auth/me')->assertUnauthorized();
         config(['app.debug' => true]);
         $this->getJson('/api/auth/me')->assertStatus(503);
     }
@@ -376,5 +397,20 @@ class SecurityBoundariesTest extends TestCase
         $this->assertNotNull($leave->fresh()->balance_deducted_at);
         $this->assertSame(20.0, $balance->fresh()->getEffectiveRemaining('annual'));
         $this->assertSame(6.0, $balance->fresh()->getEffectiveRemaining('casual'));
+    }
+
+    public function test_due_leaves_are_deducted_in_end_date_order_when_balance_runs_short(): void
+    {
+        $employee = Employee::create(['ibs_code' => 'SEC-ORDER', 'name' => 'Order employee', 'status' => 'on_site', 'position' => 'Technician', 'department' => 'cm', 'work_location' => 'Mainline']);
+        $balance = LeaveBalance::create(['employee_id' => $employee->id, 'annual' => 21, 'casual' => 7, 'annual_remaining' => 3]);
+        $leave = fn (string $start, string $end) => LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'type' => 'lrf', 'leave_type' => 'annual', 'status' => 'approved', 'days' => 3, 'paid' => true, 'start_date' => $start, 'end_date' => $end]);
+        // Registered first, but ended later: must wait behind the earlier leave
+        $later = $leave(now()->subDays(5)->toDateString(), now()->subDays(4)->toDateString());
+        $earlier = $leave(now()->subDays(12)->toDateString(), now()->subDays(10)->toDateString());
+
+        $this->assertSame(1, app(LeaveDeductionService::class)->processDue($employee->id));
+        $this->assertNotNull($earlier->fresh()->balance_deducted_at);
+        $this->assertNull($later->fresh()->balance_deducted_at);
+        $this->assertSame(0.0, $balance->fresh()->getEffectiveRemaining('annual'));
     }
 }

@@ -46,7 +46,9 @@ return [
     |
     */
 
-    'expiration' => max(1, (int) env('SANCTUM_EXPIRATION', 720)),
+    // Sign-ins stay valid until logout (the original behaviour). Set
+    // SANCTUM_EXPIRATION (minutes) only if a session limit is wanted.
+    'expiration' => env('SANCTUM_EXPIRATION') ? max(1, (int) env('SANCTUM_EXPIRATION')) : null,
 
     /*
     |--------------------------------------------------------------------------

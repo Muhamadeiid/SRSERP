@@ -16,8 +16,9 @@ the existing HTTP/LAN setup directly to the Internet.
    hop as seen by Laravel. Never use `*`. The supplied public edge overwrites
    client forwarding headers. Confirm Docker's frontend forwards these correctly
    before enabling the HTTPS requirement. Misconfiguration intentionally fails closed.
-5. Bearer sessions now expire after 720 minutes by default; configure a positive
-   `SANCTUM_EXPIRATION` in minutes if company policy requires a different duration.
+5. Bearer sessions do not expire by default (sign-ins last until logout). Set a
+   positive `SANCTUM_EXPIRATION` in minutes if company policy requires a session limit;
+   an internet-facing deployment should set one.
    Use `/api` for both frontend API settings. Rebuild the frontend after changing
    build-time configuration. Limit `FRONTEND_ORIGINS` to required origins.
 6. Rotate previously shared/default credentials without changing APP_KEY blindly:
