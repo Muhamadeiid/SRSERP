@@ -111,7 +111,7 @@ class UserController extends Controller
     {
         $subs = User::where('manager_id', $request->user()->id)
             ->with('manager:id,name,profile_photo_path')
-            ->get();
+            ->get(['id', 'name', 'email', 'role', 'department', 'is_active', 'manager_id', 'profile_photo_path']);
 
         return response()->json($subs);
     }

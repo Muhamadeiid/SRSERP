@@ -25,6 +25,10 @@ class FormSignaturePolicy
                     $clean[$key]['e_signature'] = $record[$key]['e_signature'] ?? null;
                 }
             }
+            if (!empty($record['follow_up_date']) && !empty($record['followed_up_by'])
+                && (int) ($record['follow_up_user']['id'] ?? 0) === (int) $record['followed_up_by']) {
+                $clean['follow_up_user']['e_signature'] = $record['follow_up_user']['e_signature'] ?? null;
+            }
             return $clean;
         }
 

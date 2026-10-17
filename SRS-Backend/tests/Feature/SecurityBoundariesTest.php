@@ -193,6 +193,26 @@ class SecurityBoundariesTest extends TestCase
         $this->assertNull($policy->filter($record, $actor, true)['hr_generalist']['e_signature']);
         $record['hr_signed_at'] = '2026-10-17';
         $this->assertSame('hr-image', $policy->filter($record, $actor, true)['hr_generalist']['e_signature']);
+        $record['follow_up_user'] = ['id' => 99, 'e_signature' => 'follow-up-image'];
+        $this->assertNull($policy->filter($record, $actor, true)['follow_up_user']['e_signature']);
+        $record['follow_up_date'] = '2026-10-17';
+        $record['followed_up_by'] = 99;
+        $this->assertSame('follow-up-image', $policy->filter($record, $actor, true)['follow_up_user']['e_signature']);
+        $record['followed_up_by'] = 100;
+        $this->assertNull($policy->filter($record, $actor, true)['follow_up_user']['e_signature']);
+    }
+
+    public function test_subordinate_directory_does_not_return_reusable_signatures(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->unsignedBigInteger('manager_id')->nullable();
+            $table->string('profile_photo_path')->nullable();
+        });
+        $manager = $this->user('manager');
+        $employee = $this->user();
+        $employee->update(['manager_id' => $manager->id, 'e_signature' => 'private-subordinate-signature']);
+        $this->withToken($manager->createToken('manager')->plainTextToken)->getJson('/api/users/subordinates')
+            ->assertOk()->assertJsonPath('0.id', $employee->id)->assertJsonMissingPath('0.e_signature');
     }
 
     public function test_incident_create_show_and_update_do_not_release_selected_employee_signatures(): void
