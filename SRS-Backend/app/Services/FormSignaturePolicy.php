@@ -39,6 +39,20 @@ class FormSignaturePolicy
         }
         $final = in_array($record['status'] ?? '', ['approved', 'cancellation_pending', 'amendment_pending'], true) && !empty($record['approved_at']);
         $signable = !in_array($record['status'] ?? '', ['rejected', 'cancelled'], true);
+
+        // The alternate employee does not approve anything: their stored signature is
+        // printed on the form as is. It is released once a manager has accepted the
+        // request, so a freshly filed request naming someone as alternate cannot be
+        // used to collect that person's signature.
+        $reviewed = $final || !empty($record['manager_approved_at']) || !empty($record['hr_approved_at']);
+        if ($signable && $reviewed) {
+            if (isset($record['alternate_employee']) && is_array($record['alternate_employee'])) {
+                $clean['alternate_employee']['e_signature'] = $record['alternate_employee']['e_signature'] ?? null;
+            }
+            if (isset($record['signature_parties']['alternate_employee']) && is_array($record['signature_parties']['alternate_employee'])) {
+                $clean['signature_parties']['alternate_employee']['e_signature'] = $record['signature_parties']['alternate_employee']['e_signature'] ?? null;
+            }
+        }
         foreach (['direct_manager' => 'manager_approved_at', 'hr' => 'hr_approved_at', 'depot_manager' => 'approved_at'] as $key => $stamp) {
             $allowed = $key === 'depot_manager' ? $final : ($signable && ($final || !empty($record[$stamp])));
             if ($allowed && isset($record['signature_parties'][$key])) {

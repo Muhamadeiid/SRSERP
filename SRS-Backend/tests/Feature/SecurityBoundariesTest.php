@@ -163,6 +163,11 @@ class SecurityBoundariesTest extends TestCase
         $this->assertNull($filtered['manager_signature']);
         $record['status'] = 'approved'; $record['approved_at'] = now()->toISOString();
         $this->assertSame('hr-image', $policy->filter($record, $actor)['signature_parties']['hr']['e_signature']);
+        // A reviewed request prints the alternate's stored signature without their approval
+        $this->assertSame('alternate', $policy->filter($record, $actor)['signature_parties']['alternate_employee']['e_signature']);
+        $this->assertSame('alternate', $policy->filter($record, $actor)['alternate_employee']['e_signature']);
+        $managerReviewed = array_merge($record, ['status' => 'manager_approved', 'approved_at' => null, 'manager_approved_at' => now()->toISOString()]);
+        $this->assertSame('alternate', $policy->filter($managerReviewed, $actor)['signature_parties']['alternate_employee']['e_signature']);
         $record['employee']['user_id'] = $actor->id;
         $this->assertSame('victim', $policy->filter($record, $actor)['employee']['e_signature']);
         $this->assertSame($record, $policy->filter($record, $this->user('hr')));
