@@ -135,8 +135,8 @@ export const attendanceService = {
   },
 
   /**
-   * Export attendance — one sheet per employee. Pass project: 'ganz' | 'line1'
-   * to export only that project's employees.
+   * Export attendance as a ZIP containing Ganz and Line 1 workbooks, with one
+   * sheet per employee. Passing project keeps the single-workbook API available.
    */
   exportAllExcel: async (filters = {}) => {
     const response = await api.get('/attendance/export-all', {

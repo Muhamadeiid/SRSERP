@@ -19,19 +19,21 @@ async function fetchSalary(params) {
   return res.json()
 }
 
-function downloadExcel(params) {
+async function downloadExcel(params) {
   const token = getToken()
   const qs = new URLSearchParams(params).toString()
   const url = `${BASE}/attendance/internal-salary/export?${qs}`
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.blob())
-    .then(blob => {
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `Internal_Salary_${params.start_date}_${params.end_date}.xlsx`
-      a.click()
-      URL.revokeObjectURL(a.href)
-    })
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) throw new Error('Could not export internal salary files.')
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = `Internal_Salary_${params.start_date}_${params.end_date}.zip`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 }
 
 const INP = 'px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors'
@@ -46,6 +48,7 @@ export default function InternalSalaryPage() {
   )
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [deptFilter, setDeptFilter] = useState('')
@@ -72,6 +75,18 @@ export default function InternalSalaryPage() {
   }, [startDate, endDate])
 
   useEffect(() => { fetch_() }, [fetch_])
+
+  const exportSalary = async () => {
+    setExporting(true)
+    setError('')
+    try {
+      await downloadExcel({ start_date: startDate, end_date: endDate })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const departments = [...new Set(rows.map(r => r.department).filter(Boolean))].sort()
 
@@ -108,10 +123,11 @@ export default function InternalSalaryPage() {
             className="w-9 h-9 border border-neutral-200 rounded-xl flex items-center justify-center hover:bg-neutral-50 text-neutral-400">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={() => downloadExcel({ start_date: startDate, end_date: endDate })}
-            disabled={loading || rows.length === 0}
+          <button onClick={exportSalary}
+            disabled={loading || exporting || rows.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50">
-            <Download className="w-3.5 h-3.5" /> Export Excel
+            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {exporting ? 'Exporting...' : 'Export Excel'}
           </button>
         </div>
       </div>

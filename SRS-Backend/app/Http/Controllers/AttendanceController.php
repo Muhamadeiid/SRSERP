@@ -14,6 +14,7 @@ use App\Services\LateDeductionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -23,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class AttendanceController extends Controller
 {
@@ -1249,9 +1251,9 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Export one project's employees, one sheet per employee in the standard
-     * attendance layout. The UI downloads two files: project=ganz and
-     * project=line1. Without a project every active employee is exported.
+     * Export one project's employees as an XLSX, or both project workbooks in
+     * one ZIP when project is omitted. Every workbook keeps one standard
+     * attendance sheet per employee.
      *
      * GET /api/attendance/export-all?project=ganz|line1
      */
@@ -1269,10 +1271,32 @@ class AttendanceController extends Controller
         $employees = Employee::active()->orderBy('name')->get();
         if ($projectSheet) {
             $employees = $this->employeesByProjectSheet($employees)[$projectSheet];
+            $spreadsheet = $this->buildAttendanceWorkbook($employees, $startDate, $endDate);
+            $writer = new Xlsx($spreadsheet);
+            $label = str_replace(' ', '', $projectSheet);
+            $filename = "Attendance_{$label}_{$startDate}_{$endDate}.xlsx";
+
+            return response()->streamDownload(
+                fn () => $writer->save('php://output'),
+                $filename,
+                ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+            );
         }
 
+        $groups = $this->employeesByProjectSheet($employees);
+        return $this->downloadWorkbookArchive(
+            "Attendance_{$startDate}_{$endDate}.zip",
+            [
+                "Attendance_Ganz_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildAttendanceWorkbook($groups['Ganz'], $startDate, $endDate),
+                "Attendance_Line1_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildAttendanceWorkbook($groups['Line 1'], $startDate, $endDate),
+            ]
+        );
+    }
+
+    private function buildAttendanceWorkbook($employees, string $startDate, string $endDate): Spreadsheet
+    {
         $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0); // remove default blank sheet
+        $spreadsheet->removeSheetByIndex(0);
 
         $usedTitles = [];
         foreach ($employees->values() as $idx => $employee) {
@@ -1289,16 +1313,54 @@ class AttendanceController extends Controller
         }
 
         $spreadsheet->setActiveSheetIndex(0);
+        return $spreadsheet;
+    }
 
-        $writer   = new Xlsx($spreadsheet);
-        $label    = $projectSheet ? str_replace(' ', '', $projectSheet) : 'All';
-        $filename = "Attendance_{$label}_{$startDate}_{$endDate}.xlsx";
+    /**
+     * @param array<string, callable(): Spreadsheet> $workbooks
+     */
+    private function downloadWorkbookArchive(string $archiveName, array $workbooks): StreamedResponse
+    {
+        $tempDirectory = storage_path('app/tmp-exports');
+        File::ensureDirectoryExists($tempDirectory);
+        $exportId = bin2hex(random_bytes(12));
+        $zipPath = $tempDirectory . DIRECTORY_SEPARATOR . "{$exportId}.zip";
 
-        return response()->streamDownload(
-            fn() => $writer->save('php://output'),
-            $filename,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-        );
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            @unlink($zipPath);
+            abort(500, 'Could not create the export archive.');
+        }
+
+        $xlsxPaths = [];
+        try {
+            foreach ($workbooks as $filename => $buildWorkbook) {
+                $xlsxPath = $tempDirectory . DIRECTORY_SEPARATOR . bin2hex(random_bytes(12)) . '.xlsx';
+                $xlsxPaths[] = $xlsxPath;
+                $spreadsheet = $buildWorkbook();
+                (new Xlsx($spreadsheet))->save($xlsxPath);
+                $spreadsheet->disconnectWorksheets();
+                if (!$zip->addFile($xlsxPath, $filename)) {
+                    throw new \RuntimeException('Could not add a workbook to the export archive.');
+                }
+            }
+            $zip->close();
+        } catch (\Throwable $exception) {
+            try {
+                $zip->close();
+            } catch (\ValueError) {
+                // The archive was never initialized or was already closed.
+            }
+            foreach ($xlsxPaths as $xlsxPath) @unlink($xlsxPath);
+            @unlink($zipPath);
+            throw $exception;
+        }
+
+        return response()->streamDownload(function () use ($zipPath, $xlsxPaths) {
+            readfile($zipPath);
+            foreach ($xlsxPaths as $xlsxPath) @unlink($xlsxPath);
+            @unlink($zipPath);
+        }, $archiveName, ['Content-Type' => 'application/zip']);
     }
 
     /**
@@ -1814,23 +1876,22 @@ class AttendanceController extends Controller
             );
         }
 
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
-        foreach ($rowsBySheet as $sheetName => $rows) {
-            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, $sheetName);
-            $spreadsheet->addSheet($sheet);
-            $this->buildInternalSalarySheet($sheet, $rows, $startDate, $endDate);
-        }
-        $spreadsheet->setActiveSheetIndex(0);
-
-        $writer   = new Xlsx($spreadsheet);
-        $filename = "Internal_Salary_{$startDate}_{$endDate}.xlsx";
-
-        return response()->streamDownload(
-            fn() => $writer->save('php://output'),
-            $filename,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        return $this->downloadWorkbookArchive(
+            "Internal_Salary_{$startDate}_{$endDate}.zip",
+            [
+                "Internal_Salary_Ganz_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildInternalSalaryWorkbook('Ganz', $rowsBySheet['Ganz'], $startDate, $endDate),
+                "Internal_Salary_Line1_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildInternalSalaryWorkbook('Line 1', $rowsBySheet['Line 1'], $startDate, $endDate),
+            ]
         );
+    }
+
+    private function buildInternalSalaryWorkbook(string $sheetName, array $rows, string $startDate, string $endDate): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle($sheetName);
+        $this->buildInternalSalarySheet($sheet, $rows, $startDate, $endDate);
+        return $spreadsheet;
     }
 
     private function buildInternalSalarySheet(

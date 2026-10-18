@@ -7,8 +7,10 @@ use App\Models\Project;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use ReflectionMethod;
 use Tests\TestCase;
+use ZipArchive;
 
 class AttendanceProjectSheetTest extends TestCase
 {
@@ -95,5 +97,36 @@ class AttendanceProjectSheetTest extends TestCase
         $long = $title('Abdel Naby Abdel Aziz Saleh Elsayed Mohamed');
         $this->assertLessThanOrEqual(31, mb_strlen($long));
         $this->assertLessThanOrEqual(31, mb_strlen($title('Abdel Naby Abdel Aziz Saleh Elsayed Mohamed')));
+    }
+
+    public function test_archive_contains_both_project_workbooks(): void
+    {
+        $controller = app(AttendanceController::class);
+        $method = new ReflectionMethod($controller, 'downloadWorkbookArchive');
+        $method->setAccessible(true);
+        $workbook = static function (): Spreadsheet {
+            $spreadsheet = new Spreadsheet();
+            $spreadsheet->getActiveSheet()->setCellValue('A1', 'test');
+            return $spreadsheet;
+        };
+
+        $response = $method->invoke($controller, 'Attendance.zip', [
+            'Attendance_Ganz.xlsx' => $workbook,
+            'Attendance_Line1.xlsx' => $workbook,
+        ]);
+
+        ob_start();
+        $response->sendContent();
+        $bytes = ob_get_clean();
+        $path = tempnam(sys_get_temp_dir(), 'attendance_zip_test_');
+        file_put_contents($path, $bytes);
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path) === true);
+        $this->assertNotFalse($zip->locateName('Attendance_Ganz.xlsx'));
+        $this->assertNotFalse($zip->locateName('Attendance_Line1.xlsx'));
+        $this->assertSame(2, $zip->numFiles);
+        $zip->close();
+        @unlink($path);
     }
 }
