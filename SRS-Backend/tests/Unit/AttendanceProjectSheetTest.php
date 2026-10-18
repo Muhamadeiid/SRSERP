@@ -129,4 +129,24 @@ class AttendanceProjectSheetTest extends TestCase
         $zip->close();
         @unlink($path);
     }
+
+    public function test_late_check_in_and_early_check_out_are_highlighted_red(): void
+    {
+        $controller = app(AttendanceController::class);
+        $method = new ReflectionMethod($controller, 'applyAttendanceTimeWarnings');
+        $method->setAccessible(true);
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $method->invoke($controller, $sheet, 2, 481, 1019, true);
+        $method->invoke($controller, $sheet, 3, 480, 1020, true);
+        $method->invoke($controller, $sheet, 4, 600, 900, false);
+
+        $this->assertSame('FF0000', $sheet->getStyle('G2')->getFill()->getStartColor()->getRGB());
+        $this->assertSame('FF0000', $sheet->getStyle('H2')->getFill()->getStartColor()->getRGB());
+        $this->assertNotSame('FF0000', $sheet->getStyle('G3')->getFill()->getStartColor()->getRGB());
+        $this->assertNotSame('FF0000', $sheet->getStyle('H3')->getFill()->getStartColor()->getRGB());
+        $this->assertNotSame('FF0000', $sheet->getStyle('G4')->getFill()->getStartColor()->getRGB());
+        $this->assertNotSame('FF0000', $sheet->getStyle('H4')->getFill()->getStartColor()->getRGB());
+    }
 }

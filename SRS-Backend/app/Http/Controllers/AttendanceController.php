@@ -1212,6 +1212,13 @@ class AttendanceController extends Controller
                                 'vertical'   => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => $thin],
             ]);
+            $this->applyAttendanceTimeWarnings(
+                $sheet,
+                $row,
+                $toMin($rec?->check_in),
+                $toMin($rec?->check_out),
+                (bool) $rec && !$off && $rec->status !== 'absent'
+            );
             $sheet->getRowDimension($row)->setRowHeight(14);
         }
 
@@ -1768,6 +1775,13 @@ class AttendanceController extends Controller
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => $thin],
             ]);
+            $this->applyAttendanceTimeWarnings(
+                $sheet,
+                $row,
+                $toMin($rec?->check_in),
+                $toMin($rec?->check_out),
+                (bool) $rec && !$off && !$companyPaidDay && !$fullDayLeave && $rec->status !== 'absent'
+            );
             $sheet->getRowDimension($row)->setRowHeight(14);
         }
 
@@ -1793,6 +1807,28 @@ class AttendanceController extends Controller
         $sumLastRow   = $sumHeaderRow + count($summaryDefs);
         $printLastRow = max($lastDataRow, $sumLastRow);
         $sheet->getPageSetup()->setPrintArea("A1:{$lastCol}{$printLastRow}");
+    }
+
+    private function applyAttendanceTimeWarnings(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $row,
+        ?int $checkInMinutes,
+        ?int $checkOutMinutes,
+        bool $eligible
+    ): void {
+        if (!$eligible) return;
+
+        $warningStyle = [
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FF0000']],
+            'font' => ['name' => 'Arial', 'size' => 8, 'bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+        ];
+
+        if ($checkInMinutes !== null && $checkInMinutes > 8 * 60) {
+            $sheet->getStyle("G{$row}")->applyFromArray($warningStyle);
+        }
+        if ($checkOutMinutes !== null && $checkOutMinutes < 17 * 60) {
+            $sheet->getStyle("H{$row}")->applyFromArray($warningStyle);
+        }
     }
 
     /**
