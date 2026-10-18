@@ -1249,23 +1249,39 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Export all employees into two project sheets (Ganz and Line 1).
+     * Export one project's employees, one sheet per employee in the standard
+     * attendance layout. The UI downloads two files: project=ganz and
+     * project=line1. Without a project every active employee is exported.
      *
-     * GET /api/attendance/export-all
+     * GET /api/attendance/export-all?project=ganz|line1
      */
     public function exportAllExcel(Request $request): StreamedResponse
     {
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
 
-        $employees   = Employee::active()->orderBy('name')->get();
+        $projectSheet = match (strtolower((string) $request->input('project'))) {
+            'ganz' => 'Ganz',
+            'line1', 'line 1' => 'Line 1',
+            default => null,
+        };
+
+        $employees = Employee::active()->orderBy('name')->get();
+        if ($projectSheet) {
+            $employees = $this->employeesByProjectSheet($employees)[$projectSheet];
+        }
+
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0); // remove default blank sheet
 
-        foreach ($this->employeesByProjectSheet($employees) as $sheetName => $projectEmployees) {
-            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, $sheetName);
-            $spreadsheet->addSheet($sheet);
-            $this->buildProjectAttendanceSheet($sheet, $projectEmployees, $startDate, $endDate);
+        $usedTitles = [];
+        foreach ($employees->values() as $idx => $employee) {
+            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet(
+                $spreadsheet,
+                $this->uniqueSheetTitle((string) $employee->name, $usedTitles)
+            );
+            $spreadsheet->addSheet($sheet, $idx);
+            $this->buildEmployeeSheet($sheet, $employee, $startDate, $endDate);
         }
 
         if ($spreadsheet->getSheetCount() === 0) {
@@ -1275,7 +1291,8 @@ class AttendanceController extends Controller
         $spreadsheet->setActiveSheetIndex(0);
 
         $writer   = new Xlsx($spreadsheet);
-        $filename = "Attendance_All_{$startDate}_{$endDate}.xlsx";
+        $label    = $projectSheet ? str_replace(' ', '', $projectSheet) : 'All';
+        $filename = "Attendance_{$label}_{$startDate}_{$endDate}.xlsx";
 
         return response()->streamDownload(
             fn() => $writer->save('php://output'),
@@ -1285,15 +1302,19 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Budget values are sometimes stored as the project key and sometimes as
-     * the numeric budget code. Unrecognised values stay visible in Line 1 so an
-     * employee is never silently omitted from payroll exports.
+     * Uses the same project rules as the rest of the system (Projects settings:
+     * "Ganz" budget prefix such as "Ganz-RSRSE-0052", or a Ganz work location).
+     * Budgets stored as the bare "GZ" code or the "0052" budget number also count
+     * as Ganz. Everything else stays visible in Line 1 so an employee is never
+     * silently omitted from payroll exports.
      */
-    private function attendanceProjectSheet(?string $projectBudget): string
+    private function attendanceProjectSheet(?string $projectBudget, ?string $workLocation = null): string
     {
-        $budget = strtoupper(trim((string) $projectBudget));
-        $compact = preg_replace('/[^A-Z0-9]/', '', $budget);
+        if (\App\Models\Project::codeFor($projectBudget, $workLocation) === 'GZ') {
+            return 'Ganz';
+        }
 
+        $compact = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string) $projectBudget)));
         if (str_starts_with($compact, 'GZ') || str_starts_with($compact, '0052')) {
             return 'Ganz';
         }
@@ -1306,119 +1327,26 @@ class AttendanceController extends Controller
         $groups = ['Ganz' => collect(), 'Line 1' => collect()];
 
         foreach ($employees as $employee) {
-            $groups[$this->attendanceProjectSheet($employee->project_budget)]->push($employee);
+            $groups[$this->attendanceProjectSheet($employee->project_budget, $employee->work_location)]->push($employee);
         }
 
         return $groups;
     }
 
-    private function buildProjectAttendanceSheet(
-        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
-        $employees,
-        string $startDate,
-        string $endDate
-    ): void {
-        $headers = [
-            'IBS No.', 'Employee Name', 'Project Budget', 'Department', 'Location',
-            'Date', 'Day', 'Check In', 'Check Out', 'Work Hrs.', 'Overtime Hrs.',
-            'Late (Min.)', 'Status', 'Deduction (Hrs.)', 'Notes',
-        ];
-        $thin = ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '9CA3AF']];
-        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
-
-        $sheet->setCellValue('A1', $sheet->getTitle() . " Attendance {$startDate} to {$endDate}");
-        $sheet->mergeCells("A1:{$lastCol}1");
-        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E3A2F']],
-            'font' => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-        ]);
-        $sheet->getRowDimension(1)->setRowHeight(24);
-
-        foreach ($headers as $index => $header) {
-            $column = Coordinate::stringFromColumnIndex($index + 1);
-            $sheet->setCellValue("{$column}2", $header);
+    /**
+     * Excel sheet titles: at most 31 characters, no []:*?/\ and unique per file
+     * (two employees can share a name).
+     */
+    private function uniqueSheetTitle(string $name, array &$used): string
+    {
+        $base = mb_substr(trim(preg_replace('/[\/\\\\?\*\[\]:]+/', '_', $name)) ?: 'Employee', 0, 31);
+        $title = $base;
+        for ($n = 2; in_array(mb_strtolower($title), $used, true); $n++) {
+            $suffix = " ({$n})";
+            $title = mb_substr($base, 0, 31 - mb_strlen($suffix)) . $suffix;
         }
-        $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']],
-            'font' => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
-            'borders' => ['allBorders' => $thin],
-        ]);
-        $sheet->getRowDimension(2)->setRowHeight(28);
-
-        $row = 3;
-        foreach ($employees as $employee) {
-            $attendances = $this->attendanceService->getAttendance([
-                'employee_id' => $employee->id,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-            ])->keyBy(fn ($attendance) => $attendance->date?->format('Y-m-d'));
-            $deductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
-
-            $date = Carbon::parse($startDate);
-            $lastDate = Carbon::parse($endDate);
-            while ($date->lte($lastDate)) {
-                $dateKey = $date->toDateString();
-                $record = $attendances->get($dateKey);
-                $dayOff = $record?->status === 'off' || !$employee->isWorkingDay($date->copy());
-                $deductionHours = $deductions[$dateKey]['deduction_hours'] ?? null;
-                $time = static function ($value): string {
-                    if (!$value) return '';
-                    if ($value instanceof Carbon) return $value->format('H:i');
-                    $text = (string) $value;
-                    return substr(strlen($text) > 8 ? substr($text, -8) : $text, 0, 5);
-                };
-
-                $values = [
-                    $employee->ibs_code ?? '',
-                    $employee->name ?? '',
-                    $employee->project_budget ?? '',
-                    $employee->department ?? '',
-                    $employee->work_location ?? '',
-                    $date->format('j-M-Y'),
-                    $date->format('D'),
-                    $time($record?->check_in),
-                    $time($record?->check_out),
-                    $record?->work_hours ?? ($dayOff ? 0 : ''),
-                    $record?->overtime_hours ?? 0,
-                    $record?->late_minutes ?? 0,
-                    $record?->status ?? ($dayOff ? 'off' : 'not_recorded'),
-                    $deductionHours ?? '',
-                    $record?->notes ?? '',
-                ];
-                foreach ($values as $index => $value) {
-                    $column = Coordinate::stringFromColumnIndex($index + 1);
-                    $sheet->setCellValue("{$column}{$row}", $value);
-                }
-
-                $fill = $dayOff ? 'D5D5D5' : ($row % 2 === 0 ? 'F3F4F6' : 'FFFFFF');
-                $sheet->getStyle("A{$row}:{$lastCol}{$row}")->applyFromArray([
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $fill]],
-                    'font' => ['name' => 'Arial', 'size' => 9],
-                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-                    'borders' => ['allBorders' => $thin],
-                ]);
-                $sheet->getStyle("F{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $row++;
-                $date->addDay();
-            }
-        }
-
-        if ($row === 3) {
-            $sheet->setCellValue('A3', 'No employees found for this project.');
-            $sheet->mergeCells("A3:{$lastCol}3");
-        }
-
-        foreach ([16, 34, 18, 18, 18, 14, 10, 12, 12, 12, 14, 12, 16, 17, 35] as $index => $width) {
-            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($index + 1))->setWidth($width);
-        }
-        $sheet->setAutoFilter("A2:{$lastCol}2");
-        $sheet->freezePane('A3');
-        $sheet->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
-            ->setFitToWidth(1)->setFitToHeight(0)->setFitToPage(true);
+        $used[] = mb_strtolower($title);
+        return $title;
     }
 
     /**
@@ -1874,7 +1802,7 @@ class AttendanceController extends Controller
 
         $rowsBySheet = ['Ganz' => [], 'Line 1' => []];
         foreach ($employees as $employee) {
-            $rowsBySheet[$this->attendanceProjectSheet($employee->project_budget)][] = $this->calcSalaryRow(
+            $rowsBySheet[$this->attendanceProjectSheet($employee->project_budget, $employee->work_location)][] = $this->calcSalaryRow(
                 $employee,
                 $salaryContext['attendances']->get($employee->id, collect()),
                 $startDate,

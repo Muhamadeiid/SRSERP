@@ -1312,11 +1312,15 @@ export default function AttendanceTab() {
   const doExportAll = async () => {
     setExportAllBusy(true)
     try {
-      const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url
-      a.download = `Attendance_All_${exportAllStart}_${exportAllEnd}.xlsx`
-      a.click(); URL.revokeObjectURL(url)
+      // Two files, one per project, each with a sheet per employee
+      for (const [project, label] of [['ganz', 'Ganz'], ['line1', 'Line1']]) {
+        const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd, project })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url
+        a.download = `Attendance_${label}_${exportAllStart}_${exportAllEnd}.xlsx`
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
       setShowExportAllPicker(false)
     } catch {}
     finally { setExportAllBusy(false) }
@@ -1949,7 +1953,7 @@ export default function AttendanceTab() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="font-bold text-secondary-700">Export All Employees</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Two sheets grouped by Project Budget: Ganz and Line 1</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Two files (Ganz and Line 1), one sheet per employee</p>
               </div>
               <button onClick={() => setShowExportAllPicker(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
                 <X className="w-4 h-4" />

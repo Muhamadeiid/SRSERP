@@ -135,7 +135,8 @@ export const attendanceService = {
   },
 
   /**
-   * Export all employees attendance — one sheet per employee
+   * Export attendance — one sheet per employee. Pass project: 'ganz' | 'line1'
+   * to export only that project's employees.
    */
   exportAllExcel: async (filters = {}) => {
     const response = await api.get('/attendance/export-all', {
