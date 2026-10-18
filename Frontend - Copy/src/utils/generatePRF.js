@@ -20,7 +20,7 @@ const IMAGE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relatio
 
 // Table order in the template body
 const T_TOP = 0, T_CATEGORY = 1, T_ITEMS = 2, T_DELIVERY = 3, T_CONTACT = 4, T_NOTES = 5, T_APPROVAL = 6
-const MIN_ITEM_ROWS = 7
+const MIN_ITEM_ROWS = 1   // only the requested items; an empty PRF still shows one blank row
 const EMU_PER_INCH = 914400
 const NOTES_IMAGE_MAX_H = 1.0  // inches
 // Fixed signature box (inches) — fits the 1.83in approval column with padding

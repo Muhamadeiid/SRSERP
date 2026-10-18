@@ -424,6 +424,35 @@ class SecurityBoundariesTest extends TestCase
         $this->assertSame(6.0, $balance->fresh()->getEffectiveRemaining('casual'));
     }
 
+    public function test_prf_detail_uses_the_employee_record_signature_when_the_account_has_none(): void
+    {
+        Schema::create('prfs', function (Blueprint $table) {
+            $table->id(); $table->string('prf_number')->unique(); $table->unsignedBigInteger('requested_by');
+            $table->date('date')->nullable(); $table->string('status'); $table->text('material_category')->nullable();
+            $table->text('notes')->nullable(); $table->longText('notes_image')->nullable(); $table->timestamps();
+        });
+        Schema::create('prf_items', function (Blueprint $table) { $table->id(); $table->unsignedBigInteger('prf_id'); $table->integer('sn')->default(1); $table->timestamps(); });
+        Schema::create('prf_approvals', function (Blueprint $table) {
+            $table->id(); $table->unsignedBigInteger('prf_id'); $table->string('role'); $table->string('action');
+            $table->unsignedBigInteger('approver_id'); $table->text('comment')->nullable(); $table->timestamp('acted_at')->nullable(); $table->timestamps();
+        });
+        Schema::create('purchase_orders', function (Blueprint $table) { $table->id(); $table->unsignedBigInteger('prf_id')->nullable(); $table->string('po_number')->nullable(); $table->string('status')->nullable(); $table->timestamps(); });
+
+        $requester = $this->user();
+        $requester->update(['e_signature' => 'account-signature']);
+        $approver = $this->user('procurement');
+        Employee::create(['ibs_code' => 'SIG-1', 'name' => 'Approver', 'status' => 'on_site', 'position' => 'Buyer', 'department' => 'procurement', 'work_location' => 'Depot', 'user_id' => $approver->id, 'e_signature' => 'employee-record-signature']);
+        Employee::create(['ibs_code' => 'SIG-2', 'name' => 'Requester', 'status' => 'on_site', 'position' => 'Engineer', 'department' => 'cm', 'work_location' => 'Depot', 'user_id' => $requester->id, 'e_signature' => 'older-employee-signature']);
+        $prf = \App\Models\Prf::create(['prf_number' => 'PRF-EG1-2026-0500', 'requested_by' => $requester->id, 'status' => 'pending_ehs']);
+        \App\Models\PrfApproval::create(['prf_id' => $prf->id, 'role' => 'procurement', 'action' => 'approved', 'approver_id' => $approver->id, 'acted_at' => now()]);
+
+        $response = $this->withToken($requester->createToken('requester')->plainTextToken)
+            ->getJson("/api/procurement/prfs/{$prf->id}")->assertOk();
+        // The account's own signature wins; the employee record only fills a gap
+        $response->assertJsonPath('data.requester.e_signature', 'account-signature');
+        $response->assertJsonPath('data.approvals.0.approver.e_signature', 'employee-record-signature');
+    }
+
     public function test_due_leaves_are_deducted_in_end_date_order_when_balance_runs_short(): void
     {
         $employee = Employee::create(['ibs_code' => 'SEC-ORDER', 'name' => 'Order employee', 'status' => 'on_site', 'position' => 'Technician', 'department' => 'cm', 'work_location' => 'Mainline']);

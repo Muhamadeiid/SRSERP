@@ -137,6 +137,23 @@ class PrfController extends Controller
             'purchaseOrder:id,prf_id,po_number,status',
         ]);
 
+        // A signature can be saved on the user account (by its owner) or on the
+        // linked employee record (by HR). Fall back to the employee record so the
+        // printed form shows the e-signature instead of just the name.
+        $people = collect([$prf->requester])->merge($prf->approvals->pluck('approver'))->filter();
+        $missing = $people->filter(fn ($person) => empty($person->e_signature))->pluck('id')->unique();
+        if ($missing->isNotEmpty()) {
+            $employeeSignatures = \App\Models\Employee::whereIn('user_id', $missing)
+                ->whereNotNull('e_signature')
+                ->where('e_signature', '!=', '')
+                ->pluck('e_signature', 'user_id');
+            $people->each(function ($person) use ($employeeSignatures) {
+                if (empty($person->e_signature) && isset($employeeSignatures[$person->id])) {
+                    $person->setAttribute('e_signature', $employeeSignatures[$person->id]);
+                }
+            });
+        }
+
         return response()->json(['success' => true, 'data' => $prf]);
     }
 
