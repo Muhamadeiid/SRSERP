@@ -32,7 +32,7 @@ export default function PoNewPage() {
     receipt_location: 'Company Warehouse',
     comments:         'Banking Transfer',
     tax:              '',
-    withholding_tax:  '',
+    apply_withholding_tax: false,
     items:            [],
     selected_quotation_id: '',
     sole_supplier: false,
@@ -94,8 +94,8 @@ export default function PoNewPage() {
   // ── Totals ───────────────────────────────────────────────────────────────
   const subtotal        = form.items.reduce((s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.unit_price) || 0), 0)
   const taxAmt          = parseFloat(form.tax)             || 0
-  const withholdingAmt  = parseFloat(form.withholding_tax) || 0
-  const grandTotal      = subtotal + taxAmt - withholdingAmt
+  const withholdingAmt  = form.apply_withholding_tax ? Math.round(subtotal * 14) / 100 : 0
+  const grandTotal      = subtotal + taxAmt + withholdingAmt
 
   // ── Submit ───────────────────────────────────────────────────────────────
   const submit = async (e) => {
@@ -114,7 +114,8 @@ export default function PoNewPage() {
         category:         form.category,
         vendor:           form.vendor,
         tax:              parseFloat(form.tax)             || 0,
-        withholding_tax:  parseFloat(form.withholding_tax) || 0,
+        withholding_tax:  withholdingAmt,
+        withholding_tax_additive: form.apply_withholding_tax,
         delivery_terms:   form.delivery_terms,
         delivery_period:  form.delivery_period,
         payment_terms:    form.payment_terms,
@@ -227,13 +228,13 @@ export default function PoNewPage() {
           <div className="border-t border-neutral-100 px-5 py-4 space-y-3">
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex-1 min-w-[240px] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Selected Quotation
-                <select required value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5'}>
-                  <option value="">Select approved quotation</option>
+                <select required={!form.direct_order} disabled={form.direct_order} value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5 disabled:bg-neutral-100 disabled:text-neutral-400'}>
+                  <option value="">{form.direct_order ? 'Not required for urgent direct order' : 'Select approved quotation'}</option>
                   {quotations.map(q=><option key={q.id} value={q.id}>{q.supplier?.company_name} — EGP {fmt(Number(q.price_before_vat)+Number(q.vat||0))} — {q.lead_time_days ?? '—'} days</option>)}
                 </select>
               </label>
               <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>setForm(f=>({...f,sole_supplier:e.target.checked,direct_order:e.target.checked?false:f.direct_order}))} /> Sole Supplier</label>
-              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.direct_order} onChange={e=>setForm(f=>({...f,direct_order:e.target.checked,sole_supplier:e.target.checked?false:f.sole_supplier}))} /> Urgent Direct Order</label>
+              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.direct_order} onChange={e=>setForm(f=>({...f,direct_order:e.target.checked,sole_supplier:e.target.checked?false:f.sole_supplier,selected_quotation_id:e.target.checked?'':f.selected_quotation_id}))} /> Urgent Direct Order</label>
             </div>
             {!form.sole_supplier && !form.direct_order && new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size < 3 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">The SOP requires quotations from 3 different approved suppliers. Recorded now: {new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size} supplier(s).</p>}
             {form.sole_supplier && <textarea required value={form.sole_supplier_justification} onChange={e=>set('sole_supplier_justification',e.target.value)} placeholder="Sole supplier justification and market price benchmark" className={INPUT + ' resize-none'} rows={2} />}
@@ -262,6 +263,13 @@ export default function PoNewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-50">
+                {form.items.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-8 text-center text-xs font-semibold text-red-600 bg-red-50">
+                      This PRF has no items. Add the missing items to the PRF before creating its PO.
+                    </td>
+                  </tr>
+                )}
                 {form.items.map((it, i) => {
                   const lineTotal = (parseFloat(it.qty) || 0) * (parseFloat(it.unit_price) || 0)
                   return (
@@ -327,11 +335,12 @@ export default function PoNewPage() {
                     className="w-32 px-2 py-1 text-xs text-right border border-neutral-200 rounded-lg outline-none focus:border-primary" />
                 </div>
                 <div className="flex items-center justify-between text-xs gap-4">
-                  <span className="text-neutral-500 whitespace-nowrap">Withholding Tax (EGP)</span>
-                  <input type="number" min="0" step="0.01" value={form.withholding_tax}
-                    onChange={e => set('withholding_tax', e.target.value)}
-                    placeholder="0.00"
-                    className="w-32 px-2 py-1 text-xs text-right border border-neutral-200 rounded-lg outline-none focus:border-primary" />
+                  <label className="flex items-center gap-2 text-neutral-600 font-semibold cursor-pointer">
+                    <input type="checkbox" checked={form.apply_withholding_tax}
+                      onChange={e => set('apply_withholding_tax', e.target.checked)} />
+                    Add 14% Withholding Tax
+                  </label>
+                  <span className="w-32 text-right font-semibold text-secondary-700">EGP {fmt(withholdingAmt)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm font-extrabold border-t border-neutral-200 pt-2">
                   <span className="text-secondary-700">TOTAL</span>
@@ -388,11 +397,20 @@ export default function PoNewPage() {
             <p className="text-xs font-bold text-secondary-700">Approval Signatures</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
-            {['Requester', 'Procurement', 'Logistics Manager', 'Depot Manager', 'MD'].map(label => (
-              <div key={label} className="px-4 py-6 text-center">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{label}</p>
-                <div className="mt-3 h-10 flex items-end justify-center border-b border-dashed border-neutral-200 mx-4" />
-                <p className="text-[10px] text-neutral-300 mt-2">Signature &amp; Date</p>
+            {[
+              { label: 'Requester', name: prf?.requester?.name, signature: prf?.requester?.e_signature, footer: `PRF (${prf?.prf_number ?? ''})` },
+              { label: 'Procurement' },
+              { label: 'Logistics Manager' },
+              { label: 'Depot Manager' },
+              { label: 'MD' },
+            ].map(item => (
+              <div key={item.label} className="px-4 py-6 text-center">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{item.label}</p>
+                <div className="mt-3 h-10 flex items-end justify-center border-b border-dashed border-neutral-200 mx-4">
+                  {item.signature && <img src={item.signature} alt={`${item.label} signature`} className="max-h-9 max-w-full object-contain" />}
+                </div>
+                {item.name && <p className="text-[10px] font-semibold text-secondary-600 mt-1 truncate">{item.name}</p>}
+                <p className="text-[10px] text-neutral-400 mt-1">{item.footer || 'Signature & Date'}</p>
               </div>
             ))}
           </div>

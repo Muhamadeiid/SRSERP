@@ -72,7 +72,8 @@ export async function generatePO(po) {
   const logoBytes = await loadLogoBytes()
   const items     = po.items ?? []
   const subtotal  = items.reduce((s, it) => s + (it.total ?? 0), 0)
-  const grandTotal = subtotal + (po.tax ?? 0) - (po.withholding_tax ?? 0)
+  const withholding = po.withholding_tax ?? 0
+  const grandTotal = subtotal + (po.tax ?? 0) + (po.withholding_tax_additive ? withholding : -withholding)
 
   // ── Title row ────────────────────────────────────────────────────────────
   const titleRow = new TableRow({
@@ -179,7 +180,7 @@ export async function generatePO(po) {
   // ── Totals section ───────────────────────────────────────────────────────
   const totalsRows = [
     ['TAX',             fmt(po.tax)],
-    ['Withholding tax', fmt(po.withholding_tax)],
+    [po.withholding_tax_additive ? 'Withholding tax (14% added)' : 'Withholding tax', `${po.withholding_tax_additive ? '+' : '-'} ${fmt(po.withholding_tax)}`],
     ['TOTAL',           `EGP  ${fmt(grandTotal)}`],
   ].map(([label, value]) =>
     new TableRow({

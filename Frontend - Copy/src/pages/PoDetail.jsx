@@ -136,7 +136,8 @@ export default function PoDetail() {
   )
 
   const subtotal       = (po.items ?? []).reduce((s, it) => s + (it.total ?? 0), 0)
-  const grandTotal     = subtotal + (po.tax ?? 0) - (po.withholding_tax ?? 0)
+  const withholding    = po.withholding_tax ?? 0
+  const grandTotal     = subtotal + (po.tax ?? 0) + (po.withholding_tax_additive ? withholding : -withholding)
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 space-y-6">
@@ -299,7 +300,7 @@ export default function PoDetail() {
             </div>
             <div className="flex justify-between">
               <span className="text-neutral-500">Withholding Tax</span>
-              <span className="text-neutral-600">EGP {fmt(po.withholding_tax)}</span>
+              <span className="text-neutral-600">{po.withholding_tax_additive ? '+' : '-'} EGP {fmt(po.withholding_tax)}</span>
             </div>
             <div className="flex justify-between text-sm font-extrabold border-t border-neutral-200 pt-2">
               <span className="text-secondary-700">TOTAL</span>

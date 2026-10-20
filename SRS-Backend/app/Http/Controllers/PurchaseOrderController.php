@@ -84,6 +84,7 @@ class PurchaseOrderController extends Controller
             'vendor'           => 'nullable|string|max:500',
             'tax'              => 'nullable|numeric|min:0',
             'withholding_tax'  => 'nullable|numeric|min:0',
+            'withholding_tax_additive' => 'nullable|boolean',
             'delivery_terms'   => 'nullable|string|max:500',
             'delivery_period'  => 'nullable|string|max:255',
             'payment_terms'    => 'nullable|string|max:255',
@@ -138,6 +139,11 @@ class PurchaseOrderController extends Controller
                 ], 422);
             }
 
+            $withholdingTaxAdditive = (bool) ($data['withholding_tax_additive'] ?? false);
+            $withholdingTax = $withholdingTaxAdditive
+                ? $this->calculateAdditiveWithholdingTax($data['items'])
+                : 0;
+
             $po = PurchaseOrder::create([
                 'po_number'        => $data['po_number'] ?? PurchaseOrder::generateNumber(),
                 'prf_id'           => $prf->id,
@@ -146,7 +152,8 @@ class PurchaseOrderController extends Controller
                 'category'         => $data['category']         ?? null,
                 'vendor'           => $data['vendor']           ?? null,
                 'tax'              => $data['tax']              ?? 0,
-                'withholding_tax'  => $data['withholding_tax']  ?? 0,
+                'withholding_tax'  => $withholdingTax,
+                'withholding_tax_additive' => $withholdingTaxAdditive,
                 'delivery_terms'   => $data['delivery_terms']   ?? null,
                 'delivery_period'  => $data['delivery_period']  ?? 'Week',
                 'payment_terms'    => $data['payment_terms']    ?? '100% After Received',
@@ -211,6 +218,7 @@ class PurchaseOrderController extends Controller
             'vendor'           => 'nullable|string|max:500',
             'tax'              => 'nullable|numeric|min:0',
             'withholding_tax'  => 'nullable|numeric|min:0',
+            'withholding_tax_additive' => 'nullable|boolean',
             'delivery_terms'   => 'nullable|string|max:500',
             'delivery_period'  => 'nullable|string|max:255',
             'payment_terms'    => 'nullable|string|max:255',
@@ -247,7 +255,7 @@ class PurchaseOrderController extends Controller
         $data = $v->validated();
 
         $commercialFields = [
-            'po_number','date','category','vendor','tax','withholding_tax','delivery_terms',
+            'po_number','date','category','vendor','tax','withholding_tax','withholding_tax_additive','delivery_terms',
             'delivery_period','payment_terms','receipt_location','comments','sole_supplier',
             'sole_supplier_justification','direct_order','direct_order_reason','budget_plan_id','selected_quotation_id','items',
         ];
@@ -296,6 +304,7 @@ class PurchaseOrderController extends Controller
                 'vendor'           => $data['vendor']           ?? null,
                 'tax'              => $data['tax']              ?? null,
                 'withholding_tax'  => $data['withholding_tax']  ?? null,
+                'withholding_tax_additive' => $data['withholding_tax_additive'] ?? null,
                 'delivery_terms'   => $data['delivery_terms']   ?? null,
                 'delivery_period'  => $data['delivery_period']  ?? null,
                 'payment_terms'    => $data['payment_terms']    ?? null,
@@ -351,11 +360,36 @@ class PurchaseOrderController extends Controller
                 }
             }
 
+            $withholdingTaxAdditive = array_key_exists('withholding_tax_additive', $data)
+                ? (bool) $data['withholding_tax_additive']
+                : (bool) $po->withholding_tax_additive;
+
+            if (array_key_exists('withholding_tax_additive', $data)
+                || ($withholdingTaxAdditive && (isset($data['items']) || array_key_exists('withholding_tax', $data)))) {
+                $withholdingTax = $withholdingTaxAdditive
+                    ? round((float) $po->items()->sum('total') * 0.14, 2)
+                    : 0;
+
+                $po->update([
+                    'withholding_tax' => $withholdingTax,
+                    'withholding_tax_additive' => $withholdingTaxAdditive,
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'data'    => $po->fresh(['prf.requester', 'creator', 'items']),
             ]);
         });
+    }
+
+    private function calculateAdditiveWithholdingTax(array $items): float
+    {
+        $subtotal = collect($items)->sum(function (array $item): float {
+            return (float) $item['qty'] * (float) ($item['unit_price'] ?? 0);
+        });
+
+        return round($subtotal * 0.14, 2);
     }
 
     public function submitForApproval(PurchaseOrder $po): JsonResponse
@@ -392,16 +426,18 @@ class PurchaseOrderController extends Controller
             return response()->json(['message' => 'Quotations from at least 3 different approved suppliers are required'], 422);
         }
         $selected = $quotes->firstWhere('id', $po->selected_quotation_id);
-        if (!$selected) {
-            return response()->json(['message' => 'Select the approved quotation before submitting the PO'], 422);
+        if (!$po->direct_order) {
+            if (!$selected) {
+                return response()->json(['message' => 'Select the approved quotation before submitting the PO'], 422);
+            }
+            if (!ProcurementSopPolicy::quotationCanBeSelected($selected->technical_compliant, $selected->ehs_compliant, $selected->expiry_date)) {
+                return response()->json(['message' => 'The selected quotation must be technically and EHS compliant and must not be expired'], 422);
+            }
+            if ($selected->supplier?->status !== 'approved') {
+                return response()->json(['message' => 'The selected vendor is not currently approved'], 422);
+            }
+            $po->update(['vendor' => $selected->supplier->company_name]);
         }
-        if (!ProcurementSopPolicy::quotationCanBeSelected($selected->technical_compliant, $selected->ehs_compliant, $selected->expiry_date)) {
-            return response()->json(['message' => 'The selected quotation must be technically and EHS compliant and must not be expired'], 422);
-        }
-        if ($selected->supplier?->status !== 'approved') {
-            return response()->json(['message' => 'The selected vendor is not currently approved'], 422);
-        }
-        $po->update(['vendor' => $selected->supplier->company_name]);
         $po->update(['approval_status' => 'pending_procurement']);
         Notification::notifyRole('procurement', 'po_approval_required', 'Purchase Order awaiting approval', "PO {$po->po_number} is ready for Procurement approval.", ['purchase_order_id'=>$po->id,'path'=>"/purchase-order/{$po->id}"], true);
         return response()->json(['success' => true, 'data' => $po->fresh(['approvals.approver','selectedQuotation.supplier'])]);
