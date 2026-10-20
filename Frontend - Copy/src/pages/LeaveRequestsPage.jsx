@@ -2331,6 +2331,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const [hrLeaveDraft, setHrLeaveDraft] = useState({
     leave_type: req?.leave_type || 'annual',
     paid: req?.paid !== false,
+    start_date: req?.start_date ? String(req.start_date).slice(0, 10) : '',
+    end_date: req?.end_date ? String(req.end_date).slice(0, 10) : '',
     early_from: normalizeTime(req?.early_from),
     early_to: normalizeTime(req?.early_to),
   })
@@ -2366,10 +2368,12 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
     setHrLeaveDraft({
       leave_type: req?.leave_type || 'annual',
       paid: req?.paid !== false,
+      start_date: req?.start_date ? String(req.start_date).slice(0, 10) : '',
+      end_date: req?.end_date ? String(req.end_date).slice(0, 10) : '',
       early_from: normalizeTime(req?.early_from),
       early_to: normalizeTime(req?.early_to),
     })
-  }, [req?.id, req?.leave_type, req?.paid, req?.early_from, req?.early_to])
+  }, [req?.id, req?.leave_type, req?.paid, req?.start_date, req?.end_date, req?.early_from, req?.early_to])
 
   useEffect(() => {
     setOtrDraft({
@@ -2446,37 +2450,48 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const leavePeriod = req.leave_type === 'early' && req.early_from && req.early_to
     ? `${fmtShort(req.start_date)} · From ${normalizeTime(req.early_from)} to ${normalizeTime(req.early_to)} (${fmtDays(req.days)} days)`
     : `${fmtShort(req.start_date)} → ${fmtShort(req.end_date)} (${fmtDays(req.days)} days)`
+  // Leave classification sent with HR / final approval and "Save changes".
+  // Returns null (after telling the user) when the draft is not valid.
+  const hrLeavePayload = () => {
+    const early = hrLeaveDraft.leave_type === 'early'
+    if (early && !hrEarlyDays) {
+      alert('Enter a valid Early Leave From and To time.')
+      return null
+    }
+    const start = hrLeaveDraft.start_date
+    const end = early ? start : hrLeaveDraft.end_date
+    if (!start || !end) {
+      alert('Enter the leave date.')
+      return null
+    }
+    if (end < start) {
+      alert('The To date must be on or after the From date.')
+      return null
+    }
+    return {
+      leave_type: hrLeaveDraft.leave_type,
+      paid: hrLeaveDraft.paid,
+      start_date: start,
+      end_date: end,
+      early_from: early ? normalizeTime(hrLeaveDraft.early_from) : null,
+      early_to: early ? normalizeTime(hrLeaveDraft.early_to) : null,
+    }
+  }
   const submitHrApproval = () => {
     if (!isLRF) {
       onHrApprove(req.id, otrDraft)
       return
     }
-    if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
-      alert('Enter a valid Early Leave From and To time.')
-      return
-    }
-    onHrApprove(req.id, {
-      leave_type: hrLeaveDraft.leave_type,
-      paid: hrLeaveDraft.paid,
-      early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
-      early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
-    })
+    const payload = hrLeavePayload()
+    if (payload) onHrApprove(req.id, payload)
   }
   const submitFinalApproval = () => {
     if (!isLRF) {
       onApprove(req.id, otrDraft)
       return
     }
-    if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
-      alert('Enter a valid Early Leave From and To time.')
-      return
-    }
-    onApprove(req.id, {
-      leave_type: hrLeaveDraft.leave_type,
-      paid: hrLeaveDraft.paid,
-      early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
-      early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
-    })
+    const payload = hrLeavePayload()
+    if (payload) onApprove(req.id, payload)
   }
   const submitManagerApproval = () => {
     onManagerApprove(req.id, isLRF ? {} : otrDraft)
@@ -2484,16 +2499,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const saveDetails = async () => {
     let payload
     if (isLRF) {
-      if (hrLeaveDraft.leave_type === 'early' && !hrEarlyDays) {
-        alert('Enter a valid Early Leave From and To time.')
-        return
-      }
-      payload = {
-        leave_type: hrLeaveDraft.leave_type,
-        paid: hrLeaveDraft.paid,
-        early_from: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_from) : null,
-        early_to: hrLeaveDraft.leave_type === 'early' ? normalizeTime(hrLeaveDraft.early_to) : null,
-      }
+      payload = hrLeavePayload()
+      if (!payload) return
     } else {
       payload = otrDraft
     }
@@ -2715,8 +2722,44 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
                 </select>
               </label>
             </div>
+            {hrLeaveDraft.leave_type !== 'early' && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className={LBL}>From Date</span>
+                  <input
+                    type="date"
+                    value={hrLeaveDraft.start_date}
+                    onChange={e => setHrLeaveDraft(d => ({
+                      ...d,
+                      start_date: e.target.value,
+                      end_date: d.end_date && d.end_date >= e.target.value ? d.end_date : e.target.value,
+                    }))}
+                    className={INP}
+                  />
+                </label>
+                <label className="block">
+                  <span className={LBL}>To Date</span>
+                  <input
+                    type="date"
+                    value={hrLeaveDraft.end_date}
+                    min={hrLeaveDraft.start_date || undefined}
+                    onChange={e => setHrLeaveDraft(d => ({ ...d, end_date: e.target.value }))}
+                    className={INP}
+                  />
+                </label>
+              </div>
+            )}
             {hrLeaveDraft.leave_type === 'early' && (
-              <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-end gap-3">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_1fr_auto] items-end gap-3">
+                <label className="block">
+                  <span className={LBL}>Date</span>
+                  <input
+                    type="date"
+                    value={hrLeaveDraft.start_date}
+                    onChange={e => setHrLeaveDraft(d => ({ ...d, start_date: e.target.value, end_date: e.target.value }))}
+                    className={INP}
+                  />
+                </label>
                 <label className="block">
                   <span className={LBL}>From</span>
                   <input

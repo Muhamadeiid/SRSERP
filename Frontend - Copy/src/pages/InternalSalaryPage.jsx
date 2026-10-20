@@ -19,21 +19,24 @@ async function fetchSalary(params) {
   return res.json()
 }
 
+// Two separate Excel files, one per project (Ganz and Line 1)
 async function downloadExcel(params) {
   const token = getToken()
-  const qs = new URLSearchParams(params).toString()
-  const url = `${BASE}/attendance/internal-salary/export?${qs}`
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) throw new Error('Could not export internal salary files.')
-  const blob = await response.blob()
-  const objectUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = objectUrl
-  a.download = `Internal_Salary_${params.start_date}_${params.end_date}.zip`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  for (const [project, label] of [['ganz', 'Ganz'], ['line1', 'Line1']]) {
+    const qs = new URLSearchParams({ ...params, project }).toString()
+    const url = `${BASE}/attendance/internal-salary/export?${qs}`
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!response.ok) throw new Error('Could not export internal salary files.')
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = `Internal_Salary_${label}_${params.start_date}_${params.end_date}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  }
 }
 
 const INP = 'px-3 py-2 text-sm bg-neutral-50 border border-neutral-200 rounded-xl outline-none focus:border-primary transition-colors'

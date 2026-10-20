@@ -453,6 +453,46 @@ class SecurityBoundariesTest extends TestCase
         $response->assertJsonPath('data.approvals.0.approver.e_signature', 'employee-record-signature');
     }
 
+    public function test_hr_can_correct_leave_dates_while_reviewing(): void
+    {
+        Schema::table('leave_requests', function (Blueprint $table) {
+            $table->time('early_from')->nullable(); $table->time('early_to')->nullable();
+            $table->string('company_paid_purpose')->nullable(); $table->text('purpose')->nullable();
+        });
+        if (!Schema::hasColumn('leave_balances', 'leave_cycle_started_on')) {
+            Schema::table('leave_balances', function (Blueprint $table) { $table->date('leave_cycle_started_on')->nullable(); });
+        }
+        if (!Schema::hasTable('system_settings')) {
+            Schema::create('system_settings', function (Blueprint $table) { $table->id(); $table->string('key')->unique(); $table->text('value')->nullable(); $table->timestamps(); });
+        }
+        $hr = $this->user('hr');
+        $employee = Employee::create(['ibs_code' => 'SEC-DATES', 'name' => 'Dates employee', 'status' => 'on_site', 'position' => 'Engineer', 'department' => 'pm', 'work_location' => 'Kozzika']);
+        LeaveBalance::create(['employee_id' => $employee->id, 'annual' => 21, 'casual' => 7]);
+        $day = fn (int $offset) => now()->startOfWeek()->addWeeks(2)->addDays($offset)->toDateString();
+        $early = LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'type' => 'lrf', 'leave_type' => 'early', 'status' => 'manager_approved', 'days' => 0.5, 'paid' => true, 'start_date' => $day(0), 'end_date' => $day(0), 'early_from' => '13:00', 'early_to' => '17:00']);
+        $token = $hr->createToken('hr')->plainTextToken;
+
+        // Early leave: the date moves, the hours stay, and it remains a single day
+        $this->withToken($token)->patchJson("/api/leave-requests/{$early->id}/details", [
+            'leave_type' => 'early', 'paid' => true, 'start_date' => $day(1), 'end_date' => $day(1), 'early_from' => '13:00', 'early_to' => '17:00',
+        ])->assertOk();
+        $early->refresh();
+        $this->assertSame($day(1), $early->start_date->toDateString());
+        $this->assertSame($day(1), $early->end_date->toDateString());
+        $this->assertSame('13:00', substr((string) $early->early_from, 0, 5));
+
+        // Full-day leave: moving it onto another request's dates is refused
+        LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'type' => 'lrf', 'leave_type' => 'annual', 'status' => 'approved', 'days' => 1, 'paid' => true, 'start_date' => $day(3), 'end_date' => $day(3)]);
+        $annual = LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'type' => 'lrf', 'leave_type' => 'annual', 'status' => 'manager_approved', 'days' => 1, 'paid' => true, 'start_date' => $day(7), 'end_date' => $day(7)]);
+        $this->withToken($token)->patchJson("/api/leave-requests/{$annual->id}/details", [
+            'leave_type' => 'annual', 'paid' => true, 'start_date' => $day(2), 'end_date' => $day(3),
+        ])->assertStatus(422)->assertJsonValidationErrors('start_date');
+        $this->withToken($token)->patchJson("/api/leave-requests/{$annual->id}/details", [
+            'leave_type' => 'annual', 'paid' => true, 'start_date' => $day(8), 'end_date' => $day(7),
+        ])->assertStatus(422)->assertJsonValidationErrors('end_date');
+        $this->assertSame($day(7), $annual->fresh()->start_date->toDateString());
+    }
+
     public function test_due_leaves_are_deducted_in_end_date_order_when_balance_runs_short(): void
     {
         $employee = Employee::create(['ibs_code' => 'SEC-ORDER', 'name' => 'Order employee', 'status' => 'on_site', 'position' => 'Technician', 'department' => 'cm', 'work_location' => 'Mainline']);

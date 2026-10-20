@@ -1312,12 +1312,15 @@ export default function AttendanceTab() {
   const doExportAll = async () => {
     setExportAllBusy(true)
     try {
-      const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url
-      a.download = `Attendance_${exportAllStart}_${exportAllEnd}.zip`
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      // Two separate Excel files, one per project, each with a sheet per employee
+      for (const [project, label] of [['ganz', 'Ganz'], ['line1', 'Line1']]) {
+        const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd, project })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url
+        a.download = `Attendance_${label}_${exportAllStart}_${exportAllEnd}.xlsx`
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
       setShowExportAllPicker(false)
     } catch (error) {
       setOverviewErr(error?.response?.data?.message || 'Could not export attendance files.')

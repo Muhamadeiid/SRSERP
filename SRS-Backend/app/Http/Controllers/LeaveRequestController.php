@@ -1656,11 +1656,13 @@ class LeaveRequestController extends Controller
             ];
         }
 
-        if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'company_paid', 'company_paid_purpose', 'purpose', 'early_from', 'early_to'])) {
+        if ($leaveRequest->type !== 'lrf' || !$request->hasAny(['leave_type', 'paid', 'company_paid', 'company_paid_purpose', 'purpose', 'early_from', 'early_to', 'start_date', 'end_date'])) {
             return [];
         }
 
         $validated = $request->validate([
+            'start_date' => 'sometimes|required|date',
+            'end_date' => 'sometimes|required|date',
             'leave_type' => 'sometimes|required|in:annual,casual,sick,early',
             'paid' => 'sometimes|required|boolean',
             'company_paid' => 'sometimes|required|boolean',
@@ -1684,6 +1686,35 @@ class LeaveRequestController extends Controller
         $days = (float) $leaveRequest->days;
         $changes = [];
 
+        // Reviewers may correct the dates too. An early leave is a single day.
+        $asDate = fn ($value) => $value ? \Carbon\Carbon::parse($value)->toDateString() : null;
+        $startDate = $asDate($validated['start_date'] ?? null) ?? $leaveRequest->start_date?->toDateString();
+        $endDate = $leaveType === 'early'
+            ? $startDate
+            : ($asDate($validated['end_date'] ?? null) ?? ($leaveRequest->end_date ?? $leaveRequest->start_date)?->toDateString());
+        if ($startDate && $endDate && $endDate < $startDate) {
+            throw ValidationException::withMessages(['end_date' => 'The To date must be on or after the From date.']);
+        }
+        $datesChanged = $startDate !== $leaveRequest->start_date?->toDateString()
+            || $endDate !== ($leaveRequest->end_date ?? $leaveRequest->start_date)?->toDateString();
+        if ($datesChanged && $startDate) {
+            $changes['start_date'] = $startDate;
+            $changes['end_date'] = $endDate;
+            if ($leaveRequest->employee_id && $leaveType !== 'early') {
+                $overlap = LeaveRequest::where('employee_id', $leaveRequest->employee_id)
+                    ->where('id', '!=', $leaveRequest->id)
+                    ->where('type', 'lrf')
+                    ->where('leave_type', '!=', 'early')
+                    ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
+                    ->whereDate('start_date', '<=', $endDate)
+                    ->whereDate('end_date', '>=', $startDate)
+                    ->exists();
+                if ($overlap) {
+                    throw ValidationException::withMessages(['start_date' => 'The employee already has a leave request covering these dates.']);
+                }
+            }
+        }
+
         if ($leaveType === 'early') {
             $from = $validated['early_from'] ?? substr((string) $leaveRequest->early_from, 0, 5);
             $to = $validated['early_to'] ?? substr((string) $leaveRequest->early_to, 0, 5);
@@ -1705,12 +1736,8 @@ class LeaveRequestController extends Controller
             $changes['early_from'] = null;
             $changes['early_to'] = null;
             $employee = $leaveRequest->employee_id ? Employee::find($leaveRequest->employee_id) : null;
-            if ($employee && $leaveRequest->start_date) {
-                $days = $this->workingLeaveDays(
-                    $employee,
-                    $leaveRequest->start_date->toDateString(),
-                    ($leaveRequest->end_date ?? $leaveRequest->start_date)->toDateString()
-                );
+            if ($employee && $startDate) {
+                $days = $this->workingLeaveDays($employee, $startDate, $endDate);
                 if ((float) $leaveRequest->days !== $days) {
                     $changes['days'] = $days;
                 }

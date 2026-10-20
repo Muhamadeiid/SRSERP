@@ -1912,6 +1912,23 @@ class AttendanceController extends Controller
             );
         }
 
+        // project=ganz|line1 returns that project's workbook directly; the UI
+        // downloads both. Without a project both come together in one ZIP.
+        $projectSheet = match (strtolower((string) $request->input('project'))) {
+            'ganz' => 'Ganz',
+            'line1', 'line 1' => 'Line 1',
+            default => null,
+        };
+        if ($projectSheet) {
+            $writer = new Xlsx($this->buildInternalSalaryWorkbook($projectSheet, $rowsBySheet[$projectSheet], $startDate, $endDate));
+            $label = str_replace(' ', '', $projectSheet);
+            return response()->streamDownload(
+                fn () => $writer->save('php://output'),
+                "Internal_Salary_{$label}_{$startDate}_{$endDate}.xlsx",
+                ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+            );
+        }
+
         return $this->downloadWorkbookArchive(
             "Internal_Salary_{$startDate}_{$endDate}.zip",
             [
