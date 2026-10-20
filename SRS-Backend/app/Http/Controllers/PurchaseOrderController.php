@@ -413,7 +413,8 @@ class PurchaseOrderController extends Controller
             if (!filled($po->direct_order_reason)) {
                 return response()->json(['message' => 'Direct order justification is required'], 422);
             }
-            if (!$po->budget_plan_id || !ProcurementBudgetPlan::whereKey($po->budget_plan_id)->where('status', 'approved')->exists()) {
+            $approvedBudgetsExist = ProcurementBudgetPlan::where('status', 'approved')->exists();
+            if ($approvedBudgetsExist && (!$po->budget_plan_id || !ProcurementBudgetPlan::whereKey($po->budget_plan_id)->where('status', 'approved')->exists())) {
                 return response()->json(['message' => 'Direct orders must reference an approved monthly budget plan'], 422);
             }
             if (!ProcurementSopPolicy::directOrderCategoryAllowed(
@@ -426,7 +427,7 @@ class PurchaseOrderController extends Controller
             return response()->json(['message' => 'Quotations from at least 3 different approved suppliers are required'], 422);
         }
         $selected = $quotes->firstWhere('id', $po->selected_quotation_id);
-        if (!$po->direct_order) {
+        if (!$po->direct_order && !$po->sole_supplier) {
             if (!$selected) {
                 return response()->json(['message' => 'Select the approved quotation before submitting the PO'], 422);
             }

@@ -227,7 +227,7 @@ export default function PoNewPage() {
           </div>
           <div className="border-t border-neutral-100 px-5 py-4 space-y-3">
             <div className="flex flex-wrap items-end gap-3">
-              {!form.direct_order && (
+              {!form.direct_order && !form.sole_supplier && (
                 <label className="flex-1 min-w-[240px] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Selected Quotation
                   <select required value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5'}>
                     <option value="">Select approved quotation</option>
@@ -235,12 +235,12 @@ export default function PoNewPage() {
                   </select>
                 </label>
               )}
-              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>setForm(f=>({...f,sole_supplier:e.target.checked,direct_order:e.target.checked?false:f.direct_order}))} /> Sole Supplier</label>
+              <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>setForm(f=>({...f,sole_supplier:e.target.checked,direct_order:e.target.checked?false:f.direct_order,selected_quotation_id:e.target.checked?'':f.selected_quotation_id}))} /> Sole Supplier</label>
               <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.direct_order} onChange={e=>setForm(f=>({...f,direct_order:e.target.checked,sole_supplier:e.target.checked?false:f.sole_supplier,selected_quotation_id:e.target.checked?'':f.selected_quotation_id}))} /> Urgent Direct Order</label>
             </div>
             {!form.sole_supplier && !form.direct_order && new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size < 3 && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">The SOP requires quotations from 3 different approved suppliers. Recorded now: {new Set(quotations.map(q=>q.supplier_id).filter(Boolean)).size} supplier(s).</p>}
             {form.sole_supplier && <textarea required value={form.sole_supplier_justification} onChange={e=>set('sole_supplier_justification',e.target.value)} placeholder="Sole supplier justification and market price benchmark" className={INPUT + ' resize-none'} rows={2} />}
-            {form.direct_order && <div className="grid gap-3 sm:grid-cols-2"><select required value={form.budget_plan_id} onChange={e=>set('budget_plan_id',e.target.value)} className={INPUT}><option value="">Select approved monthly budget</option>{budgets.map(b=><option key={b.id} value={b.id}>{String(b.month).padStart(2,'0')}/{b.year} — EGP {fmt(b.grand_total)}</option>)}</select><textarea required value={form.direct_order_reason} onChange={e=>set('direct_order_reason',e.target.value)} placeholder="Urgency and approved-budget justification (stationary, office supplies, or transportation only)" className={INPUT + ' resize-none'} rows={2} /></div>}
+            {form.direct_order && <div className={`grid gap-3 ${budgets.length > 0 ? 'sm:grid-cols-2' : ''}`}>{budgets.length > 0 && <select required value={form.budget_plan_id} onChange={e=>set('budget_plan_id',e.target.value)} className={INPUT}><option value="">Select approved monthly budget</option>{budgets.map(b=><option key={b.id} value={b.id}>{String(b.month).padStart(2,'0')}/{b.year} — EGP {fmt(b.grand_total)}</option>)}</select>}<textarea required value={form.direct_order_reason} onChange={e=>set('direct_order_reason',e.target.value)} placeholder="Urgency justification" className={INPUT + ' resize-none'} rows={2} /></div>}
           </div>
         </div>
 
