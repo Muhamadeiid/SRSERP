@@ -400,7 +400,7 @@ export default function PoNewPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
             {[
-              { label: 'Requester', name: prf?.requester?.name, signature: prf?.requester?.e_signature, footer: `PRF (${prf?.prf_number ?? ''})` },
+              { label: 'Requester', value: prf?.prf_number ?? '' },
               { label: 'Procurement' },
               { label: 'Logistics Manager' },
               { label: 'Depot Manager' },
@@ -409,10 +409,9 @@ export default function PoNewPage() {
               <div key={item.label} className="px-4 py-6 text-center">
                 <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{item.label}</p>
                 <div className="mt-3 h-10 flex items-end justify-center border-b border-dashed border-neutral-200 mx-4">
-                  {item.signature && <img src={item.signature} alt={`${item.label} signature`} className="max-h-9 max-w-full object-contain" />}
+                  {item.value && <span className="pb-2 text-xs font-bold text-secondary-700">{item.value}</span>}
                 </div>
-                {item.name && <p className="text-[10px] font-semibold text-secondary-600 mt-1 truncate">{item.name}</p>}
-                <p className="text-[10px] text-neutral-400 mt-1">{item.footer || 'Signature & Date'}</p>
+                <p className="text-[10px] text-neutral-400 mt-1">{item.value ? 'PRF Number' : 'Signature & Date'}</p>
               </div>
             ))}
           </div>

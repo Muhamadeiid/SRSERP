@@ -317,16 +317,17 @@ export default function PoDetail() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
           {[
-            ['Requester', po.prf?.requester?.name, po.prf?.requester?.e_signature, po.created_at],
+            ['Requester', po.prf?.prf_number, null, null, true],
             ['Procurement', cycle.approval('procurement')?.approver?.name, cycle.approval('procurement')?.approver?.e_signature, cycle.approval('procurement')?.acted_at],
             ['Logistics Manager', null, null, null],
             ['Depot Manager', cycle.approval('depot_manager')?.approver?.name, cycle.approval('depot_manager')?.approver?.e_signature, cycle.approval('depot_manager')?.acted_at],
             ['MD', cycle.approval('managing_director')?.approver?.name, cycle.approval('managing_director')?.approver?.e_signature, cycle.approval('managing_director')?.acted_at],
-          ].map(([label, name, signature, date]) => (
+          ].map(([label, name, signature, date, isRequester]) => (
             <div key={label} className="px-4 py-6 text-center">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">{label}</p>
-              <div className="h-14 flex items-center justify-center mx-2 mb-1">{signature && <img src={signature} alt={`${label} signature`} className="max-w-full max-h-full object-contain" />}</div>
-              <p className="text-[10px] text-neutral-500 truncate">{name || 'Pending'}</p><p className="text-[10px] text-neutral-300">{date ? fmtShort(date) : 'Signature & Date'}</p>
+              <div className="h-14 flex items-center justify-center mx-2 mb-1">{isRequester ? <span className="text-xs font-bold text-secondary-700">{name || '—'}</span> : signature && <img src={signature} alt={`${label} signature`} className="max-w-full max-h-full object-contain" />}</div>
+              {!isRequester && <><p className="text-[10px] text-neutral-500 truncate">{name || 'Pending'}</p><p className="text-[10px] text-neutral-300">{date ? fmtShort(date) : 'Signature & Date'}</p></>}
+              {isRequester && <p className="text-[10px] text-neutral-300">PRF Number</p>}
             </div>
           ))}
         </div>

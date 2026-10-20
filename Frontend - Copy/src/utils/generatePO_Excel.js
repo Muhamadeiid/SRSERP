@@ -277,7 +277,7 @@ export async function generatePO_Excel(po) {
   // ── Signatures ────────────────────────────────────────────────────────────
   const sigLabels = ['Requester', 'Procurement', 'Logistics Manager /', 'Depot Manager', 'MD']
   const sigValues = [
-    po.prf?.requester?.name ?? '',
+    po.prf?.prf_number ?? '',
     (cycle.hasRejection ? cycle.approval('procurement')?.approver?.name : po.creator?.name) ?? '',
     '',
     '',
@@ -317,8 +317,7 @@ export async function generatePO_Excel(po) {
 
   // Year row
   const year = po.date ? new Date(po.date).getFullYear() : new Date().getFullYear()
-  const prf_number = po.prf?.prf_number ?? ''
-  const yearVals = [`PRF (${prf_number})`, `/${year}`, `/${year}`, `/${year}`, `/${year}`]
+  const yearVals = ['', `/${year}`, `/${year}`, `/${year}`, `/${year}`]
   sigRanges.forEach(([s, e], i) => {
     if (s !== e) ws.mergeCells(row, s, row, e)
     const c = ws.getCell(row, s)

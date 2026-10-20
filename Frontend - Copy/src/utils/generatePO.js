@@ -216,7 +216,7 @@ export async function generatePO(po) {
   const depotApproval = approvedAt('depot_manager')
   const managementApproval = approvedAt('managing_director')
   const sigValues  = [
-    { name: po.prf?.requester?.name ?? '', signature: po.prf?.requester?.e_signature, date: po.created_at },
+    { name: po.prf?.prf_number ?? '', signature: null, date: null },
     { name: procApproval?.approver?.name ?? '', signature: procApproval?.approver?.e_signature, date: procApproval?.acted_at },
     { name: '', signature: null, date: null },
     { name: depotApproval?.approver?.name ?? '', signature: depotApproval?.approver?.e_signature, date: depotApproval?.acted_at },
@@ -242,13 +242,12 @@ export async function generatePO(po) {
     }),
   })
 
-  const prf_number = po.prf?.prf_number ?? ''
   const year       = po.date ? new Date(po.date).getFullYear() : new Date().getFullYear()
 
   const sigDateRow = new TableRow({
     height: { value: 380, rule: HeightRule.EXACT },
     children: [
-      cell([para([normal(`PRF (${prf_number})`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
+      cell([para([normal('', 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B }),
       ...sigValues.slice(1).map(v => cell([para([normal(v.date ? fmtDate(v.date) : `/${year}`, 15)], AlignmentType.CENTER)], { width: sigColW, borders: ALL_B })),
     ],
   })
