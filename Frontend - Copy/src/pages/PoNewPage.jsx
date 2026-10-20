@@ -227,12 +227,14 @@ export default function PoNewPage() {
           </div>
           <div className="border-t border-neutral-100 px-5 py-4 space-y-3">
             <div className="flex flex-wrap items-end gap-3">
-              <label className="flex-1 min-w-[240px] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Selected Quotation
-                <select required={!form.direct_order} disabled={form.direct_order} value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5 disabled:bg-neutral-100 disabled:text-neutral-400'}>
-                  <option value="">{form.direct_order ? 'Not required for urgent direct order' : 'Select approved quotation'}</option>
-                  {quotations.map(q=><option key={q.id} value={q.id}>{q.supplier?.company_name} — EGP {fmt(Number(q.price_before_vat)+Number(q.vat||0))} — {q.lead_time_days ?? '—'} days</option>)}
-                </select>
-              </label>
+              {!form.direct_order && (
+                <label className="flex-1 min-w-[240px] text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Selected Quotation
+                  <select required value={form.selected_quotation_id} onChange={e => { const q=quotations.find(x=>String(x.id)===e.target.value); setForm(f=>({...f,selected_quotation_id:e.target.value,vendor:q?.supplier?.company_name || f.vendor})) }} className={INPUT + ' mt-1.5'}>
+                    <option value="">Select approved quotation</option>
+                    {quotations.map(q=><option key={q.id} value={q.id}>{q.supplier?.company_name} — EGP {fmt(Number(q.price_before_vat)+Number(q.vat||0))} — {q.lead_time_days ?? '—'} days</option>)}
+                  </select>
+                </label>
+              )}
               <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.sole_supplier} onChange={e=>setForm(f=>({...f,sole_supplier:e.target.checked,direct_order:e.target.checked?false:f.direct_order}))} /> Sole Supplier</label>
               <label className="flex items-center gap-2 px-3 py-2.5 border rounded-lg text-xs font-bold"><input type="checkbox" checked={form.direct_order} onChange={e=>setForm(f=>({...f,direct_order:e.target.checked,sole_supplier:e.target.checked?false:f.sole_supplier,selected_quotation_id:e.target.checked?'':f.selected_quotation_id}))} /> Urgent Direct Order</label>
             </div>
