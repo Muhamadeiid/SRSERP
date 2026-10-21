@@ -33,6 +33,7 @@ class PrfController extends Controller
     // 'role' stays for notifications (who to email). 'permission' is the actual
     // authority check, so approval rights are managed from the Permission Matrix.
     private const PIPELINE = [
+        'pending_material'    => ['role' => 'material_controller', 'permission' => 'prf.approve_material',    'next' => 'pending_procurement', 'label' => 'Material Controller'],
         'pending_procurement' => ['role' => 'procurement',   'permission' => 'prf.approve_procurement', 'next' => 'pending_ehs',    'label' => 'Procurement'],
         'pending_ehs'         => ['role' => 'ehs_manager',   'permission' => 'prf.approve_ehs',         'next' => 'pending_depot',  'label' => 'EHS Manager'],
         'pending_depot'       => ['role' => 'depot_manager', 'permission' => 'prf.approve_depot',       'next' => 'approved',       'label' => 'Depot Manager'],
@@ -71,7 +72,8 @@ class PrfController extends Controller
         } elseif ($user->isAdmin()) {
             // full visibility
         } elseif (
-            in_array($user->role, ['procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
+            in_array($user->role, ['material_controller', 'procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
+            || $user->hasPermission('prf.approve_material')
             || $user->hasPermission('prf.approve_procurement')
             || $user->hasPermission('prf.approve_ehs')
             || $user->hasPermission('prf.approve_depot')
@@ -121,8 +123,9 @@ class PrfController extends Controller
     {
         $user = auth()->user();
         $canViewAll = $user->isAdmin()
-            || in_array($user->role, ['procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
+            || in_array($user->role, ['material_controller', 'procurement', 'purchasing', 'ehs', 'ehs_manager', 'depot_manager'], true)
             || $user->hasPermission('procurement.access')
+            || $user->hasPermission('prf.approve_material')
             || $user->hasPermission('prf.approve_procurement')
             || $user->hasPermission('prf.approve_ehs')
             || $user->hasPermission('prf.approve_depot');
@@ -140,7 +143,10 @@ class PrfController extends Controller
         // A signature can be saved on the user account (by its owner) or on the
         // linked employee record (by HR). Fall back to the employee record so the
         // printed form shows the e-signature instead of just the name.
-        $people = collect([$prf->requester])->merge($prf->approvals->pluck('approver'))->filter();
+        $signedApprovers = $prf->approvals
+            ->where('role', '!=', 'material_controller')
+            ->pluck('approver');
+        $people = collect([$prf->requester])->merge($signedApprovers)->filter();
         $missing = $people->filter(fn ($person) => empty($person->e_signature))->pluck('id')->unique();
         if ($missing->isNotEmpty()) {
             $employeeSignatures = \App\Models\Employee::whereIn('user_id', $missing)
@@ -153,6 +159,12 @@ class PrfController extends Controller
                 }
             });
         }
+
+        // Material Controller approval is an audit decision only. It must never
+        // attach or expose an e-signature in the PRF approval flow.
+        $prf->approvals
+            ->where('role', 'material_controller')
+            ->each(fn ($approval) => $approval->approver?->setAttribute('e_signature', null));
 
         return response()->json(['success' => true, 'data' => $prf]);
     }
@@ -209,7 +221,7 @@ class PrfController extends Controller
                 'material_category' => $data['material_category'] ?? [],
                 'notes'             => $data['notes']             ?? null,
                 'notes_image'       => $data['notes_image']       ?? null,
-                'status'            => 'pending_procurement',
+                'status'            => 'pending_material',
             ]);
 
             foreach ($data['items'] as $i => $row) {
@@ -225,7 +237,7 @@ class PrfController extends Controller
                 ]);
             }
 
-            $this->notifyStageApprovers($prf, 'pending_procurement');
+            $this->notifyStageApprovers($prf, 'pending_material');
             $this->notifyFutureStageApprovers($prf);
 
             return response()->json([
@@ -517,7 +529,7 @@ class PrfController extends Controller
     private function requesterCanModify(Prf $prf): bool
     {
         return $prf->requested_by === auth()->id()
-            && $prf->status === 'pending_procurement'
+            && $prf->status === 'pending_material'
             && !$prf->approvals()->exists();
     }
 
@@ -566,7 +578,7 @@ class PrfController extends Controller
 
     private function notifyFutureStageApprovers(Prf $prf): void
     {
-        foreach (['pending_ehs', 'pending_depot'] as $stageStatus) {
+        foreach (['pending_procurement', 'pending_ehs', 'pending_depot'] as $stageStatus) {
             $stage = self::PIPELINE[$stageStatus];
             $permittedRoles = DB::table('role_permissions')
                 ->where('permission_key', $stage['permission'])
@@ -586,7 +598,7 @@ class PrfController extends Controller
                     $observer->id,
                     'prf_submitted',
                     "New PRF submitted — {$prf->prf_number}",
-                    "A new PRF was submitted by {$prf->requester?->name}. It is currently waiting for Procurement approval; your {$stage['label']} approval will become available when the previous stages are complete.",
+                    "A new PRF was submitted by {$prf->requester?->name}. It is currently waiting for Material Controller approval; your {$stage['label']} approval will become available when the previous stages are complete.",
                     ['prf_id' => $prf->id, 'path' => "/purchase-request/{$prf->id}"],
                     true
                 );

@@ -10,7 +10,7 @@ import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
 import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
-const PROC_FULL_ROLES = ['admin', 'depot_manager', 'procurement']
+const PROC_FULL_ROLES = ['admin', 'depot_manager', 'material_controller', 'procurement']
 
 const NAV = [
   { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },

@@ -16,6 +16,7 @@ function trackingKey(s) {
 
 const VALID_STATUSES = new Set([
   'all',
+  'pending_material',
   'pending_procurement',
   'pending_ehs',
   'pending_depot',
@@ -140,6 +141,7 @@ export default function PrfMasterList() {
 
   const STATUS_OPTIONS = [
     ['all',                 'All'],
+    ['pending_material',    'Pending Material Controller'],
     ['pending_procurement', 'Pending Procurement'],
     ['pending_ehs',         'Pending EHS'],
     ['pending_depot',       'Pending Depot'],

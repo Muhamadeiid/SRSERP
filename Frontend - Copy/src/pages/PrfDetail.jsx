@@ -15,6 +15,7 @@ const fmtShort   = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-di
 const fmtFullDay = d => d ? new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
 const STAGE_LABEL = {
+  material_controller: 'Material Controller',
   procurement:   'Procurement',
   ehs:           'EHS / Safety',
   ehs_manager:   'EHS Manager',
@@ -65,7 +66,7 @@ export default function PrfDetail() {
   const canCreatePO      = isApproved && user?.role === 'admin'
   const hasLinkedPO      = !!prf?.purchase_order
   const canModify        = String(prf?.requested_by) === String(user?.id)
-    && prf?.status === 'pending_procurement'
+    && prf?.status === 'pending_material'
     && (prf?.approvals ?? []).length === 0
 
   const saveNumber = async () => {
@@ -262,7 +263,7 @@ export default function PrfDetail() {
 
       {/* Top info */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
+        <div className="grid grid-cols-1 md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
           {[
             ['Requested By', prf.requester?.name ?? '—'],
             ['Date',         fmtShort(prf.date)],
@@ -389,13 +390,22 @@ export default function PrfDetail() {
             done
           />
           <ApprovalBox
+            label="Material Controller"
+            name={approvalsByRole.material_controller?.approver?.name}
+            date={approvalsByRole.material_controller?.acted_at}
+            done={!!approvalsByRole.material_controller}
+            current={prf.status === 'pending_material'}
+            rejected={prf.status === 'rejected' && !approvalsByRole.material_controller}
+            noSignature
+          />
+          <ApprovalBox
             label="Procurement"
             name={approvalsByRole.procurement?.approver?.name}
             date={approvalsByRole.procurement?.acted_at}
             sig={approvalsByRole.procurement?.approver?.e_signature}
             done={!!approvalsByRole.procurement}
             current={prf.status === 'pending_procurement'}
-            rejected={prf.status === 'rejected' && !approvalsByRole.procurement}
+            rejected={prf.status === 'rejected' && !!approvalsByRole.material_controller && !approvalsByRole.procurement}
           />
           <ApprovalBox
             label="EHS Manager"
@@ -501,8 +511,8 @@ export default function PrfDetail() {
   )
 }
 
-// ── Approval box mini-component (signature image only — no date below) ────
-function ApprovalBox({ label, sig, done, current, rejected }) {
+// ── Approval box mini-component ──────────────────────────────────────────
+function ApprovalBox({ label, name, date, sig, done, current, rejected, noSignature = false }) {
   let cls       = 'border-dashed border-neutral-200 bg-neutral-50/40'
   let badgeCls  = 'text-neutral-400'
   let badgeText = 'Pending'
@@ -529,10 +539,20 @@ function ApprovalBox({ label, sig, done, current, rejected }) {
     <div className={`px-4 py-3 border-2 rounded-none ${cls} text-center`}>
       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">{label}</p>
 
-      {/* E-signature image (fixed area — keeps all four boxes aligned) */}
+      {/* Material Controller is intentionally recorded without an e-signature. */}
       <div className="mt-2 h-14 flex items-center justify-center">
-        {done && sig ? (
+        {noSignature && done ? (
+          <div>
+            <p className="text-[11px] font-bold text-secondary-700">{name || 'Approved'}</p>
+            <p className="mt-1 text-[10px] text-neutral-400">{fmtShort(date)}</p>
+          </div>
+        ) : done && sig ? (
           <img src={sig} alt={`${label} signature`} className="max-h-14 max-w-full object-contain" />
+        ) : done && name ? (
+          <div>
+            <p className="text-[11px] font-bold text-secondary-700">{name}</p>
+            <p className="mt-1 text-[10px] text-neutral-400">{fmtShort(date)}</p>
+          </div>
         ) : (
           <span className="text-[10px] text-neutral-300 italic">—</span>
         )}

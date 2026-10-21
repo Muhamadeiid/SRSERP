@@ -17,7 +17,7 @@ export default function Sidebar({ collapsed: collapsedProp, setCollapsed: setCol
 
   const role       = String(user?.role ?? 'staff').trim().toLowerCase()
   const isDashFull = ['admin', 'depot_manager'].includes(role)
-  const isProcFull = ['admin', 'depot_manager', 'procurement'].includes(role)
+  const isProcFull = ['admin', 'depot_manager', 'material_controller', 'procurement'].includes(role)
   const isHRFull   = ['admin', 'depot_manager', 'hr'].includes(role)
 
   const navItems = [

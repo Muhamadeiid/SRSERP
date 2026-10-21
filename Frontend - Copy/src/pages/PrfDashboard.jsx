@@ -20,6 +20,7 @@ const fmtShort = d => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digi
 
 const STATUS_OPTIONS = [
   ['all',                 'All'],
+  ['pending_material',    'Pending Material Controller'],
   ['pending_procurement', 'Pending Procurement'],
   ['pending_ehs',         'Pending EHS'],
   ['pending_depot',       'Pending Depot'],

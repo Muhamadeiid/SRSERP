@@ -99,7 +99,7 @@ const HR_FULL_DEPTS = []
 const DASH_ROLES    = ['admin', 'depot_manager']
 
 // Procurement PRF visibility: Admin, Depot Manager, and Procurement Specialist.
-const PROC_ROLES    = ['admin', 'depot_manager', 'procurement']
+const PROC_ROLES    = ['admin', 'depot_manager', 'material_controller', 'procurement']
 const ADMIN_ROLES   = ['admin']
 
 // Everyone (all authenticated users — no roles prop = just needs to be logged in)

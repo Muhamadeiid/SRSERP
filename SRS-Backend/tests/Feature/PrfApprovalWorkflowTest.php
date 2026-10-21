@@ -18,6 +18,8 @@ class PrfApprovalWorkflowTest extends TestCase
     public function test_prf_moves_through_each_approval_stage_in_order(): void
     {
         $requester = $this->user('staff');
+        $materialController = $this->user('material_controller');
+        $materialController->update(['e_signature' => 'data:image/png;base64,material-signature-must-not-be-used']);
         $procurement = $this->user('procurement');
         $ehsOfficer = $this->user('ehs');
         $ehs = $this->user('ehs_manager');
@@ -39,8 +41,9 @@ class PrfApprovalWorkflowTest extends TestCase
                 'quantity' => 1,
                 'unit' => 'pcs',
             ]],
-        ])->assertCreated()->assertJsonPath('data.status', 'pending_procurement')->json('data.id');
+        ])->assertCreated()->assertJsonPath('data.status', 'pending_material')->json('data.id');
 
+        $this->assertSame(1, $this->unreadFor($materialController, $prfId));
         $this->assertSame(1, $this->unreadFor($procurement, $prfId));
         $this->assertSame(1, $this->unreadFor($ehs, $prfId));
         $this->assertSame(1, $this->unreadFor($depot, $prfId));
@@ -48,7 +51,18 @@ class PrfApprovalWorkflowTest extends TestCase
         Sanctum::actingAs($ehs);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
             ->assertForbidden();
-        $this->assertSame('pending_procurement', Prf::findOrFail($prfId)->status);
+        $this->assertSame('pending_material', Prf::findOrFail($prfId)->status);
+
+        Sanctum::actingAs($materialController);
+        $this->postJson("/api/procurement/prfs/{$prfId}/approve")
+            ->assertOk()->assertJsonPath('data.status', 'pending_procurement');
+        $this->assertSame(0, $this->unreadFor($materialController, $prfId));
+        $this->assertSame(1, $this->unreadFor($procurement, $prfId));
+
+        $this->getJson("/api/procurement/prfs/{$prfId}")
+            ->assertOk()
+            ->assertJsonPath('data.approvals.0.role', 'material_controller')
+            ->assertJsonPath('data.approvals.0.approver.e_signature', null);
 
         Sanctum::actingAs($procurement);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
@@ -64,7 +78,7 @@ class PrfApprovalWorkflowTest extends TestCase
         Sanctum::actingAs($procurement);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
             ->assertForbidden();
-        $this->assertSame(1, PrfApproval::where('prf_id', $prfId)->count());
+        $this->assertSame(2, PrfApproval::where('prf_id', $prfId)->count());
 
         Sanctum::actingAs($ehs);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
@@ -77,7 +91,7 @@ class PrfApprovalWorkflowTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'approved');
 
         $this->assertSame(0, $this->unreadFor($depot, $prfId));
-        $this->assertSame(3, PrfApproval::where('prf_id', $prfId)->where('action', 'approved')->count());
+        $this->assertSame(4, PrfApproval::where('prf_id', $prfId)->where('action', 'approved')->count());
         $this->assertDatabaseHas('notifications', [
             'user_id' => $requester->id,
             'type' => 'prf_approved',
@@ -85,14 +99,14 @@ class PrfApprovalWorkflowTest extends TestCase
 
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")
             ->assertStatus(422);
-        $this->assertSame(3, PrfApproval::where('prf_id', $prfId)->count());
+        $this->assertSame(4, PrfApproval::where('prf_id', $prfId)->count());
     }
 
     public function test_requester_can_edit_or_cancel_only_before_the_first_approval(): void
     {
         $requester = $this->user('staff');
         $otherUser = $this->user('staff');
-        $procurement = $this->user('procurement');
+        $materialController = $this->user('material_controller');
 
         Sanctum::actingAs($requester);
         $prfId = $this->postJson('/api/procurement/prfs', [
@@ -120,7 +134,7 @@ class PrfApprovalWorkflowTest extends TestCase
             'items' => [['description' => 'Unauthorized edit', 'quantity' => 1]],
         ])->assertForbidden();
 
-        Sanctum::actingAs($procurement);
+        Sanctum::actingAs($materialController);
         $this->postJson("/api/procurement/prfs/{$prfId}/approve")->assertOk();
 
         Sanctum::actingAs($requester);

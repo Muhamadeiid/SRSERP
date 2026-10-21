@@ -61,7 +61,7 @@ export default function PrfNewPage() {
       .then(res => {
         const prf = res?.data
         if (!active || !prf) return
-        if (prf.status !== 'pending_procurement' || (prf.approvals ?? []).length > 0 || String(prf.requested_by) !== String(user?.id)) {
+        if (prf.status !== 'pending_material' || (prf.approvals ?? []).length > 0 || String(prf.requested_by) !== String(user?.id)) {
           navigate(`/purchase-request/${id}`, { replace: true })
           return
         }

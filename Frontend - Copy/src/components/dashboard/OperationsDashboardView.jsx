@@ -98,7 +98,7 @@ export default function OperationsDashboardView({
         key: 'prfs',
         count: prfPending,
         label: `purchase request${prfPending === 1 ? '' : 's'} in workflow`,
-        href: '/procurement/master?status=pending_procurement',
+        href: '/procurement/master?status=pending_material',
         tone: 'blue',
       },
       fullMaintenanceAccess && {

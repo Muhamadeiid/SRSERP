@@ -9,7 +9,8 @@ const fmt = value => value
   : '—'
 
 const stageText = {
-  pending_procurement: 'Waiting for Procurement',
+  pending_material: 'Waiting for Material Controller',
+  pending_procurement: 'Material Controller approved · Waiting for Procurement',
   pending_ehs: 'Procurement approved · Waiting for EHS Manager',
   pending_depot: 'EHS Manager approved · Waiting for Depot Manager',
   approved: 'Fully approved',
@@ -20,8 +21,8 @@ const stageText = {
 export default function MyPrfRequestsPage() {
   const navigate = useNavigate()
   const { user } = useSelector(state => state.auth)
-  const canReviewAll = ['admin', 'procurement', 'purchasing', 'ehs_manager', 'depot_manager'].includes(user?.role)
-    || ['prf.approve_procurement', 'prf.approve_ehs', 'prf.approve_depot'].some(permission => user?.permissions?.includes(permission))
+  const canReviewAll = ['admin', 'material_controller', 'procurement', 'purchasing', 'ehs_manager', 'depot_manager'].includes(user?.role)
+    || ['prf.approve_material', 'prf.approve_procurement', 'prf.approve_ehs', 'prf.approve_depot'].some(permission => user?.permissions?.includes(permission))
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -82,7 +83,7 @@ export default function MyPrfRequestsPage() {
               <tbody className="divide-y divide-neutral-100">
                 {requests.map(request => {
                   const canEdit = String(request.requested_by) === String(user?.id)
-                    && request.status === 'pending_procurement'
+                    && request.status === 'pending_material'
                     && (request.approvals ?? []).length === 0
                   return (
                     <tr key={request.id} className="hover:bg-neutral-50/70">

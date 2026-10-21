@@ -44,6 +44,7 @@ export const updatePrfNumber = (id, prf_number) =>
 // ── Display helpers (constants kept here so all PRF UIs share them) ─────────
 export const PRF_STATUS_LABELS = {
   draft:                'Draft',
+  pending_material:     'Pending Material Controller',
   pending_procurement:  'Pending Procurement',
   pending_ehs:          'Pending EHS Manager',
   pending_depot:        'Pending Depot Manager',
@@ -54,6 +55,7 @@ export const PRF_STATUS_LABELS = {
 
 export const PRF_STATUS_STYLES = {
   draft:                'bg-neutral-100 text-neutral-600 border-neutral-200',
+  pending_material:     'bg-indigo-50   text-indigo-700 border-indigo-200',
   pending_procurement:  'bg-amber-50    text-amber-700   border-amber-200',
   pending_ehs:          'bg-blue-50     text-blue-700    border-blue-200',
   pending_depot:        'bg-purple-50   text-purple-700  border-purple-200',
@@ -79,6 +81,7 @@ export const MATERIAL_CATEGORIES = [
 
 // Map a current PRF status to the role allowed to act on it
 export const STATUS_TO_ROLE = {
+  pending_material:    'material_controller',
   pending_procurement: 'procurement',
   pending_ehs:         'ehs_manager',
   pending_depot:       'depot_manager',
@@ -89,6 +92,7 @@ export function canActOnStage(user, status) {
   if (!user || !STATUS_TO_ROLE[status]) return false
   if (user.role === 'admin') return true
   const permission = {
+    pending_material: 'prf.approve_material',
     pending_procurement: 'prf.approve_procurement',
     pending_ehs: 'prf.approve_ehs',
     pending_depot: 'prf.approve_depot',

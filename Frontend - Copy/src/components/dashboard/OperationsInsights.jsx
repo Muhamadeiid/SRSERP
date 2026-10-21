@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 
 const stages = [
+  ['pending_material', 'Material Controller review', '#4f46e5'],
   ['pending_procurement', 'Procurement review', '#005782'],
   ['pending_ehs', 'EHS review', '#6489a5'],
   ['pending_depot', 'Depot approval', '#bc9454'],
