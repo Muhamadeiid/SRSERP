@@ -327,11 +327,17 @@ class LeaveRequestController extends Controller
             && (float) ($data['days'] ?? 0) > 0
             && !$this->hasAvailableLeaveBalance($employee->id, $data['leave_type'], (float) $data['days'])
         ) {
-            return response()->json([
+            $response = [
                 'success' => false,
                 'code' => 'INSUFFICIENT_LEAVE_BALANCE',
                 'message' => 'The employee does not have enough available leave balance for this request.',
-            ], 422);
+            ];
+            // Balances are confidential: only HR, Admin and the Depot Manager see
+            // how the available balance was worked out.
+            if (auth()->user()->isHR()) {
+                $response['balance'] = $this->leaveBalanceBreakdown($employee->id, $data['leave_type'], (float) $data['days']);
+            }
+            return response()->json($response, 422);
         }
         if (
             $data['type'] === 'lrf'
@@ -1536,6 +1542,48 @@ class LeaveRequestController extends Controller
             'annual' => max(0, $annualLeft),
             'casual' => max(0, min($annualLeft, $casualLeft)),
             'sick' => max(0, $sickLeft),
+        ];
+    }
+
+    /**
+     * How the available balance for a request type was worked out: the stored
+     * remaining balance, every request still holding days from it (submitted or
+     * approved but not deducted yet), and what is left.
+     */
+    private function leaveBalanceBreakdown(int $employeeId, string $type, float $requestedDays): array
+    {
+        $balance = LeaveBalance::where('employee_id', $employeeId)->first();
+        $available = $this->availableLeaveBalances($employeeId);
+        // Annual, casual and early leave all draw on the annual pool
+        $pool = $type === 'sick' ? ['sick'] : ['annual', 'casual', 'early'];
+
+        $holding = LeaveRequest::query()
+            ->where('type', 'lrf')
+            ->where('employee_id', $employeeId)
+            ->whereNull('balance_deducted_at')
+            ->where(fn ($q) => $q->where('company_paid', false)->orWhereNull('company_paid'))
+            ->whereIn('status', ['pending', 'manager_approved', 'hr_approved', 'approved', 'cancellation_pending', 'amendment_pending'])
+            ->whereIn('leave_type', $pool)
+            ->where('days', '>', 0)
+            ->where(fn ($q) => $q->where('paid', true)->orWhereNull('paid'))
+            ->orderBy('start_date')
+            ->get(['id', 'tracking_no', 'leave_type', 'status', 'start_date', 'end_date', 'days'])
+            ->map(fn ($r) => [
+                'tracking_no' => $r->tracking_no,
+                'leave_type' => $r->leave_type,
+                'status' => $r->status,
+                'start_date' => $r->start_date?->toDateString(),
+                'end_date' => $r->end_date?->toDateString(),
+                'days' => (float) $r->days,
+            ])->values();
+
+        $key = $type === 'early' ? 'annual' : $type;
+        return [
+            'remaining' => $balance ? $balance->getEffectiveRemaining($key === 'sick' ? 'sick' : 'annual') : null,
+            'casual_remaining' => $balance ? $balance->getEffectiveRemaining('casual') : null,
+            'held_by' => $holding,
+            'available' => $available[$key] ?? null,
+            'requested' => $requestedDays,
         ];
     }
 

@@ -53,6 +53,7 @@ async function request(path, options = {}) {
     error.status = res.status
     error.code = err.code
     error.details = err.errors
+    error.balance = err.balance
     throw error
   }
   return res.json()

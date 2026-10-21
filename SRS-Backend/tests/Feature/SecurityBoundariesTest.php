@@ -493,6 +493,34 @@ class SecurityBoundariesTest extends TestCase
         $this->assertSame($day(7), $annual->fresh()->start_date->toDateString());
     }
 
+    public function test_half_day_left_after_a_reserved_leave_is_still_bookable_and_explained(): void
+    {
+        Schema::table('leave_requests', function (Blueprint $table) { $table->string('tracking_no')->nullable(); });
+        if (!Schema::hasColumn('leave_balances', 'leave_cycle_started_on')) {
+            Schema::table('leave_balances', function (Blueprint $table) { $table->date('leave_cycle_started_on')->nullable(); });
+        }
+        if (!Schema::hasTable('system_settings')) {
+            Schema::create('system_settings', function (Blueprint $table) { $table->id(); $table->string('key')->unique(); $table->text('value')->nullable(); $table->timestamps(); });
+        }
+        $employee = Employee::create(['ibs_code' => 'SEC-HALF', 'name' => 'Half day employee', 'status' => 'on_site', 'position' => 'Technician', 'department' => 'hm', 'work_location' => 'Tura']);
+        LeaveBalance::create(['employee_id' => $employee->id, 'annual' => 21, 'casual' => 7, 'annual_remaining' => 2.5, 'casual_remaining' => 2.5, 'leave_cycle_started_on' => now()->startOfYear()->toDateString()]);
+        LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'tracking_no' => 'LRF-EG1-2026-1215', 'type' => 'lrf', 'leave_type' => 'annual', 'status' => 'approved', 'days' => 2, 'paid' => true, 'start_date' => now()->addDays(20)->toDateString(), 'end_date' => now()->addDays(21)->toDateString()]);
+
+        $controller = app(\App\Http\Controllers\LeaveRequestController::class);
+        $has = new \ReflectionMethod($controller, 'hasAvailableLeaveBalance'); $has->setAccessible(true);
+        $this->assertTrue($has->invoke($controller, $employee->id, 'early', 0.5));
+        $this->assertFalse($has->invoke($controller, $employee->id, 'early', 0.75));
+
+        // A second open request now holds the last half day: the breakdown names it
+        LeaveRequest::create(['employee_id' => $employee->id, 'employee_name' => $employee->name, 'tracking_no' => 'LRF-EG1-2026-1300', 'type' => 'lrf', 'leave_type' => 'early', 'status' => 'pending', 'days' => 0.5, 'paid' => true, 'start_date' => now()->toDateString(), 'end_date' => now()->toDateString()]);
+        $this->assertFalse($has->invoke($controller, $employee->id, 'early', 0.5));
+        $breakdown = new \ReflectionMethod($controller, 'leaveBalanceBreakdown'); $breakdown->setAccessible(true);
+        $result = $breakdown->invoke($controller, $employee->id, 'early', 0.5);
+        $this->assertSame(2.5, (float) $result['remaining']);
+        $this->assertSame(0.0, (float) $result['available']);
+        $this->assertSame(['LRF-EG1-2026-1300', 'LRF-EG1-2026-1215'], collect($result['held_by'])->pluck('tracking_no')->all());
+    }
+
     public function test_due_leaves_are_deducted_in_end_date_order_when_balance_runs_short(): void
     {
         $employee = Employee::create(['ibs_code' => 'SEC-ORDER', 'name' => 'Order employee', 'status' => 'on_site', 'position' => 'Technician', 'department' => 'cm', 'work_location' => 'Mainline']);

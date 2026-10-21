@@ -3444,6 +3444,7 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           ? 'This employee does not have enough available balance for the selected leave. Reduce the number of days, choose Unpaid or Company Paid when applicable, or ask HR to review the employee balance.'
           : (e.message || 'Please review the request details and try again.'),
         balanceIssue,
+        balance: e.balance || null,
       })
     } finally {
       setSaving(false)
@@ -3613,6 +3614,27 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-bold ${submitError.balanceIssue ? 'text-amber-800' : 'text-red-700'}`}>{submitError.title}</p>
               <p className={`mt-1 text-xs leading-relaxed ${submitError.balanceIssue ? 'text-amber-700' : 'text-red-600'}`}>{submitError.message}</p>
+              {submitError.balance && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-white/70 p-2.5 text-xs text-amber-900">
+                  <p>
+                    Balance: <b>{fmtDays(submitError.balance.remaining)}</b> days
+                    {' · '}Held by open requests: <b>{fmtDays((submitError.balance.held_by || []).reduce((sum, r) => sum + Number(r.days || 0), 0))}</b>
+                    {' · '}Available: <b>{fmtDays(submitError.balance.available)}</b>
+                    {' · '}Requested: <b>{fmtDays(submitError.balance.requested)}</b>
+                  </p>
+                  {(submitError.balance.held_by || []).length > 0 && (
+                    <ul className="mt-1.5 space-y-0.5">
+                      {submitError.balance.held_by.map((r, i) => (
+                        <li key={r.tracking_no || i}>
+                          {r.tracking_no || 'No tracking no.'} · {r.leave_type} · {fmtShort(r.start_date)}
+                          {r.end_date && r.end_date !== r.start_date ? ` → ${fmtShort(r.end_date)}` : ''}
+                          {' · '}{fmtDays(r.days)} day(s) · {String(r.status).replace(/_/g, ' ')}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
             <button type="button" onClick={() => setSubmitError(null)} className="rounded-md p-1 text-neutral-400 hover:bg-white/70" aria-label="Dismiss message"><X className="h-4 w-4" /></button>
           </div>
