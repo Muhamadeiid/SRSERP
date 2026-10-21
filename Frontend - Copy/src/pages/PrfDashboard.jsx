@@ -8,8 +8,9 @@ import {
   BarChart3, ShoppingCart, Building2, ChevronRight,
 } from 'lucide-react'
 import {
-  getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage,
+  getPrf, getPrfs, PRF_STATUS_LABELS, PRF_STATUS_STYLES, canActOnStage,
 } from '../services/prfService'
+import PrfPreviewModal from '../components/procurement/PrfPreviewModal'
 import { getPos } from '../services/poService'
 import { getSuppliers } from '../services/procurementRegistryService'
 import {
@@ -41,6 +42,20 @@ export default function PrfDashboard() {
   const [warning, setWarning] = useState('')
   const [status,  setStatus]  = useState('all')
   const [search,  setSearch]  = useState('')
+  const [preview, setPreview] = useState(null)
+  const [previewLoadingId, setPreviewLoadingId] = useState(null)
+
+  const openPreview = async id => {
+    setPreviewLoadingId(id)
+    try {
+      const response = await getPrf(id)
+      setPreview(response?.data ?? response)
+    } catch (e) {
+      setErr(e.message || 'Failed to load purchase request details')
+    } finally {
+      setPreviewLoadingId(null)
+    }
+  }
 
   const canSeePOs = ['admin', 'procurement', 'purchasing'].includes(user?.role)
 
@@ -424,9 +439,9 @@ export default function PrfDashboard() {
                       </span>
                     </td>
                     <td className="px-4 sm:px-5 py-3.5 text-center">
-                      <button onClick={(e) => { e.stopPropagation(); navigate(`/procurement/${p.id}`) }}
+                      <button onClick={(e) => { e.stopPropagation(); openPreview(p.id) }}
                         className="p-1.5 rounded-lg text-neutral-400 hover:bg-primary/10 hover:text-primary transition-all opacity-0 group-hover:opacity-100">
-                        <Eye className="w-3.5 h-3.5" />
+                        {previewLoadingId === p.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </td>
                   </tr>
@@ -445,6 +460,8 @@ export default function PrfDashboard() {
         </div>
         <span>© {new Date().getFullYear()} Rotem Industrial SRS • Procurement Module</span>
       </div>
+
+      {preview && <PrfPreviewModal prf={preview} onClose={() => setPreview(null)} onOpen={() => navigate(`/procurement/${preview.id}`)} />}
 
     </div>
   )
