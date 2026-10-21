@@ -391,8 +391,6 @@ export default function PrfDetail() {
           />
           <ApprovalBox
             label="Material Controller"
-            name={approvalsByRole.material_controller?.approver?.name}
-            date={approvalsByRole.material_controller?.acted_at}
             done={!!approvalsByRole.material_controller}
             current={prf.status === 'pending_material'}
             rejected={prf.status === 'rejected' && !approvalsByRole.material_controller}
@@ -446,7 +444,7 @@ export default function PrfDetail() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-secondary-700">
-                    {a.approver?.name} <span className="font-normal text-neutral-400">· {STAGE_LABEL[a.role]}</span>
+                    {a.role === 'material_controller' ? 'Material Controller' : a.approver?.name} <span className="font-normal text-neutral-400">· {STAGE_LABEL[a.role]}</span>
                   </p>
                   <p className="text-xs text-neutral-600 mt-0.5">{a.comment}</p>
                   <p className="text-[10px] text-neutral-400 mt-1">{fmtShort(a.acted_at)}</p>
@@ -542,10 +540,7 @@ function ApprovalBox({ label, name, date, sig, done, current, rejected, noSignat
       {/* Material Controller is intentionally recorded without an e-signature. */}
       <div className="mt-2 h-14 flex items-center justify-center">
         {noSignature && done ? (
-          <div>
-            <p className="text-[11px] font-bold text-secondary-700">{name || 'Approved'}</p>
-            <p className="mt-1 text-[10px] text-neutral-400">{fmtShort(date)}</p>
-          </div>
+          <span className="text-[11px] font-bold text-green-600">Approved</span>
         ) : done && sig ? (
           <img src={sig} alt={`${label} signature`} className="max-h-14 max-w-full object-contain" />
         ) : done && name ? (
