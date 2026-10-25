@@ -52,6 +52,9 @@ class MaintenanceScheduleGenerator
         '20' => ['2026-08-02', 'B2'],
     ];
 
+    /** @var array<string, Carbon> latest 9Y day per train (history and this month) */
+    private array $nineYearEnds = [];
+
     public function preview(int $year, int $month): array
     {
         $start = Carbon::create($year, $month, 1)->startOfMonth();
@@ -70,6 +73,13 @@ class MaintenanceScheduleGenerator
         $warnings = [];
 
         $blocked = $this->planNineYearWork($start, $end, $past, $trains, $holidays, $plan, $generatedMeta, $warnings);
+        $this->nineYearEnds = [];
+        foreach ($trains as $trainId) {
+            $lastOverhaul = $this->latestOverhaulDate((string) $trainId, $past->where('train_id', $trainId), $plan);
+            if ($lastOverhaul) {
+                $this->nineYearEnds[(string) $trainId] = $lastOverhaul;
+            }
+        }
 
         $this->planRoutineVisitsForMonth($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->ensureDailyCoverage($past, $start, $end, $plan, $blocked, $holidays, $warnings);
@@ -89,9 +99,9 @@ class MaintenanceScheduleGenerator
     }
 
     // Local search for the monthly routine schedule
-    private const SOLVER_STEPS = 60000;
+    private const SOLVER_STEPS = 150000;
 
-    private const SOLVER_PATIENCE = 4000;
+    private const SOLVER_PATIENCE = 60000;
 
     private const SOLVER_RANDOM_PERCENT = 10;
 
@@ -102,6 +112,8 @@ class MaintenanceScheduleGenerator
     private const POSTPONE_B_DAYS = 10;
 
     private const POSTPONE_B_COST = 10;
+
+    private const POSTPONE_G_COST = 5000;
 
     /**
      * Routine visits (A / B1 / B2 / B3 / G) for the whole month at once.
@@ -182,7 +194,20 @@ class MaintenanceScheduleGenerator
             return;
         }
 
-        $result = $this->solveRoutine($options, $workingDays, $load, $heavy);
+        // First without postponing any due G; only if a train cannot be scheduled
+        // that way is a G allowed to wait for a later visit.
+        $strictOptions = [];
+        foreach ($options as $trainId => $list) {
+            $kept = array_values(array_filter($list, fn ($option) => $option['score'] < self::POSTPONE_G_COST));
+            $strictOptions[$trainId] = $kept ?: $list;
+        }
+        $result = $this->solveRoutine($strictOptions, $workingDays, $load, $heavy);
+        if ($result['unplaced'] > 0) {
+            $relaxed = $this->solveRoutine($options, $workingDays, $load, $heavy);
+            if ([$relaxed['unplaced'], $relaxed['uncovered']] < [$result['unplaced'], $result['uncovered']]) {
+                $result = $relaxed;
+            }
+        }
 
         foreach ($result['assignment'] as $trainId => $option) {
             foreach ($option['visits'] as [$day, $code]) {
@@ -280,16 +305,21 @@ class MaintenanceScheduleGenerator
             ];
         };
 
-        // A B/G that is due may also be postponed to a later visit (into next month
-        // if needed) when its day is required by another train; this keeps a month
-        // with many B/G dues solvable. Each postponement costs more than any gap
-        // difference, so the solver postpones as few as possible.
+        // A due B1/B2/B3 may also be postponed to a later visit (into next month if
+        // needed) when its day is required by another train; this keeps a month
+        // with many B dues solvable. Each postponement costs more than any gap
+        // difference, so the solver postpones as few as possible. A G waits only as a last resort.
         $variants = function (Carbon $date, ?string $code, ?Carbon $due) use ($visit): array {
             $planned = $visit($date, $code, $due);
             $list = $planned ? [[$planned, 0]] : [];
+            $nextStage = $code ? self::B_CYCLE[((int) array_search($code, self::B_CYCLE, true) + 1) % count(self::B_CYCLE)] : null;
             if ($code && $due && $date->gte($due->copy()->subDays(8))) {
-                // already overdue B/G cost more to postpone again
-                $cost = $date->lt($due->copy()->addDays(self::POSTPONE_B_DAYS)) ? self::POSTPONE_B_COST : self::POSTPONE_B_COST * 3;
+                // already overdue B costs more to postpone again. A G waits only when
+                // otherwise a train could not be scheduled at all: it costs more than
+                // leaving a working day without maintenance.
+                $cost = $nextStage === 'G'
+                    ? self::POSTPONE_G_COST
+                    : ($date->lt($due->copy()->addDays(self::POSTPONE_B_DAYS)) ? self::POSTPONE_B_COST : self::POSTPONE_B_COST * 3);
                 $list[] = [$visit($date, $code, $due, true), $cost];
             }
 
@@ -457,7 +487,14 @@ class MaintenanceScheduleGenerator
 
             // Cost change of switching this train to each of its options: only the
             // option's own days change once the current choice is taken out
+            $removed = -$current['score'];
+            foreach (array_keys($current['days']) as $day) {
+                $removed -= $dayCost($day);
+            }
             $toggle($current, -1);
+            foreach (array_keys($current['days']) as $day) {
+                $removed += $dayCost($day);
+            }
             $bestMove = null;
             $bestDelta = PHP_INT_MAX;
             $ties = 0;
@@ -476,10 +513,14 @@ class MaintenanceScheduleGenerator
             }
             if (mt_rand(1, 100) <= self::SOLVER_RANDOM_PERCENT) {
                 $bestMove = mt_rand(0, count($options[$trainId]) - 1);
+                $bestDelta = $options[$trainId][$bestMove]['score'];
+                foreach ($options[$trainId][$bestMove]['days'] as $day => $isHeavy) {
+                    $bestDelta += $dayCost($day, 1, $isHeavy ? 1 : 0) - $dayCost($day);
+                }
             }
             $toggle($options[$trainId][$bestMove], 1);
             $choice[$trainId] = $bestMove;
-            $cost = $total();
+            $cost += $removed + $bestDelta;
             if ($cost < $bestCost) {
                 $bestCost = $cost;
                 $bestChoice = $choice;
@@ -673,6 +714,13 @@ class MaintenanceScheduleGenerator
             if ($baselineDate->lt($start) && ! $databaseIsAfterVerifiedBaseline) {
                 $reference = ['date' => $baselineDate, 'code' => $baseline[1]];
             }
+        }
+
+        // The 9Y overhaul restarts the B/G cycle: the first stage after it is B1,
+        // about three months after the overhaul ends.
+        $overhaulEnd = $this->nineYearEnds[$trainId] ?? null;
+        if ($overhaulEnd && (! $reference || $overhaulEnd->gt($reference['date']))) {
+            $reference = ['date' => $overhaulEnd->copy(), 'code' => 'G'];
         }
 
         return $reference;
