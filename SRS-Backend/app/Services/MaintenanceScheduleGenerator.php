@@ -27,31 +27,6 @@ class MaintenanceScheduleGenerator
 
     private const B_CYCLE = ['B1', 'B2', 'B3', 'G'];
 
-    private const VERIFIED_BASELINE_END = '2026-09-30';
-
-    private const B_HISTORY_BASELINE = [
-        '01' => ['2026-07-02', 'B1'],
-        '02' => ['2026-06-29', 'B3'],
-        '12' => ['2026-08-12', 'G'],
-        '04' => ['2026-09-29', 'G'],
-        '13' => ['2026-08-23', 'B3'],
-        '03' => ['2026-09-30', 'B3'],
-        '14' => ['2026-08-08', 'B2'],
-        '07' => ['2026-07-09', 'B1'],
-        '05' => ['2026-09-17', 'B2'],
-        '06' => ['2026-08-13', 'B1'],
-        '15' => ['2026-01-26', 'B1'],
-        '09' => ['2026-04-18', 'B3'],
-        '10' => ['2026-04-21', 'B3'],
-        '16' => ['2026-02-22', 'B3'],
-        '08' => ['2026-07-07', 'B3'],
-        '11' => ['2026-05-21', 'B3'],
-        '17' => ['2026-08-26', 'B1'],
-        '18' => ['2026-05-25', 'B2'],
-        '19' => ['2026-09-19', 'B3'],
-        '20' => ['2026-08-02', 'B2'],
-    ];
-
     /** @var array<string, Carbon> latest 9Y day per train (history and this month) */
     private array $nineYearEnds = [];
 
@@ -119,7 +94,7 @@ class MaintenanceScheduleGenerator
 
     /**
      * How each train's B/G stage was worked out, oldest to newest: the visits on
-     * record, the B/G reference used (saved schedule, built-in baseline, or the
+     * record, the B/G reference used (saved schedule or the
      * 9Y restart), the next stage and its due date, and what was planned.
      */
     private function cycleReport(array $trains, Collection $past, Carbon $start, Carbon $end, array $plan): array
@@ -765,16 +740,6 @@ class MaintenanceScheduleGenerator
             'code' => $this->baseCode($databaseEntry->code),
             'source' => 'schedule',
         ] : null;
-
-        $baseline = self::B_HISTORY_BASELINE[$trainId] ?? null;
-        if ($baseline) {
-            $baselineDate = Carbon::parse($baseline[0]);
-            $databaseIsAfterVerifiedBaseline = $reference
-                && $reference['date']->gt(Carbon::parse(self::VERIFIED_BASELINE_END));
-            if ($baselineDate->lt($start) && ! $databaseIsAfterVerifiedBaseline) {
-                $reference = ['date' => $baselineDate, 'code' => $baseline[1], 'source' => 'baseline'];
-            }
-        }
 
         // The 9Y overhaul restarts the B/G cycle: the first stage after it is B1,
         // about three months after the overhaul ends.

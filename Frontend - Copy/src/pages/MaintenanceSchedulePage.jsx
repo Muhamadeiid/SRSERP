@@ -242,7 +242,7 @@ export default function MaintenanceSchedulePage() {
   </div>
 }
 
-const SOURCE_LABEL = { schedule: 'Saved schedule', baseline: 'Built-in baseline (to 30 Sep 2026)', '9y': '9Y restart' }
+const SOURCE_LABEL = { schedule: 'Saved schedule', '9y': '9Y restart' }
 const STATUS_STYLE = {
   planned: ['Planned', 'bg-emerald-50 text-emerald-700 border-emerald-200'],
   postponed: ['Postponed', 'bg-amber-50 text-amber-800 border-amber-200'],
