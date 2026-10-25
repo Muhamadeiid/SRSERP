@@ -131,7 +131,7 @@ class MaintenanceScheduleGenerator
             while ($lastVisit->copy()->addDays(self::A_MIN)->lte($scheduleEnd)) {
                 $target = $lastVisit->copy()->addDays(self::VISIT_TARGET);
                 $code = $resumingAfterOverhaul ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
-                $date = $this->balancedVisitDate($lastVisit, $start, $scheduleEnd, $trainId, $code, $plan, $blocked, $holidays);
+                $date = $this->balancedVisitDate($lastVisit, $start, $scheduleEnd, $trainId, $code, $plan, $blocked, $holidays, $past);
                 if (! $date) {
                     if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
                         $warnings[] = "Train {$trainId}: no slot keeps the visit gap between 13 and 17 days.";
@@ -257,7 +257,7 @@ class MaintenanceScheduleGenerator
         $this->put($plan, $second, $trainId, 'G');
     }
 
-    private function balancedVisitDate(Carbon $lastVisit, Carbon $start, Carbon $end, string $trainId, string $code, array $plan, array $blocked, array $holidays): ?Carbon
+    private function balancedVisitDate(Carbon $lastVisit, Carbon $start, Carbon $end, string $trainId, string $code, array &$plan, array $blocked, array $holidays, Collection $past): ?Carbon
     {
         $candidates = collect([15, 14, 16, 13, 17])
             ->map(fn ($gap) => ['gap' => $gap, 'date' => $lastVisit->copy()->addDays($gap)])
@@ -272,15 +272,20 @@ class MaintenanceScheduleGenerator
                 continue;
             }
             $key = $candidate->toDateString();
-            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId]) || $this->routineVisitCount($plan[$key] ?? []) >= self::MAX_VISITS_PER_DAY) {
+            if (! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
                 continue;
             }
             $heavyVisit = $this->isHeavyVisit($code);
-            if (($heavyVisit && $this->nonOverhaulVisitCount($plan[$key] ?? []) > 0)
-                || (! $heavyVisit && $this->hasHeavyVisit($plan[$key] ?? []))) {
+            if ($this->hasHeavyVisit($plan[$key] ?? [])) {
                 continue;
             }
-            if ($code === 'G' && ! $this->hasAvailableSecondGDay($candidate, $end, $trainId, $plan, $blocked, $holidays)) {
+            $requiredSlots = $heavyVisit
+                ? $this->nonOverhaulVisitCount($plan[$key] ?? [])
+                : max(0, $this->routineVisitCount($plan[$key] ?? []) - self::MAX_VISITS_PER_DAY + 1);
+            if ($requiredSlots > 0 && ! $this->relocateAVisits($candidate, $requiredSlots, $start, $end, $past, $plan, $blocked, $holidays)) {
+                continue;
+            }
+            if ($code === 'G' && ! $this->prepareSecondGDay($candidate, $start, $end, $trainId, $past, $plan, $blocked, $holidays)) {
                 continue;
             }
 
@@ -290,21 +295,53 @@ class MaintenanceScheduleGenerator
         return null;
     }
 
-    private function hasAvailableSecondGDay(Carbon $first, Carbon $end, string $trainId, array $plan, array $blocked, array $holidays): bool
+    private function relocateAVisits(Carbon $source, int $count, Carbon $start, Carbon $end, Collection $past, array &$plan, array $blocked, array $holidays): bool
+    {
+        $sourceKey = $source->toDateString();
+        $aTrains = collect($plan[$sourceKey] ?? [])->filter(fn ($code) => $code === 'A')->keys()->values();
+        if ($aTrains->count() < $count) return false;
+
+        $candidatePlan = $plan;
+        foreach ($aTrains->take($count) as $movingTrain) {
+            $targets = collect(CarbonPeriod::create($start, $end))
+                ->filter(fn ($date) => !$date->isSameDay($source) && $this->isWorkingDay($date, $holidays))
+                ->sortBy(fn ($date) => [$source->diffInDays($date), $this->routineVisitCount($candidatePlan[$date->toDateString()] ?? [])]);
+            $moved = false;
+            foreach ($targets as $target) {
+                $targetKey = $target->toDateString();
+                if (!empty($blocked[$movingTrain][$targetKey])
+                    || !empty($candidatePlan[$targetKey][$movingTrain])
+                    || $this->hasHeavyVisit($candidatePlan[$targetKey] ?? [])
+                    || $this->routineVisitCount($candidatePlan[$targetKey] ?? []) >= self::MAX_VISITS_PER_DAY
+                    || !$this->aMoveKeepsBalance((string) $movingTrain, $source, $target, $past, $candidatePlan)) {
+                    continue;
+                }
+                unset($candidatePlan[$sourceKey][$movingTrain]);
+                if (empty($candidatePlan[$sourceKey])) unset($candidatePlan[$sourceKey]);
+                $this->put($candidatePlan, $target, (string) $movingTrain, 'A');
+                $moved = true;
+                break;
+            }
+            if (!$moved) return false;
+        }
+
+        $plan = $candidatePlan;
+        return true;
+    }
+
+    private function prepareSecondGDay(Carbon $first, Carbon $start, Carbon $end, string $trainId, Collection $past, array &$plan, array $blocked, array $holidays): bool
     {
         $second = $first->copy()->addDay();
-        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
-            $second->addDay();
-        }
-        if ($second->gt($end)) {
-            return false;
-        }
+        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) $second->addDay();
+        if ($second->gt($end)) return false;
 
         $key = $second->toDateString();
+        if (!empty($blocked[$trainId][$key]) || !empty($plan[$key][$trainId]) || $this->hasHeavyVisit($plan[$key] ?? [])) return false;
 
-        return empty($blocked[$trainId][$key])
-            && empty($plan[$key][$trainId])
-            && $this->nonOverhaulVisitCount($plan[$key] ?? []) === 0;
+        $visitsToMove = $this->nonOverhaulVisitCount($plan[$key] ?? []);
+        if ($visitsToMove > 0 && !$this->relocateAVisits($second, $visitsToMove, $start, $end, $past, $plan, $blocked, $holidays)) return false;
+
+        return $this->nonOverhaulVisitCount($plan[$key] ?? []) === 0;
     }
 
     private function planMonthlyCVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
@@ -353,9 +390,9 @@ class MaintenanceScheduleGenerator
             $routineTrains = [];
             foreach ($entries as $trainId => $code) {
                 if ($code === 'C') {
-                    $meta[$date]['k19'] = $trainId;
+                    $meta[$date]['k19'] = (string) $trainId;
                 } elseif (! $this->isNineYearCode($code)) {
-                    $routineTrains[] = $trainId;
+                    $routineTrains[] = (string) $trainId;
                 }
             }
 

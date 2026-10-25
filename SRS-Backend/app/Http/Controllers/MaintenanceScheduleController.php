@@ -91,6 +91,16 @@ class MaintenanceScheduleController extends Controller
     public function saveBatch(Request $request): JsonResponse
     {
         $this->authorizeSchedule($request->user());
+        $request->merge([
+            'meta' => collect($request->input('meta', []))->map(function ($meta) {
+                foreach (['k6', 'k5', 'c_col', 'k19', 'remark'] as $field) {
+                    if (array_key_exists($field, $meta) && $meta[$field] !== null) {
+                        $meta[$field] = (string) $meta[$field];
+                    }
+                }
+                return $meta;
+            })->all(),
+        ]);
         $data = $request->validate([
             'changes' => ['present', 'array', 'max:1000'],
             'changes.*.date' => ['required', 'date_format:Y-m-d'],
