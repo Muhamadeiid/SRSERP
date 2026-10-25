@@ -157,47 +157,118 @@ class MaintenanceScheduleController extends Controller
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($data['file']->getRealPath());
         $sheet = $spreadsheet->getSheetByName('Schedule Template');
-        abort_unless($sheet, 422, 'The workbook must contain a sheet named Schedule Template.');
-
-        [$year, $month, $headerRow, $dayColumns] = $this->readScheduleHeader(
-            $sheet,
-            $data['year'] ?? null,
-            $data['month'] ?? null
-        );
-        $validCodes = MaintenanceCode::pluck('code')->all();
-        $validTrains = Train::pluck('id')->all();
-        $rows = [];
-        $skipped = 0;
-        $trainRows = 0;
-        for ($row = $headerRow + 1; $row <= $sheet->getHighestDataRow(); $row++) {
-            $label = trim((string) $sheet->getCell([1, $row])->getFormattedValue());
-            if (! preg_match('/(?:Train\s*)?(\d{1,2})/i', $label, $match)) continue;
-            $trainId = str_pad($match[1], 2, '0', STR_PAD_LEFT);
-            if (! in_array($trainId, $validTrains, true)) continue;
-            $trainRows++;
-            foreach ($dayColumns as $column => $day) {
-                $code = strtoupper(trim((string) $sheet->getCell([$column, $row])->getFormattedValue()));
-                if ($code === '') continue;
-                if (! in_array($code, $validCodes, true)) { $skipped++; continue; }
-                if (! checkdate($month, $day, $year)) { $skipped++; continue; }
-                $rows[] = [
-                    'schedule_date' => sprintf('%04d-%02d-%02d', $year, $month, $day),
-                    'train_id' => $trainId, 'code' => $code, 'created_at' => now(), 'updated_at' => now(),
-                ];
+        if (!$sheet) {
+            foreach ($spreadsheet->getWorksheetIterator() as $candidate) {
+                if (preg_match('/^20\d{2}-(1[0-2]|0?[1-9])$/', trim($candidate->getTitle()))) {
+                    $sheet = $candidate;
+                    break;
+                }
             }
         }
-        abort_unless($trainRows > 0, 422, 'No valid train rows were found in Schedule Template.');
+        $sheet ??= $spreadsheet->getActiveSheet();
+
+        $validCodes = MaintenanceCode::pluck('code')->all();
+        $validTrains = Train::pluck('id')->all();
+        $exported = $this->readExportedSchedule($sheet, $data['year'] ?? null, $data['month'] ?? null, $validCodes, $validTrains);
+        if ($exported) {
+            [$year, $month, $rows, $metaRows, $skipped] = $exported;
+        } else {
+            [$year, $month, $headerRow, $dayColumns] = $this->readScheduleHeader($sheet, $data['year'] ?? null, $data['month'] ?? null);
+            $rows = [];
+            $metaRows = [];
+            $skipped = 0;
+            $trainRows = 0;
+            for ($row = $headerRow + 1; $row <= $sheet->getHighestDataRow(); $row++) {
+                $label = trim((string) $sheet->getCell([1, $row])->getFormattedValue());
+                if (! preg_match('/(?:Train\s*)?(\d{1,2})/i', $label, $match)) continue;
+                $trainId = str_pad($match[1], 2, '0', STR_PAD_LEFT);
+                if (! in_array($trainId, $validTrains, true)) continue;
+                $trainRows++;
+                foreach ($dayColumns as $column => $day) {
+                    $code = strtoupper(trim((string) $sheet->getCell([$column, $row])->getFormattedValue()));
+                    if ($code === '') continue;
+                    if (! in_array($code, $validCodes, true)) { $skipped++; continue; }
+                    if (! checkdate($month, $day, $year)) { $skipped++; continue; }
+                    $rows[] = ['schedule_date' => sprintf('%04d-%02d-%02d', $year, $month, $day), 'train_id' => $trainId, 'code' => $code, 'created_at' => now(), 'updated_at' => now()];
+                }
+            }
+            abort_unless($trainRows > 0, 422, 'No valid train rows were found in the workbook.');
+        }
         $start = Carbon::create($year, $month, 1)->startOfMonth()->toDateString();
         $end = Carbon::create($year, $month, 1)->endOfMonth()->toDateString();
-        DB::transaction(function () use ($start, $end, $rows) {
+        DB::transaction(function () use ($start, $end, $rows, $metaRows) {
             MaintenanceSchedule::whereBetween('schedule_date', [$start, $end])->delete();
             if ($rows) MaintenanceSchedule::upsert($rows, ['schedule_date', 'train_id'], ['code', 'updated_at']);
+            if ($metaRows) {
+                ScheduleDayMeta::whereBetween('schedule_date', [$start, $end])->delete();
+                ScheduleDayMeta::upsert($metaRows, ['schedule_date'], ['k6', 'k5', 'c_col', 'k19', 'remark', 'updated_at']);
+            }
         });
         $spreadsheet->disconnectWorksheets();
 
         return response()->json(['success' => true, 'data' => [
             'year' => $year, 'month' => $month, 'imported' => count($rows), 'skipped' => $skipped,
         ]]);
+    }
+
+    private function readExportedSchedule($sheet, ?int $fallbackYear, ?int $fallbackMonth, array $validCodes, array $validTrains): ?array
+    {
+        $headerRow = null;
+        for ($row = 1; $row <= min(10, $sheet->getHighestDataRow()); $row++) {
+            $first = strtolower(trim((string) $sheet->getCell([1, $row])->getFormattedValue()));
+            $second = strtolower(trim((string) $sheet->getCell([2, $row])->getFormattedValue()));
+            if ($first === 'no' && $second === 'date') { $headerRow = $row; break; }
+        }
+        if (!$headerRow) return null;
+
+        $year = $fallbackYear;
+        $month = $fallbackMonth;
+        foreach ([$sheet->getTitle(), (string) $sheet->getCell([1, 1])->getFormattedValue()] as $source) {
+            if (preg_match('/(20\d{2})[-_\/ ](1[0-2]|0?[1-9])(?!\d)/', $source, $match)) {
+                $year = (int) $match[1];
+                $month = (int) $match[2];
+                break;
+            }
+        }
+        abort_unless($year && $month >= 1 && $month <= 12, 422, 'Year and month could not be determined from the workbook.');
+
+        $trainColumns = [];
+        $metaColumns = [];
+        $metaLabels = ['k6' => 'k6', 'k5' => 'k5', 'c' => 'c_col', 'k19' => 'k19', 'remark' => 'remark'];
+        $lastColumn = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+        for ($column = 4; $column <= $lastColumn; $column++) {
+            $label = trim((string) $sheet->getCell([$column, $headerRow])->getFormattedValue());
+            $trainId = str_pad($label, 2, '0', STR_PAD_LEFT);
+            if (in_array($trainId, $validTrains, true)) $trainColumns[$column] = $trainId;
+            $metaKey = $metaLabels[strtolower($label)] ?? null;
+            if ($metaKey) $metaColumns[$metaKey] = $column;
+        }
+        abort_unless($trainColumns, 422, 'No valid train columns were found in the workbook.');
+
+        $rows = [];
+        $metaRows = [];
+        $skipped = 0;
+        for ($row = $headerRow + 1; $row <= $sheet->getHighestDataRow(); $row++) {
+            $day = (int) $sheet->getCell([1, $row])->getValue();
+            if ($day < 1 || $day > 31 || !checkdate($month, $day, $year)) continue;
+            $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
+            foreach ($trainColumns as $column => $trainId) {
+                $code = strtoupper(trim((string) $sheet->getCell([$column, $row])->getFormattedValue()));
+                if ($code === '') continue;
+                if (!in_array($code, $validCodes, true)) { $skipped++; continue; }
+                $rows[] = ['schedule_date' => $date, 'train_id' => $trainId, 'code' => $code, 'created_at' => now(), 'updated_at' => now()];
+            }
+            if ($metaColumns) {
+                $meta = ['schedule_date' => $date, 'k6' => null, 'k5' => null, 'c_col' => null, 'k19' => null, 'remark' => null, 'created_at' => now(), 'updated_at' => now()];
+                foreach ($metaColumns as $key => $column) {
+                    $value = trim((string) $sheet->getCell([$column, $row])->getFormattedValue());
+                    $meta[$key] = $value !== '' ? $value : null;
+                }
+                $metaRows[] = $meta;
+            }
+        }
+
+        return [$year, $month, $rows, $metaRows, $skipped];
     }
 
     private function readScheduleHeader($sheet, ?int $fallbackYear, ?int $fallbackMonth): array
