@@ -87,8 +87,10 @@ class MaintenanceScheduleGenerator
         $this->assignTracks($plan, $generatedMeta);
 
         ksort($plan);
+        $cycleReport = $this->cycleReport($trains, $past, $start, $end, $plan);
 
         return [
+            'cycle_report' => $cycleReport,
             'entries' => collect($plan)->map(fn ($rows) => collect($rows)->sortKeys()->all())->all(),
             'meta' => $generatedMeta,
             'warnings' => array_values(array_unique($warnings)),
@@ -114,6 +116,63 @@ class MaintenanceScheduleGenerator
     private const POSTPONE_B_COST = 10;
 
     private const POSTPONE_G_COST = 5000;
+
+    /**
+     * How each train's B/G stage was worked out, oldest to newest: the visits on
+     * record, the B/G reference used (saved schedule, built-in baseline, or the
+     * 9Y restart), the next stage and its due date, and what was planned.
+     */
+    private function cycleReport(array $trains, Collection $past, Carbon $start, Carbon $end, array $plan): array
+    {
+        $report = [];
+        foreach ($trains as $trainId) {
+            $trainId = (string) $trainId;
+            $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
+            $routinePast = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')->values();
+            $history = $routinePast->map(fn ($row) => [$row->schedule_date->toDateString(), strtoupper((string) $row->code)])->values()->all();
+
+            $nineYear = $trainPast->filter(fn ($row) => $this->isNineYearCode($row->code))->pluck('schedule_date')
+                ->merge(collect($plan)->filter(fn ($entries) => isset($entries[$trainId]) && $this->isNineYearCode($entries[$trainId]))->keys()->map(fn ($day) => Carbon::parse($day)))
+                ->sort()->values();
+
+            $reference = $this->lastBReference($trainId, $routinePast, $start);
+            $nextStage = $reference ? self::B_CYCLE[((int) array_search($reference['code'], self::B_CYCLE, true) + 1) % count(self::B_CYCLE)] : null;
+            $due = $reference ? $reference['date']->copy()->addMonthsNoOverflow(3) : null;
+
+            $planned = [];
+            foreach ($plan as $day => $entries) {
+                $code = $entries[$trainId] ?? null;
+                if ($code && ! $this->isNineYearCode($code) && $code !== 'C') {
+                    $planned[] = [$day, $code];
+                }
+            }
+            usort($planned, fn ($a, $b) => strcmp($a[0], $b[0]));
+            $plannedStage = collect($planned)->first(fn ($visit) => $visit[1] !== 'A');
+
+            $status = 'not_due';
+            if (! $reference) {
+                $status = 'no_history';
+            } elseif ($plannedStage) {
+                $status = 'planned';
+            } elseif ($due->copy()->subDays(8)->lte($end)) {
+                $status = collect($planned)->isEmpty() ? 'no_visit' : 'postponed';
+            }
+
+            $report[] = [
+                'train' => $trainId,
+                'history' => array_slice($history, -6),
+                'last_9y' => $nineYear->isEmpty() ? null : [$nineYear->first()->toDateString(), $nineYear->last()->toDateString()],
+                'reference' => $reference ? ['date' => $reference['date']->toDateString(), 'code' => $reference['code'], 'source' => $reference['source'] ?? 'schedule'] : null,
+                'next_stage' => $nextStage,
+                'due' => $due?->toDateString(),
+                'due_window_start' => $due?->copy()->subDays(8)->toDateString(),
+                'planned' => $planned,
+                'status' => $status,
+            ];
+        }
+
+        return $report;
+    }
 
     /**
      * Routine visits (A / B1 / B2 / B3 / G) for the whole month at once.
@@ -704,6 +763,7 @@ class MaintenanceScheduleGenerator
         $reference = $databaseEntry ? [
             'date' => $databaseEntry->schedule_date->copy(),
             'code' => $this->baseCode($databaseEntry->code),
+            'source' => 'schedule',
         ] : null;
 
         $baseline = self::B_HISTORY_BASELINE[$trainId] ?? null;
@@ -712,7 +772,7 @@ class MaintenanceScheduleGenerator
             $databaseIsAfterVerifiedBaseline = $reference
                 && $reference['date']->gt(Carbon::parse(self::VERIFIED_BASELINE_END));
             if ($baselineDate->lt($start) && ! $databaseIsAfterVerifiedBaseline) {
-                $reference = ['date' => $baselineDate, 'code' => $baseline[1]];
+                $reference = ['date' => $baselineDate, 'code' => $baseline[1], 'source' => 'baseline'];
             }
         }
 
@@ -720,7 +780,7 @@ class MaintenanceScheduleGenerator
         // about three months after the overhaul ends.
         $overhaulEnd = $this->nineYearEnds[$trainId] ?? null;
         if ($overhaulEnd && (! $reference || $overhaulEnd->gt($reference['date']))) {
-            $reference = ['date' => $overhaulEnd->copy(), 'code' => 'G'];
+            $reference = ['date' => $overhaulEnd->copy(), 'code' => 'G', 'source' => '9y'];
         }
 
         return $reference;

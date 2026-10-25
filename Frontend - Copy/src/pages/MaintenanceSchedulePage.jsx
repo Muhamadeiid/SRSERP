@@ -21,6 +21,8 @@ export default function MaintenanceSchedulePage() {
   const [generating, setGenerating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [generationWarnings, setGenerationWarnings] = useState([])
+  const [cycleReport, setCycleReport] = useState([])
+  const [showCycleReport, setShowCycleReport] = useState(false)
   const [notice, setNotice] = useState(null)
   const [tableScale, setTableScale] = useState(1)
   const fileRef = useRef()
@@ -105,7 +107,7 @@ export default function MaintenanceSchedulePage() {
   }
 
   const generate = async () => {
-    setGenerating(true); setNotice(null); setGenerationWarnings([])
+    setGenerating(true); setNotice(null); setGenerationWarnings([]); setCycleReport([])
     try {
       const response = await generateMaintenanceSchedule(cursor.year, cursor.month)
       const result = response.data
@@ -134,6 +136,7 @@ export default function MaintenanceSchedulePage() {
         setMetaChanges(nextMetaChanges)
       }
       setGenerationWarnings(result.warnings || [])
+      setCycleReport(result.cycle_report || [])
       setNotice({ text: `Draft generated with ${Object.values(generated).reduce((sum, row) => sum + Object.keys(row).length, 0)} planned entries. Review and edit it, then click Save Changes.` })
     } catch (error) { setNotice({ error: true, text: error.message || 'Could not generate the schedule.' }) }
     finally { setGenerating(false) }
@@ -167,6 +170,7 @@ export default function MaintenanceSchedulePage() {
     </div>
     {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice.text}</div>}
     {generationWarnings.length > 0 && <div className="mb-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><div className="mb-1 flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" />Generation review ({generationWarnings.length})</div><ul className="max-h-28 overflow-auto pl-5 text-xs list-disc">{generationWarnings.map(warning => <li key={warning}>{warning}</li>)}</ul></div>}
+    {cycleReport.length > 0 && <CycleReport rows={cycleReport} open={showCycleReport} onToggle={() => setShowCycleReport(value => !value)} />}
     <div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
       {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div ref={tableViewportRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-hidden">
         <table className="origin-top-left border-collapse text-xs" style={{ width: SCHEDULE_TABLE_WIDTH, minWidth: SCHEDULE_TABLE_WIDTH, tableLayout: 'fixed', zoom: tableScale }}>
@@ -232,5 +236,48 @@ export default function MaintenanceSchedulePage() {
       </tbody></table></div>
     </div>}
     <div className="mt-3 flex flex-wrap gap-3 text-xs text-neutral-600">{schedule?.codes?.map(code => <span key={code.code} className="inline-flex items-center gap-1.5"><i className="h-3 w-3 border border-neutral-300" style={{ backgroundColor: code.color_hex }} />{code.code}: {code.name}</span>)}</div>
+  </div>
+}
+
+const SOURCE_LABEL = { schedule: 'Saved schedule', baseline: 'Built-in baseline (to 30 Sep 2026)', '9y': '9Y restart' }
+const STATUS_STYLE = {
+  planned: ['Planned', 'bg-emerald-50 text-emerald-700 border-emerald-200'],
+  postponed: ['Postponed', 'bg-amber-50 text-amber-800 border-amber-200'],
+  no_visit: ['No visit', 'bg-red-50 text-red-700 border-red-200'],
+  not_due: ['Not due', 'bg-neutral-50 text-neutral-500 border-neutral-200'],
+  no_history: ['No B/G history', 'bg-red-50 text-red-700 border-red-200'],
+}
+const shortDate = (iso) => iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'
+
+// How the generator worked out each train's B/G stage, oldest to newest
+function CycleReport({ rows, open, onToggle }) {
+  return <div className="mb-4 rounded-md border border-sky-200 bg-white">
+    <button type="button" onClick={onToggle} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-bold text-secondary">
+      <span>B/G cycle check ({rows.length} trains)</span>
+      <span className="text-xs font-semibold text-sky-700">{open ? 'Hide' : 'Show how each B/G was calculated'}</span>
+    </button>
+    {open && <div className="max-h-96 overflow-auto border-t border-sky-100">
+      <table className="w-full border-collapse text-xs">
+        <thead className="sticky top-0 bg-sky-50 text-left text-[11px] uppercase tracking-wide text-sky-900">
+          <tr>{['Train', 'Last visits (old → new)', 'Last 9Y', 'B/G reference used', 'Next stage', 'Due (window)', 'Planned this month', 'Result'].map(h => <th key={h} className="border-b border-sky-100 px-3 py-2 font-semibold">{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map(row => {
+            const [label, style] = STATUS_STYLE[row.status] || [row.status, '']
+            return <tr key={row.train} className="border-b border-neutral-100 align-top">
+              <td className="px-3 py-2 font-bold">{row.train}</td>
+              <td className="px-3 py-2 text-neutral-600">{row.history.length ? row.history.map(([d, c]) => `${shortDate(d)} ${c}`).join(' → ') : '—'}</td>
+              <td className="px-3 py-2 text-neutral-600">{row.last_9y ? `${shortDate(row.last_9y[0])} – ${shortDate(row.last_9y[1])}` : '—'}</td>
+              <td className="px-3 py-2">{row.reference ? <><b>{row.reference.code}</b> on {shortDate(row.reference.date)}<div className="text-[10px] text-neutral-400">{SOURCE_LABEL[row.reference.source] || row.reference.source}</div></> : '—'}</td>
+              <td className="px-3 py-2 font-bold">{row.next_stage || '—'}</td>
+              <td className="px-3 py-2">{row.due ? <>{shortDate(row.due)}<div className="text-[10px] text-neutral-400">from {shortDate(row.due_window_start)}</div></> : '—'}</td>
+              <td className="px-3 py-2 text-neutral-700">{row.planned.length ? row.planned.map(([d, c]) => `${d.slice(8)} ${c}`).join(', ') : '—'}</td>
+              <td className="px-3 py-2"><span className={`inline-block rounded border px-2 py-0.5 font-semibold ${style}`}>{label}</span></td>
+            </tr>
+          })}
+        </tbody>
+      </table>
+      <p className="px-4 py-2 text-[11px] text-neutral-500">The next stage is due three months after the reference. A visit from 8 days before the due date becomes that stage. If a reference is wrong, correct that B/G in the saved schedule of its month and generate again.</p>
+    </div>}
   </div>
 }
