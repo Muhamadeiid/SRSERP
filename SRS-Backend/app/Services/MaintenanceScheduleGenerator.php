@@ -133,8 +133,14 @@ class MaintenanceScheduleGenerator
                 $code = $resumingAfterOverhaul ? 'A' : $this->nextVisitCode($target, $lastBCode, $nextBDue);
                 $date = $this->balancedVisitDate($lastVisit, $start, $scheduleEnd, $trainId, $code, $plan, $blocked, $holidays, $past);
                 if (! $date) {
-                    if ($lastVisit->copy()->addDays(self::A_MAX)->gte($start)) {
-                        $warnings[] = "Train {$trainId}: no slot keeps the visit gap between 13 and 17 days.";
+                    // Only a real gap when the whole 13-17 day window lies inside this
+                    // schedule. If part of it falls in the next month, the next visit
+                    // simply belongs to that month and is planned when it is generated.
+                    $windowStart = $lastVisit->copy()->addDays(self::A_MIN);
+                    $windowEnd = $lastVisit->copy()->addDays(self::A_MAX);
+                    if ($windowEnd->lte($scheduleEnd) && $windowEnd->gte($start)) {
+                        $warnings[] = "Train {$trainId}: no slot keeps the visit gap between 13 and 17 days ("
+                            . $windowStart->format('d M') . ' - ' . $windowEnd->format('d M') . ').';
                     }
                     break;
                 }
@@ -351,6 +357,10 @@ class MaintenanceScheduleGenerator
             ->values();
 
         foreach ($trains as $index => $trainId) {
+            // A train in 9Y for every working day of the month needs no cleaning visit
+            if ($workingDates->every(fn ($date) => ! empty($blocked[$trainId][$date->toDateString()]))) {
+                continue;
+            }
             $preferredIndex = ($index * 7 + $start->month) % max(1, $workingDates->count());
             $orderedDates = $workingDates->sortBy(fn ($date, $dateIndex) => abs($dateIndex - $preferredIndex));
             $routineDates = $past->where('train_id', $trainId)
