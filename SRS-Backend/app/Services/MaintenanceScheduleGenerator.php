@@ -871,6 +871,7 @@ class MaintenanceScheduleGenerator
             ->values();
 
         $candidates = [];
+        $dayLevels = [];
         foreach ($trains as $trainId) {
             $trainId = (string) $trainId;
             // A train in 9Y for every working day of the month needs no cleaning visit
@@ -888,28 +889,32 @@ class MaintenanceScheduleGenerator
                 }
             }
 
-            $days = [];
+            // Days by how far they bend the rule: level 0 keeps C_MIN_ROUTINE_GAP
+            // and avoids B/G days; higher levels are only used when needed
+            $levels = [];
             foreach ($workingDates as $date) {
                 $key = $date->toDateString();
                 if (collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C')
-                    || $this->hasHeavyVisit($plan[$key] ?? [])
                     || ! empty($blocked[$trainId][$key])
-                    || ! empty($plan[$key][$trainId])
-                    || $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP)) {
+                    || ! empty($plan[$key][$trainId])) {
                     continue;
                 }
-                // prefer the day farthest from the train's routine visits
                 $distance = $routineDates->map(fn ($routineDate) => $routineDate->diffInDays($date))->min() ?? 99;
-                $days[$key] = $distance;
+                if ($distance < 1) {
+                    continue;
+                }
+                $level = max(0, self::C_MIN_ROUTINE_GAP - $distance) + ($this->hasHeavyVisit($plan[$key] ?? []) ? self::C_MIN_ROUTINE_GAP : 0);
+                $levels[$level][$key] = $distance;
             }
-            arsort($days);
-            $candidates[$trainId] = array_keys($days);
+            ksort($levels);
+            $dayLevels[$trainId] = $levels;
+            $candidates[$trainId] = $this->cCandidates($levels, 0);
         }
 
         // Kuhn's augmenting paths; trains with the fewest days go first
         uksort($candidates, fn ($a, $b) => count($candidates[$a]) <=> count($candidates[$b]) ?: strcmp((string) $a, (string) $b));
         $dayOwner = [];
-        $assign = function (string $trainId, array &$seen) use (&$assign, &$dayOwner, $candidates): bool {
+        $assign = function (string $trainId, array &$seen) use (&$assign, &$dayOwner, &$candidates): bool {
             foreach ($candidates[$trainId] as $day) {
                 if (isset($seen[$day])) {
                     continue;
@@ -925,14 +930,60 @@ class MaintenanceScheduleGenerator
             return false;
         };
         foreach (array_keys($candidates) as $trainId) {
+            $trainId = (string) $trainId;
             $seen = [];
-            if (! $assign((string) $trainId, $seen)) {
-                $warnings[] = "Train {$trainId}: no safe monthly C slot was available.";
+            if ($assign($trainId, $seen)) {
+                continue;
+            }
+            // No day keeps the rule: allow closer days for this train only, one step at a time
+            $placed = false;
+            foreach (array_keys($dayLevels[$trainId]) as $level) {
+                if ($level === 0) {
+                    continue;
+                }
+                $candidates[$trainId] = $this->cCandidates($dayLevels[$trainId], $level);
+                $seen = [];
+                if ($assign($trainId, $seen)) {
+                    $placed = true;
+                    break;
+                }
+            }
+            if (! $placed) {
+                $warnings[] = "Train {$trainId}: no monthly C slot was available.";
+            }
+        }
+        foreach ($dayOwner as $day => $trainId) {
+            $level = collect($dayLevels[(string) $trainId])->search(fn ($days) => isset($days[$day]));
+            if ($level > 0) {
+                $distance = $dayLevels[(string) $trainId][$level][$day];
+                $reasons = [];
+                if ($distance < self::C_MIN_ROUTINE_GAP) {
+                    $reasons[] = "only {$distance} day(s) from its visit";
+                }
+                if ($this->hasHeavyVisit($plan[$day] ?? [])) {
+                    $reasons[] = 'on a B/G day';
+                }
+                $warnings[] = "Train {$trainId}: C on {$day} is ".implode(' and ', $reasons).' (no better day was free).';
             }
         }
         foreach ($dayOwner as $day => $trainId) {
             $this->put($plan, Carbon::parse($day), (string) $trainId, 'C');
         }
+    }
+
+    /** C days up to the given level, best level first, then farthest from the visits */
+    private function cCandidates(array $levels, int $maxLevel): array
+    {
+        $days = [];
+        foreach ($levels as $level => $byDay) {
+            if ($level > $maxLevel) {
+                break;
+            }
+            arsort($byDay);
+            array_push($days, ...array_keys($byDay));
+        }
+
+        return $days;
     }
 
     private function assignTracks(array $plan, array &$meta): void
