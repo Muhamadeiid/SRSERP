@@ -32,6 +32,42 @@ class MaintenanceScheduleController extends Controller
         ]);
     }
 
+    /**
+     * Every saved maintenance visit per train from January of the earliest
+     * requested year up to the end of the given month (default: this month),
+     * oldest first. Used to check the B/G cycle the generator relies on.
+     *
+     * GET /api/schedule/history?from=2026-01&to=2026-11
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $this->authorizeSchedule($request->user());
+        $data = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m'],
+            'to' => ['nullable', 'date_format:Y-m'],
+        ]);
+        $from = Carbon::createFromFormat('Y-m', $data['from'] ?? now()->format('Y') . '-01')->startOfMonth();
+        $to = Carbon::createFromFormat('Y-m', $data['to'] ?? now()->format('Y-m'))->endOfMonth();
+        abort_if($from->gt($to) || $from->diffInMonths($to) > 36, 422, 'Choose a range of up to three years.');
+
+        $visits = MaintenanceSchedule::query()
+            ->whereBetween('schedule_date', [$from->toDateString(), $to->toDateString()])
+            ->orderBy('schedule_date')
+            ->get(['schedule_date', 'train_id', 'code'])
+            ->groupBy('train_id')
+            ->map(fn ($rows) => $rows->map(fn ($row) => [$row->schedule_date->toDateString(), $row->code])->values());
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'trains' => Train::orderBy('display_order')->get(['id', 'name']),
+                'visits' => $visits,
+            ],
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizeSchedule($request->user());

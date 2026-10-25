@@ -159,6 +159,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::c
 
     // PM monthly train schedule. Authorization is enforced by the controller.
     Route::get('/schedule', [MaintenanceScheduleController::class, 'index']);
+    Route::get('/schedule/history', [MaintenanceScheduleController::class, 'history']);
     Route::post('/schedule/generate', [MaintenanceScheduleController::class, 'generate']);
     Route::post('/schedule/entry', [MaintenanceScheduleController::class, 'storeEntry']);
     Route::delete('/schedule/entry', [MaintenanceScheduleController::class, 'destroyEntry']);

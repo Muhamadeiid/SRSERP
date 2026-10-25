@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Download, Loader2, Save, Sparkles, Upload } from 'lucide-react'
-import { generateMaintenanceSchedule, getMaintenanceSchedule, saveMaintenanceSchedule, uploadMaintenanceSchedule } from '../services/maintenanceService'
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Download, History, Loader2, Save, Sparkles, Upload, X } from 'lucide-react'
+import { generateMaintenanceSchedule, getMaintenanceHistory, getMaintenanceSchedule, saveMaintenanceSchedule, uploadMaintenanceSchedule } from '../services/maintenanceService'
 import { exportMaintenanceSchedule } from '../utils/exportMaintenanceSchedule'
 
 const EMPTY_META = { k6: '', k5: '', c_col: '', k19: '', remark: '' }
@@ -23,6 +23,7 @@ export default function MaintenanceSchedulePage() {
   const [generationWarnings, setGenerationWarnings] = useState([])
   const [cycleReport, setCycleReport] = useState([])
   const [showCycleReport, setShowCycleReport] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [notice, setNotice] = useState(null)
   const [tableScale, setTableScale] = useState(1)
   const fileRef = useRef()
@@ -159,6 +160,7 @@ export default function MaintenanceSchedulePage() {
         <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={upload} />
         <button type="button" disabled={saving} onClick={() => fileRef.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50 disabled:opacity-50"><Upload className="h-4 w-4" />Upload Excel</button>
         <button type="button" disabled={loading || exporting || !schedule} onClick={exportExcel} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50 disabled:opacity-50">{exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}Download Excel</button>
+        <button type="button" onClick={() => setShowHistory(true)} className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-4 text-sm font-semibold text-secondary hover:bg-neutral-50"><History className="h-4 w-4" />Visit History</button>
         <button type="button" disabled={saving || generating || loading} onClick={generate} className="inline-flex h-10 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-4 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50">{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Generate Draft</button>
         <button type="button" disabled={!dirtyCount || saving} onClick={save} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-bold text-white disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Changes {dirtyCount ? `(${dirtyCount})` : ''}</button>
       </div>
@@ -170,6 +172,7 @@ export default function MaintenanceSchedulePage() {
     </div>
     {notice && <div className={`mb-4 rounded-md border px-4 py-3 text-sm ${notice.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{notice.text}</div>}
     {generationWarnings.length > 0 && <div className="mb-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><div className="mb-1 flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" />Generation review ({generationWarnings.length})</div><ul className="max-h-28 overflow-auto pl-5 text-xs list-disc">{generationWarnings.map(warning => <li key={warning}>{warning}</li>)}</ul></div>}
+    {showHistory && <VisitHistory year={cursor.year} month={cursor.month} onClose={() => setShowHistory(false)} />}
     {cycleReport.length > 0 && <CycleReport rows={cycleReport} open={showCycleReport} onToggle={() => setShowCycleReport(value => !value)} />}
     <div className="overflow-hidden rounded-md border border-neutral-200 bg-white shadow-sm">
       {loading ? <div className="flex h-80 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : !schedule ? <div className="flex h-80 items-center justify-center text-sm text-neutral-500">Schedule data is unavailable.</div> : <div ref={tableViewportRef} className="max-h-[calc(100vh-250px)] overflow-y-auto overflow-x-hidden">
@@ -279,5 +282,97 @@ function CycleReport({ rows, open, onToggle }) {
       </table>
       <p className="px-4 py-2 text-[11px] text-neutral-500">The next stage is due three months after the reference. A visit from 8 days before the due date becomes that stage. If a reference is wrong, correct that B/G in the saved schedule of its month and generate again.</p>
     </div>}
+  </div>
+}
+
+const HISTORY_STYLE = {
+  A: 'bg-yellow-100 text-yellow-900',
+  B1: 'bg-green-200 text-green-900',
+  B2: 'bg-green-200 text-green-900',
+  B3: 'bg-green-200 text-green-900',
+  G: 'bg-sky-300 text-sky-950',
+  C: 'bg-white text-neutral-500',
+  '9Y': 'bg-red-500 text-white',
+}
+const historyStyle = (code) => HISTORY_STYLE[code] || 'bg-neutral-100'
+const monthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`
+
+// Saved visits per train, oldest first: one column per train
+function VisitHistory({ year, month, onClose }) {
+  const [from, setFrom] = useState(monthKey(year, 1))
+  const [to, setTo] = useState(monthKey(year, month))
+  const [showC, setShowC] = useState(false)
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setData(null)
+    setError('')
+    getMaintenanceHistory(from, to)
+      .then(response => { if (active) setData(response.data) })
+      .catch(err => { if (active) setError(err.message || 'Could not load the visit history.') })
+    return () => { active = false }
+  }, [from, to])
+
+  const columns = useMemo(() => {
+    if (!data) return []
+    return data.trains.map(train => {
+      const items = []
+      for (const [date, code] of (data.visits[train.id] || [])) {
+        const upper = String(code).toUpperCase()
+        if (upper === 'C' && !showC) continue
+        const last = items[items.length - 1]
+        const isOverhaul = upper.startsWith('9Y')
+        const days = last ? (new Date(`${date}T00:00:00`) - new Date(`${last.to}T00:00:00`)) / 86400000 : 99
+        // a 9Y block or a two-day G is one entry
+        if (last && ((isOverhaul && last.code === '9Y' && days <= 7) || (upper === 'G' && last.code === 'G' && days <= 3))) {
+          last.to = date
+          continue
+        }
+        items.push({ code: isOverhaul ? '9Y' : upper, from: date, to: date })
+      }
+      return { train, items }
+    })
+  }, [data, showC])
+  const rows = Math.max(0, ...columns.map(column => column.items.length))
+  const label = (item) => (item.to !== item.from ? `${shortDate(item.from)} – ${shortDate(item.to)}` : shortDate(item.from))
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={onClose}>
+    <div className="flex max-h-[92vh] w-full max-w-[1600px] flex-col rounded-lg bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-3">
+        <h2 className="mr-auto flex items-center gap-2 text-base font-bold text-secondary"><History className="h-4 w-4 text-primary" />Visit history (saved schedule)</h2>
+        <label className="text-xs text-neutral-500">From <input type="month" value={from} max={to} onChange={event => setFrom(event.target.value)} className="ml-1 rounded border border-neutral-200 px-2 py-1 text-xs" /></label>
+        <label className="text-xs text-neutral-500">To <input type="month" value={to} min={from} onChange={event => setTo(event.target.value)} className="ml-1 rounded border border-neutral-200 px-2 py-1 text-xs" /></label>
+        <label className="flex items-center gap-1 text-xs text-neutral-600"><input type="checkbox" checked={showC} onChange={event => setShowC(event.target.checked)} />Show C</label>
+        <button type="button" onClick={onClose} className="rounded p-1 text-neutral-400 hover:bg-neutral-100" aria-label="Close"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="overflow-auto">
+        {error ? <p className="p-6 text-sm text-red-600">{error}</p>
+          : !data ? <div className="flex h-60 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+          : <table className="border-collapse text-[11px]">
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className="sticky left-0 z-20 border border-neutral-700 bg-neutral-800 px-2 py-2 text-white">#</th>
+                {columns.map(({ train, items }) => <th key={train.id} className="min-w-[96px] border border-neutral-700 bg-neutral-800 px-2 py-2 text-white">{train.id}<div className="text-[10px] font-normal text-neutral-300">{items.length} entries</div></th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows === 0
+                ? <tr><td colSpan={columns.length + 1} className="p-6 text-center text-neutral-500">No saved visits in this period.</td></tr>
+                : Array.from({ length: rows }, (_, index) => <tr key={index}>
+                  <td className="sticky left-0 border border-neutral-200 bg-neutral-50 px-2 py-1 text-center text-neutral-400">{index + 1}</td>
+                  {columns.map(({ train, items }) => {
+                    const item = items[index]
+                    return <td key={train.id} className={`border border-neutral-200 px-1.5 py-1 text-center ${item ? historyStyle(item.code) : ''}`}>
+                      {item ? <><b>{item.code}</b><div className="whitespace-nowrap text-[10px]">{label(item)}</div></> : ''}
+                    </td>
+                  })}
+                </tr>)}
+            </tbody>
+          </table>}
+      </div>
+      <p className="border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-500">Oldest at the top. A two-day G and each 9Y block show as one entry. These are the saved visits the generator uses as history; months that were never saved or uploaded are empty here.</p>
+    </div>
   </div>
 }
