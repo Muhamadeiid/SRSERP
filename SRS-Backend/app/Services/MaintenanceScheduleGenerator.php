@@ -71,7 +71,7 @@ class MaintenanceScheduleGenerator
 
         $blocked = $this->planNineYearWork($start, $end, $past, $trains, $holidays, $plan, $generatedMeta, $warnings);
 
-        $this->planRoutineVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        $this->planRoutineVisitsForMonth($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->ensureDailyCoverage($past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->planMonthlyCVisits($trains, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
         $this->assignTracks($plan, $generatedMeta);
@@ -86,6 +86,441 @@ class MaintenanceScheduleGenerator
             'existing_count' => $existing->count(),
             'rules' => ['visit_target' => 15, 'visit_min' => 13, 'visit_max' => 17, 'max_routine_visits_per_day' => 2, 'max_c_per_day' => 1, 'c_min_routine_gap' => 5],
         ];
+    }
+
+    // Local search for the monthly routine schedule
+    private const SOLVER_STEPS = 60000;
+
+    private const SOLVER_PATIENCE = 4000;
+
+    private const SOLVER_RANDOM_PERCENT = 10;
+
+    private const SOLVER_HARD_COST = 100000;
+
+    private const SOLVER_UNCOVERED_COST = 1000;
+
+    private const POSTPONE_B_DAYS = 10;
+
+    private const POSTPONE_B_COST = 10;
+
+    /**
+     * Routine visits (A / B1 / B2 / B3 / G) for the whole month at once.
+     *
+     * Every train that is not in 9Y gets two visits in the month, each 13-17
+     * days after the previous one, with at most two maintenance trains a day,
+     * B/G days reserved for one train, and every working day covered. All
+     * trains are solved together (backtracking) so a busy day can be resolved
+     * by moving another train instead of leaving a train without a visit.
+     * Trains entering or leaving 9Y this month keep the step-by-step planner.
+     */
+    private function planRoutineVisitsForMonth(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
+    {
+        $workingDays = collect(CarbonPeriod::create($start, $end))
+            ->filter(fn ($date) => $this->isWorkingDay($date, $holidays))
+            ->map(fn ($date) => $date->toDateString())
+            ->values()
+            ->all();
+
+        $special = [];
+        $normal = []; // train => overhaul end it resumes from, or null
+        foreach ($trains as $trainId) {
+            $trainId = (string) $trainId;
+            $freeDays = array_filter($workingDays, fn ($day) => empty($blocked[$trainId][$day]));
+            if (! $freeDays) {
+                continue; // in 9Y for the whole month
+            }
+            $trainPast = $past->where('train_id', $trainId)->sortBy('schedule_date')->values();
+            $lastVisit = $trainPast->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
+                ->last()?->schedule_date;
+            $lastOverhaul = $this->latestOverhaulDate($trainId, $trainPast, $plan);
+            $plannedOverhaul = $this->plannedOverhaulWindow($trainId, $plan);
+            if ($plannedOverhaul && $plannedOverhaul['start']->gt($start)) {
+                // entering 9Y this month: visits only before it, step-by-step planner
+                $special[] = $trainId;
+            } elseif ($lastOverhaul && (! $lastVisit || $lastOverhaul->gt($lastVisit))) {
+                // back from 9Y: first visit is an A 13-17 days after the overhaul
+                $normal[$trainId] = $lastOverhaul->copy();
+            } else {
+                $normal[$trainId] = null;
+            }
+        }
+
+        if ($special) {
+            $this->planRoutineVisits($special, $past, $start, $end, $plan, $blocked, $holidays, $warnings);
+        }
+
+        // Occupancy already fixed by 9Y-affected trains
+        $load = [];
+        $heavy = [];
+        foreach ($plan as $day => $entries) {
+            $load[$day] = $this->routineVisitCount($entries);
+            $heavy[$day] = $this->hasHeavyVisit($entries);
+        }
+
+        $options = [];
+        foreach ($normal as $trainId => $resumeFrom) {
+            $trainId = (string) $trainId;
+            $built = $this->routineOptions($trainId, $past, $start, $end, $plan, $blocked, $holidays, $resumeFrom);
+            if (! $built) {
+                $warnings[] = "Train {$trainId}: no visit history was found; no schedule was invented.";
+                continue;
+            }
+            // Back from 9Y late in the month: its first visit falls in the next month
+            $resumesNextMonth = $resumeFrom && $resumeFrom->copy()->addDays(self::A_MAX)->gt($end);
+            if (! $built['options']) {
+                if (! $resumesNextMonth) {
+                    $warnings[] = "Train {$trainId}: no working day keeps the visit gap between 13 and 17 days.";
+                }
+                continue;
+            }
+            if (! $built['two_visits'] && ! $resumeFrom) {
+                $warnings[] = "Train {$trainId}: only one visit fits in {$start->format('M Y')} with a 13-17 day gap.";
+            }
+            $options[$trainId] = $built['options'];
+        }
+        if (! $options) {
+            return;
+        }
+
+        $result = $this->solveRoutine($options, $workingDays, $load, $heavy);
+
+        foreach ($result['assignment'] as $trainId => $option) {
+            foreach ($option['visits'] as [$day, $code]) {
+                $this->put($plan, Carbon::parse($day), (string) $trainId, $code);
+            }
+            foreach ($option['g_second'] as $day) {
+                $this->put($plan, Carbon::parse($day), (string) $trainId, 'G');
+            }
+        }
+        $placed = array_map('strval', array_keys($result['assignment']));
+        foreach (array_keys($options) as $trainId) {
+            if (! in_array((string) $trainId, $placed, true)) {
+                $warnings[] = "Train {$trainId}: no combination of days fits this train with the other trains (2 per day, B/G alone).";
+            }
+        }
+    }
+
+    /**
+     * Possible visit pairs for one train this month. A visit is A, or the next
+     * B/G stage when it falls within 8 days of (or after) the B/G due date.
+     */
+    private function routineOptions(string $trainId, Collection $past, Carbon $start, Carbon $end, array $plan, array $blocked, array $holidays, ?Carbon $resumeFrom = null): ?array
+    {
+        $routinePast = $past->where('train_id', $trainId)
+            ->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
+            ->sortBy('schedule_date')
+            ->values();
+        $lastRow = $routinePast->last();
+        if (! $lastRow && ! $resumeFrom) {
+            return null;
+        }
+        $last = $resumeFrom ? $resumeFrom->copy() : $lastRow->schedule_date->copy();
+        // A two-day G counts from its first day
+        if (! $resumeFrom && $this->baseCode((string) $lastRow->code) === 'G' && $routinePast->count() > 1) {
+            $previous = $routinePast[$routinePast->count() - 2];
+            if ($this->baseCode((string) $previous->code) === 'G' && $previous->schedule_date->diffInDays($last) <= 3) {
+                $last = $previous->schedule_date->copy();
+            }
+        }
+        $reference = $this->lastBReference($trainId, $routinePast, $start);
+        $bCode = $reference['code'] ?? null;
+        $bDue = isset($reference['date']) ? $reference['date']->copy()->addMonthsNoOverflow(3) : null;
+
+        $usable = function (Carbon $date) use ($trainId, $start, $end, $plan, $blocked, $holidays): bool {
+            $key = $date->toDateString();
+
+            return $date->betweenIncluded($start, $end)
+                && $this->isWorkingDay($date, $holidays)
+                && empty($blocked[$trainId][$key])
+                && empty($plan[$key][$trainId]);
+        };
+        $candidates = function (Carbon $previous) use ($usable, $start): array {
+            $dates = [];
+            foreach ([15, 14, 16, 13, 17] as $gap) {
+                $date = $previous->copy()->addDays($gap);
+                if ($usable($date)) {
+                    $dates[] = [$date, $gap];
+                }
+            }
+            if (! $dates && $previous->lt($start)) {
+                // Overdue from earlier months (or its window had no working day):
+                // first working days of this month
+                for ($offset = 0; $offset <= 6 && count($dates) < 3; $offset++) {
+                    $date = $start->copy()->addDays($offset);
+                    if ($usable($date)) {
+                        $dates[] = [$date, 15];
+                    }
+                }
+            }
+
+            return $dates;
+        };
+        $visit = function (Carbon $date, ?string $code, ?Carbon $due, bool $postpone = false) use ($usable, $end, $holidays): ?array {
+            $isB = ! $postpone && $code && $due && $date->gte($due->copy()->subDays(8));
+            $visitCode = $isB ? self::B_CYCLE[((int) array_search($code, self::B_CYCLE, true) + 1) % count(self::B_CYCLE)] : 'A';
+            $second = [];
+            if ($visitCode === 'G') {
+                $next = $date->copy()->addDay();
+                while ($next->lte($end) && ! $this->isWorkingDay($next, $holidays)) {
+                    $next->addDay();
+                }
+                if (! $usable($next)) {
+                    return null;
+                }
+                $second[] = $next->toDateString();
+            }
+
+            return [
+                'date' => $date->toDateString(),
+                'code' => $visitCode,
+                'heavy' => $visitCode !== 'A',
+                'second' => $second,
+                'b_code' => $isB ? $visitCode : $code,
+                'b_due' => $isB ? $date->copy()->addMonthsNoOverflow(3) : $due,
+            ];
+        };
+
+        // A B/G that is due may also be postponed to a later visit (into next month
+        // if needed) when its day is required by another train; this keeps a month
+        // with many B/G dues solvable. Each postponement costs more than any gap
+        // difference, so the solver postpones as few as possible.
+        $variants = function (Carbon $date, ?string $code, ?Carbon $due) use ($visit): array {
+            $planned = $visit($date, $code, $due);
+            $list = $planned ? [[$planned, 0]] : [];
+            if ($code && $due && $date->gte($due->copy()->subDays(8))) {
+                // already overdue B/G cost more to postpone again
+                $cost = $date->lt($due->copy()->addDays(self::POSTPONE_B_DAYS)) ? self::POSTPONE_B_COST : self::POSTPONE_B_COST * 3;
+                $list[] = [$visit($date, $code, $due, true), $cost];
+            }
+
+            return $list;
+        };
+
+        $pairs = [];
+        $singles = [];
+        foreach ($candidates($last) as [$firstDate, $gap1]) {
+            $firstVariants = $resumeFrom
+                ? [[$visit($firstDate, $bCode, $bDue, true), 0]] // first visit after 9Y is always A
+                : $variants($firstDate, $bCode, $bDue);
+            foreach ($firstVariants as [$first, $cost1]) {
+                $seconds = [];
+                foreach ($candidates($firstDate) as [$secondDate, $gap2]) {
+                    // The month's last visit must leave the next one in the next month;
+                    // otherwise the train would need a third visit or a gap over 17 days.
+                    if (! $this->nextVisitFitsNextMonth($secondDate, $end, $holidays)) {
+                        continue;
+                    }
+                    foreach ($variants($secondDate, $first['b_code'], $first['b_due']) as [$secondVisit, $cost2]) {
+                        $seconds[] = [$secondVisit, $gap2, $cost2];
+                    }
+                }
+                foreach ($seconds as [$secondVisit, $gap2, $cost2]) {
+                    $pairs[] = $this->routineOption([$first, $secondVisit], abs($gap1 - 15) + abs($gap2 - 15) + $cost1 + $cost2);
+                }
+                if (! $seconds && $firstDate->copy()->addDays(self::A_MIN)->gt($end)) {
+                    $singles[] = $this->routineOption([$first], abs($gap1 - 15) + $cost1);
+                }
+            }
+        }
+
+        $options = $pairs ?: $singles;
+        usort($options, fn ($a, $b) => $a['score'] <=> $b['score']);
+
+        return ['options' => $options, 'two_visits' => (bool) $pairs];
+    }
+
+    /** A working day 13-17 days after $last must exist after the end of the month. */
+    private function nextVisitFitsNextMonth(Carbon $last, Carbon $end, array $holidays): bool
+    {
+        foreach (range(self::A_MIN, self::A_MAX) as $gap) {
+            $date = $last->copy()->addDays($gap);
+            if ($date->gt($end) && $this->isWorkingDay($date, $holidays)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function routineOption(array $visits, int $score): array
+    {
+        $days = [];
+        $gSecond = [];
+        foreach ($visits as $visit) {
+            $days[$visit['date']] = $visit['heavy'];
+            foreach ($visit['second'] as $day) {
+                $days[$day] = true;
+                $gSecond[] = $day;
+            }
+        }
+
+        return [
+            'visits' => array_map(fn ($visit) => [$visit['date'], $visit['code']], $visits),
+            'g_second' => $gSecond,
+            'days' => $days,
+            'score' => $score,
+        ];
+    }
+
+    /**
+     * Chooses one option per train for the whole month (local search).
+     *
+     * Hard rules: at most two maintenance trains a day, and a B/G day holds only
+     * that train. Soft goals: every working day has a visit, gaps close to 15 days,
+     * few B/G postponements. Starting from each train's best option, it keeps
+     * re-choosing the option of a train involved in a problem day, picking the
+     * change that lowers the total cost (with occasional random moves to escape
+     * dead ends). Deterministic: the same month always gives the same schedule.
+     * Trains still breaking a hard rule at the end are left out and reported.
+     */
+    private function solveRoutine(array $options, array $workingDays, array $load, array $heavy): array
+    {
+        $trainIds = array_map('strval', array_keys($options));
+        $fixedLoad = $load;
+        $fixedHeavy = $heavy;
+        $working = array_fill_keys($workingDays, true);
+        mt_srand(20260915);
+
+        $dayLoad = [];
+        $dayHeavy = [];
+        $dayCost = function (string $day, int $addLoad = 0, int $addHeavy = 0) use (&$dayLoad, &$dayHeavy, $fixedLoad, $fixedHeavy, $working): int {
+            $count = ($dayLoad[$day] ?? 0) + ($fixedLoad[$day] ?? 0) + $addLoad;
+            $heavyCount = ($dayHeavy[$day] ?? 0) + (! empty($fixedHeavy[$day]) ? 1 : 0) + $addHeavy;
+            $hard = max(0, $count - self::MAX_VISITS_PER_DAY) + ($heavyCount > 0 ? $count - 1 : 0);
+            $uncovered = isset($working[$day]) && $count === 0 ? 1 : 0;
+
+            return $hard * self::SOLVER_HARD_COST + $uncovered * self::SOLVER_UNCOVERED_COST;
+        };
+        $toggle = function (array $option, int $direction) use (&$dayLoad, &$dayHeavy): void {
+            foreach ($option['days'] as $day => $isHeavy) {
+                $dayLoad[$day] = ($dayLoad[$day] ?? 0) + $direction;
+                if ($isHeavy) {
+                    $dayHeavy[$day] = ($dayHeavy[$day] ?? 0) + $direction;
+                }
+            }
+        };
+
+        $choice = [];
+        foreach ($trainIds as $trainId) {
+            $choice[$trainId] = 0; // options are sorted cheapest first
+            $toggle($options[$trainId][0], 1);
+        }
+        $allDays = array_keys($working);
+        foreach ($options as $list) {
+            foreach ($list as $option) {
+                foreach (array_keys($option['days']) as $day) {
+                    $allDays[] = $day;
+                }
+            }
+        }
+        $allDays = array_values(array_unique($allDays));
+        $total = function () use ($allDays, $dayCost, &$choice, $options): int {
+            $cost = 0;
+            foreach ($allDays as $day) {
+                $cost += $dayCost($day);
+            }
+            foreach ($choice as $trainId => $index) {
+                $cost += $options[$trainId][$index]['score'];
+            }
+
+            return $cost;
+        };
+
+        $cost = $total();
+        $bestCost = $cost;
+        $bestChoice = $choice;
+
+        $lastImprovement = 0;
+        for ($step = 0; $step < self::SOLVER_STEPS; $step++) {
+            // stop once the schedule is clean and has not improved for a while
+            if ($bestCost < self::SOLVER_UNCOVERED_COST && $step - $lastImprovement > self::SOLVER_PATIENCE) {
+                break;
+            }
+            // Trains touching a day with a problem; any train once the hard rules hold
+            $problemDays = array_filter($allDays, fn ($day) => $dayCost($day) > 0);
+            $candidates = [];
+            foreach ($trainIds as $trainId) {
+                $current = $options[$trainId][$choice[$trainId]];
+                foreach ($problemDays as $day) {
+                    if (isset($current['days'][$day])) {
+                        $candidates[] = $trainId;
+                        break;
+                    }
+                }
+            }
+            if (! $candidates) {
+                $candidates = $trainIds; // uncovered days: someone has to move there
+            }
+            $trainId = $candidates[mt_rand(0, count($candidates) - 1)];
+            $currentIndex = $choice[$trainId];
+            $current = $options[$trainId][$currentIndex];
+
+            // Cost change of switching this train to each of its options: only the
+            // option's own days change once the current choice is taken out
+            $toggle($current, -1);
+            $bestMove = null;
+            $bestDelta = PHP_INT_MAX;
+            $ties = 0;
+            foreach ($options[$trainId] as $index => $option) {
+                $delta = $option['score'];
+                foreach ($option['days'] as $day => $isHeavy) {
+                    $delta += $dayCost($day, 1, $isHeavy ? 1 : 0) - $dayCost($day);
+                }
+                if ($delta < $bestDelta) {
+                    $bestDelta = $delta;
+                    $bestMove = $index;
+                    $ties = 1;
+                } elseif ($delta === $bestDelta && mt_rand(1, ++$ties) === 1) {
+                    $bestMove = $index;
+                }
+            }
+            if (mt_rand(1, 100) <= self::SOLVER_RANDOM_PERCENT) {
+                $bestMove = mt_rand(0, count($options[$trainId]) - 1);
+            }
+            $toggle($options[$trainId][$bestMove], 1);
+            $choice[$trainId] = $bestMove;
+            $cost = $total();
+            if ($cost < $bestCost) {
+                $bestCost = $cost;
+                $bestChoice = $choice;
+                $lastImprovement = $step;
+            }
+        }
+
+        // Rebuild the best state; leave out trains that still break a hard rule
+        $dayLoad = [];
+        $dayHeavy = [];
+        foreach ($bestChoice as $trainId => $index) {
+            $toggle($options[$trainId][$index], 1);
+        }
+        $assignment = [];
+        foreach ($bestChoice as $trainId => $index) {
+            $assignment[$trainId] = $options[$trainId][$index];
+        }
+        $unplaced = 0;
+        foreach ($trainIds as $trainId) {
+            $option = $assignment[$trainId];
+            $breaks = false;
+            foreach (array_keys($option['days']) as $day) {
+                if ($dayCost($day) >= self::SOLVER_HARD_COST) {
+                    $breaks = true;
+                    break;
+                }
+            }
+            if ($breaks) {
+                $toggle($option, -1);
+                unset($assignment[$trainId]);
+                $unplaced++;
+            }
+        }
+        $uncovered = 0;
+        foreach ($workingDays as $day) {
+            if (($dayLoad[$day] ?? 0) + ($fixedLoad[$day] ?? 0) === 0) {
+                $uncovered++;
+            }
+        }
+
+        return ['unplaced' => $unplaced, 'uncovered' => $uncovered, 'score' => $bestCost, 'assignment' => $assignment];
     }
 
     private function planRoutineVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
@@ -350,19 +785,25 @@ class MaintenanceScheduleGenerator
         return $this->nonOverhaulVisitCount($plan[$key] ?? []) === 0;
     }
 
+    /**
+     * One C (cleaning) visit per train per month, at most one C a day, never on a
+     * B/G day, during 9Y, or within 5 days of the same train's routine visits.
+     * Trains are matched to days together (bipartite matching), so a train with
+     * few possible days is not crowded out by trains that had many choices.
+     */
     private function planMonthlyCVisits(array $trains, Collection $past, Carbon $start, Carbon $end, array &$plan, array $blocked, array $holidays, array &$warnings): void
     {
         $workingDates = collect(CarbonPeriod::create($start, $end))
             ->filter(fn ($date) => $this->isWorkingDay($date, $holidays))
             ->values();
 
-        foreach ($trains as $index => $trainId) {
+        $candidates = [];
+        foreach ($trains as $trainId) {
+            $trainId = (string) $trainId;
             // A train in 9Y for every working day of the month needs no cleaning visit
             if ($workingDates->every(fn ($date) => ! empty($blocked[$trainId][$date->toDateString()]))) {
                 continue;
             }
-            $preferredIndex = ($index * 7 + $start->month) % max(1, $workingDates->count());
-            $orderedDates = $workingDates->sortBy(fn ($date, $dateIndex) => abs($dateIndex - $preferredIndex));
             $routineDates = $past->where('train_id', $trainId)
                 ->reject(fn ($row) => $this->isNineYearCode($row->code) || strtoupper((string) $row->code) === 'C')
                 ->pluck('schedule_date')
@@ -374,23 +815,50 @@ class MaintenanceScheduleGenerator
                 }
             }
 
-            $scheduled = false;
-            foreach ($orderedDates as $date) {
+            $days = [];
+            foreach ($workingDates as $date) {
                 $key = $date->toDateString();
-                $hasC = collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C');
-                $tooClose = $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP);
-                if ($hasC || $tooClose || $this->hasHeavyVisit($plan[$key] ?? []) || ! empty($blocked[$trainId][$key]) || ! empty($plan[$key][$trainId])) {
+                if (collect($plan[$key] ?? [])->contains(fn ($code) => $code === 'C')
+                    || $this->hasHeavyVisit($plan[$key] ?? [])
+                    || ! empty($blocked[$trainId][$key])
+                    || ! empty($plan[$key][$trainId])
+                    || $routineDates->contains(fn ($routineDate) => $routineDate->diffInDays($date) < self::C_MIN_ROUTINE_GAP)) {
                     continue;
                 }
+                // prefer the day farthest from the train's routine visits
+                $distance = $routineDates->map(fn ($routineDate) => $routineDate->diffInDays($date))->min() ?? 99;
+                $days[$key] = $distance;
+            }
+            arsort($days);
+            $candidates[$trainId] = array_keys($days);
+        }
 
-                $this->put($plan, $date, $trainId, 'C');
-                $scheduled = true;
-                break;
+        // Kuhn's augmenting paths; trains with the fewest days go first
+        uksort($candidates, fn ($a, $b) => count($candidates[$a]) <=> count($candidates[$b]) ?: strcmp((string) $a, (string) $b));
+        $dayOwner = [];
+        $assign = function (string $trainId, array &$seen) use (&$assign, &$dayOwner, $candidates): bool {
+            foreach ($candidates[$trainId] as $day) {
+                if (isset($seen[$day])) {
+                    continue;
+                }
+                $seen[$day] = true;
+                if (! isset($dayOwner[$day]) || $assign($dayOwner[$day], $seen)) {
+                    $dayOwner[$day] = $trainId;
+
+                    return true;
+                }
             }
 
-            if (! $scheduled) {
+            return false;
+        };
+        foreach (array_keys($candidates) as $trainId) {
+            $seen = [];
+            if (! $assign((string) $trainId, $seen)) {
                 $warnings[] = "Train {$trainId}: no safe monthly C slot was available.";
             }
+        }
+        foreach ($dayOwner as $day => $trainId) {
+            $this->put($plan, Carbon::parse($day), (string) $trainId, 'C');
         }
     }
 
@@ -619,19 +1087,6 @@ class MaintenanceScheduleGenerator
                     $this->put($plan, $emptyDate, $trainId, 'A');
                     $moved = true;
                     break 2;
-                }
-            }
-            if (! $moved) {
-                $trainIds = $past->pluck('train_id')->unique()->sort()->values();
-                foreach ($trainIds as $trainId) {
-                    if (! empty($blocked[$trainId][$emptyKey])
-                        || ! empty($plan[$emptyKey][$trainId])
-                        || ! $this->aMoveKeepsBalance($trainId, Carbon::parse('1900-01-01'), $emptyDate, $past, $plan)) {
-                        continue;
-                    }
-                    $this->put($plan, $emptyDate, $trainId, 'A');
-                    $moved = true;
-                    break;
                 }
             }
             if (! $moved) {
