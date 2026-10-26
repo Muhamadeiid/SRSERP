@@ -335,7 +335,32 @@ function VisitHistory({ year, month, onClose }) {
       return { train, items }
     })
   }, [data, showC])
-  const rows = Math.max(0, ...columns.map(column => column.items.length))
+  const monthGroups = useMemo(() => {
+    if (!data || !from || !to) return []
+    const groups = []
+    const cursor = new Date(`${from}-01T00:00:00`)
+    const end = new Date(`${to}-01T00:00:00`)
+    while (cursor <= end) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+      const itemsByTrain = Object.fromEntries(columns.map(column => [
+        column.train.id,
+        column.items.filter(item => item.from.slice(0, 7) === key),
+      ]))
+      groups.push({
+        key,
+        year: cursor.getFullYear(),
+        month: cursor.toLocaleString('en', { month: 'short' }),
+        rowCount: Math.max(1, ...Object.values(itemsByTrain).map(items => items.length)),
+        itemsByTrain,
+      })
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    return groups
+  }, [columns, data, from, to])
+  const yearRowSpans = useMemo(() => monthGroups.reduce((spans, group) => {
+    spans[group.year] = (spans[group.year] || 0) + group.rowCount
+    return spans
+  }, {}), [monthGroups])
   const label = (item) => (item.to !== item.from ? `${shortDate(item.from)} – ${shortDate(item.to)}` : shortDate(item.from))
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={onClose}>
@@ -353,22 +378,30 @@ function VisitHistory({ year, month, onClose }) {
           : <table className="border-collapse text-[11px]">
             <thead className="sticky top-0 z-10">
               <tr>
-                <th className="sticky left-0 z-20 border border-neutral-700 bg-neutral-800 px-2 py-2 text-white">#</th>
+                <th className="sticky left-0 z-30 w-[60px] min-w-[60px] border border-neutral-700 bg-neutral-800 px-2 py-2 text-white">#</th>
+                <th className="sticky left-[60px] z-30 w-[64px] min-w-[64px] border border-neutral-700 bg-neutral-800 px-2 py-2 text-white" aria-label="Month" />
                 {columns.map(({ train, items }) => <th key={train.id} className="min-w-[96px] border border-neutral-700 bg-neutral-800 px-2 py-2 text-white">{train.id}<div className="text-[10px] font-normal text-neutral-300">{items.length} entries</div></th>)}
               </tr>
             </thead>
             <tbody>
-              {rows === 0
-                ? <tr><td colSpan={columns.length + 1} className="p-6 text-center text-neutral-500">No saved visits in this period.</td></tr>
-                : Array.from({ length: rows }, (_, index) => <tr key={index}>
-                  <td className="sticky left-0 border border-neutral-200 bg-neutral-50 px-2 py-1 text-center text-neutral-400">{index + 1}</td>
-                  {columns.map(({ train, items }) => {
-                    const item = items[index]
+              {monthGroups.map((group, groupIndex) => Array.from({ length: group.rowCount }, (_, rowIndex) => {
+                const firstMonthRow = rowIndex === 0
+                const firstYearRow = firstMonthRow && (groupIndex === 0 || monthGroups[groupIndex - 1].year !== group.year)
+                return <tr key={`${group.key}-${rowIndex}`} className={firstMonthRow ? 'border-t-2 border-t-neutral-400' : ''}>
+                  {firstYearRow && <td rowSpan={yearRowSpans[group.year]} className="sticky left-0 z-[5] w-[60px] min-w-[60px] border border-neutral-300 bg-neutral-100 px-2 text-center align-middle font-bold text-neutral-600">
+                    <span className="inline-block -rotate-90 whitespace-nowrap text-sm">{group.year}</span>
+                  </td>}
+                  {firstMonthRow && <td rowSpan={group.rowCount} className="sticky left-[60px] z-[4] w-[64px] min-w-[64px] border border-neutral-300 bg-neutral-50 px-2 text-center align-middle font-bold text-neutral-600">
+                    <span className="inline-block -rotate-90 whitespace-nowrap text-xs">{group.month}</span>
+                  </td>}
+                  {columns.map(({ train }) => {
+                    const item = group.itemsByTrain[train.id][rowIndex]
                     return <td key={train.id} className={`border border-neutral-200 px-1.5 py-1 text-center ${item ? historyStyle(item.code) : ''}`}>
                       {item ? <><b>{item.code}</b><div className="whitespace-nowrap text-[10px]">{label(item)}</div></> : ''}
                     </td>
                   })}
-                </tr>)}
+                </tr>
+              }))}
             </tbody>
           </table>}
       </div>
