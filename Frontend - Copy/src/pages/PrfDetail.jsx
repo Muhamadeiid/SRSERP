@@ -3,10 +3,10 @@ import { useSelector } from 'react-redux'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Loader2, X, Check, Printer, ArrowLeft, FileText, MessageSquare,
-  CheckCircle, XCircle, Clock, Plus, Pencil, Ban,
+  CheckCircle, XCircle, Clock, Plus, Pencil, Ban, Trash2, History,
 } from 'lucide-react'
 import {
-  getPrf, approvePrf, rejectPrf, updatePrfNumber, cancelPrf,
+  getPrf, approvePrf, rejectPrf, updatePrfNumber, cancelPrf, deletePrf,
   PRF_STATUS_LABELS, PRF_STATUS_STYLES, MATERIAL_CATEGORIES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
 import { createQuotation, getQuotations, getSuppliers } from '../services/procurementRegistryService'
@@ -62,12 +62,15 @@ export default function PrfDetail() {
   const canAct           = prf && canActOnStage(user, prf.status)
   const isApproved       = prf?.status === 'approved'
   const isProcurementUser = ['procurement', 'purchasing', 'depot_manager', 'admin'].includes(user?.role)
-  const backPath         = user?.role === 'admin' ? '/procurement' : '/purchase-requests'
+  const backPath         = ['admin', 'depot_manager', 'material_controller', 'procurement'].includes(user?.role) ? '/procurement' : '/purchase-requests'
   const canCreatePO      = isApproved && user?.role === 'admin'
   const hasLinkedPO      = !!prf?.purchase_order
-  const canModify        = String(prf?.requested_by) === String(user?.id)
-    && prf?.status === 'pending_material'
-    && (prf?.approvals ?? []).length === 0
+  const requesterCanModify = String(prf?.requested_by) === String(user?.id)
+    && prf?.status === 'pending_material' && (prf?.approvals ?? []).length === 0
+  const materialCanModify = prf?.status === 'pending_material'
+    && (user?.role === 'admin' || (Array.isArray(user?.permissions) && user.permissions.includes('prf.approve_material')))
+  const canModify = requesterCanModify || materialCanModify
+  const canDelete = prf?.status === 'approved' && user?.role === 'admin' && !hasLinkedPO
 
   const saveNumber = async () => {
     const value = numberDraft.trim()
@@ -135,6 +138,19 @@ export default function PrfDetail() {
       setPrf(res?.data ?? null)
     } catch (e) {
       alert(e.message || 'Failed to cancel purchase request')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('Delete this approved PRF? Its tracking number will be released and later PRF numbers will move down by one.')) return
+    setBusy(true)
+    try {
+      await deletePrf(id)
+      navigate('/procurement', { replace: true })
+    } catch (e) {
+      alert(e.message || 'Failed to delete purchase request')
     } finally {
       setBusy(false)
     }
@@ -256,6 +272,12 @@ export default function PrfDetail() {
             <button onClick={() => navigate(`/purchase-order/${prf.purchase_order.id}`)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 text-secondary text-xs font-bold rounded-lg hover:bg-neutral-50 transition-all">
               <FileText className="w-3.5 h-3.5" /> View PO
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={handleDelete} disabled={busy}
+              className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-100 disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           )}
         </div>
@@ -426,6 +448,27 @@ export default function PrfDetail() {
         </div>
       </div>
 
+      {(prf.activities ?? []).length > 0 && (
+        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
+            <p className="text-xs font-bold text-secondary-700 flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Change History
+            </p>
+          </div>
+          <div className="divide-y divide-neutral-50">
+            {prf.activities.map(activity => (
+              <div key={activity.id} className="px-4 py-3">
+                <p className="text-xs font-bold text-secondary-700">
+                  Edited by {activity.actor?.name ?? 'Unknown user'}
+                  <span className="font-normal text-neutral-400"> · {fmtShort(activity.created_at)}</span>
+                </p>
+                <ActivityChanges changes={activity.changes ?? {}} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Past comments */}
       {(prf.approvals ?? []).filter(a => a.comment).length > 0 && (
         <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm">
@@ -507,6 +550,17 @@ export default function PrfDetail() {
       {quoteForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveQuote} className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold">Add Supplier Quotation</h2><p className="text-xs text-neutral-400">Quotation data required by SOP clause 6.2.2</p></div><button type="button" onClick={()=>setQuoteForm(null)}><X/></button></div><div className="grid sm:grid-cols-2 gap-3"><select required value={quoteForm.supplier_id} onChange={e=>setQuoteForm({...quoteForm,supplier_id:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"><option value="">Approved Supplier</option>{suppliers.map(s=><option value={s.id} key={s.id}>{s.company_name}</option>)}</select>{[['reference','Quotation reference'],['requested_date','Requested date'],['received_date','Received date'],['expiry_date','Expiry date'],['incoterm','Incoterm'],['lead_time_days','Lead time days'],['available_quantity','Available quantity'],['minimum_order_quantity','Minimum order quantity'],['price_before_vat','Price before VAT'],['vat','VAT amount']].map(([k,p])=><input key={k} required={k==='price_before_vat'} type={k.includes('date')?'date':['lead_time_days','available_quantity','minimum_order_quantity','price_before_vat','vat'].includes(k)?'number':'text'} step="any" value={quoteForm[k]} placeholder={p} onChange={e=>setQuoteForm({...quoteForm,[k]:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"/>)}</div><div className="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" checked={quoteForm.technical_compliant} onChange={e=>setQuoteForm({...quoteForm,technical_compliant:e.target.checked})}/> Technical compliant</label><label><input type="checkbox" checked={quoteForm.ehs_compliant} onChange={e=>setQuoteForm({...quoteForm,ehs_compliant:e.target.checked})}/> EHS compliant</label><label><input type="checkbox" checked={quoteForm.selected} onChange={e=>setQuoteForm({...quoteForm,selected:e.target.checked})}/> Selected quote</label></div><textarea value={quoteForm.supporting_documents} onChange={e=>setQuoteForm({...quoteForm,supporting_documents:e.target.value})} placeholder="Datasheets, QC sheets, validation tests, MSDS, manufacturing / shelf-life and packing references" className="w-full border rounded-lg p-3 text-sm"/><textarea value={quoteForm.notes} onChange={e=>setQuoteForm({...quoteForm,notes:e.target.value})} placeholder="Additional notes" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Save Quotation</button></form></div>}
     </div>
   )
+}
+
+function ActivityChanges({ changes }) {
+  const lines = []
+  ;(changes.removed_items ?? []).forEach(item => lines.push(`Removed item: ${item.description}`))
+  ;(changes.added_items ?? []).forEach(item => lines.push(`Added item: ${item.description}`))
+  ;(changes.quantity_changes ?? []).forEach(item => lines.push(`${item.description}: quantity ${item.from} → ${item.to}`))
+  ;(changes.updated_items ?? []).forEach(item => lines.push(`Updated item details: ${item.description}`))
+  Object.keys(changes.fields ?? {}).forEach(field => lines.push(`Updated ${field.replaceAll('_', ' ')}`))
+
+  return <div className="mt-1 space-y-0.5">{lines.map((line, index) => <p key={index} className="text-[11px] text-neutral-500">{line}</p>)}</div>
 }
 
 // ── Approval box mini-component ──────────────────────────────────────────

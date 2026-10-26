@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useSearchParams } from 'react-router-dom'
 import { Building2, Calculator, ClipboardX, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Search, Star, X } from 'lucide-react'
 import {
   createBudget, createSupplier, decideBudget, evaluateSupplier,
@@ -37,6 +38,7 @@ const emptyBudgetItem = () => ({ category: 'Consumables', description: '', deliv
 const fmt = d => d ? new Date(d).toLocaleDateString('en-GB') : '—'
 const money = n => Number(n || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const nextBudgetPeriod = () => { const d=new Date(); d.setMonth(d.getMonth()+1); return {year:d.getFullYear(),month:d.getMonth()+1} }
+const RECORD_TABS = ['suppliers', 'budgets', 'rejected', 'log']
 
 function Badge({ value }) {
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${STATUS[value] || STATUS.draft}`}>{String(value || '—').replaceAll('_', ' ')}</span>
@@ -44,7 +46,9 @@ function Badge({ value }) {
 
 export default function ProcurementRecordsPage() {
   const { user } = useSelector(s => s.auth)
-  const [tab, setTab] = useState('suppliers')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const [tab, setTab] = useState(RECORD_TABS.includes(requestedTab) ? requestedTab : 'suppliers')
   const [data, setData] = useState({ suppliers: [], budgets: [], rejected: [], log: [] })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -63,6 +67,16 @@ export default function ProcurementRecordsPage() {
     } catch (e) { setError(e.message) } finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const nextTab = searchParams.get('tab')
+    if (RECORD_TABS.includes(nextTab)) setTab(nextTab)
+  }, [searchParams])
+
+  const selectTab = (nextTab) => {
+    setTab(nextTab)
+    setSearch('')
+    setSearchParams({ tab: nextTab }, { replace: true })
+  }
 
   const suppliers = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -123,7 +137,7 @@ export default function ProcurementRecordsPage() {
       {tabs.map(item => {
         const [key, label] = item
         const TabIcon = item[2]
-        return <button key={key} onClick={() => { setTab(key); setSearch('') }} className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 ${tab === key ? 'border-primary text-primary' : 'border-transparent text-neutral-400'}`}><TabIcon className="w-4 h-4" />{label}</button>
+        return <button key={key} onClick={() => selectTab(key)} className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 ${tab === key ? 'border-primary text-primary' : 'border-transparent text-neutral-400'}`}><TabIcon className="w-4 h-4" />{label}</button>
       })}
     </div>
     {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}

@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux'
 import { ArrowRight, Search, X } from 'lucide-react'
 
 const HR_FULL = ['admin', 'depot_manager', 'hr']
-const PROC_FULL = ['admin']
+const PROC_FULL = ['admin', 'depot_manager', 'procurement']
 const DASH_FULL = ['admin', 'depot_manager']
 
 const PAGES = [

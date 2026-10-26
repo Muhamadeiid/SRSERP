@@ -100,6 +100,7 @@ const DASH_ROLES    = ['admin', 'depot_manager']
 
 // Procurement PRF visibility: Admin, Depot Manager, and Procurement Specialist.
 const PROC_ROLES    = ['admin', 'depot_manager', 'material_controller', 'procurement']
+const PROC_FULL_ROLES = ['admin', 'depot_manager', 'procurement']
 const ADMIN_ROLES   = ['admin']
 
 // Everyone (all authenticated users — no roles prop = just needs to be logged in)
@@ -406,7 +407,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="master" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute roles={PROC_FULL_ROLES} redirect="/procurement">
               <PrfMasterList />
             </ProtectedRoute>
           } />
@@ -416,7 +417,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="po/:id" element={
-            <ProtectedRoute roles={PROC_ROLES} redirect="/human-resources/leave">
+            <ProtectedRoute roles={PROC_FULL_ROLES} redirect="/procurement">
               <PoDetail />
             </ProtectedRoute>
           } />
@@ -431,7 +432,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="records" element={
-            <ProtectedRoute roles={ADMIN_ROLES} redirect="/procurement">
+            <ProtectedRoute roles={PROC_FULL_ROLES} redirect="/procurement">
               <ProcurementRecordsPage />
             </ProtectedRoute>
           } />

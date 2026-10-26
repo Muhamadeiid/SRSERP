@@ -10,10 +10,10 @@ import ProfileAvatar from '../components/profile/ProfileAvatar'
 import NotificationBell from '../components/notifications/NotificationBell'
 import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
-const PROC_FULL_ROLES = ['admin', 'depot_manager', 'material_controller', 'procurement']
+const PROC_FULL_ROLES = ['admin', 'depot_manager', 'procurement']
 
 const NAV = [
-  { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true,  procOnly: true },
+  { label: 'Dashboard',    path: '/procurement',        icon: LayoutDashboard, end: true },
   { label: 'New PRF',      path: '/procurement/new',    icon: FilePlus2 },
   { label: 'Master List',  path: '/procurement/master', icon: FileSpreadsheet,             procOnly: true },
   { label: 'Procurement Management', path: '/procurement/records', icon: LibraryBig,        adminOnly: true },
@@ -25,7 +25,9 @@ export default function ProcurementLayout() {
   const dispatch  = useDispatch()
   const { user }  = useSelector(s => s.auth)
   const isProcFull = PROC_FULL_ROLES.includes(user?.role)
-  const navItems   = NAV.filter(item => (!item.procOnly || isProcFull) && (!item.adminOnly || user?.role === 'admin'))
+  const navItems   = NAV
+    .filter(item => (!item.procOnly || isProcFull) && (!item.adminOnly || user?.role === 'admin'))
+    .map(item => item.path === '/procurement' && user?.role === 'material_controller' ? { ...item, label: 'PRF Reviews' } : item)
   const sidebarW       = collapsed ? '68px' : '240px'
   const sidebarVisible = !isMobile || !collapsed
   const mainOffset     = isMobile ? 0 : sidebarW

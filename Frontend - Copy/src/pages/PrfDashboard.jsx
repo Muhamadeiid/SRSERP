@@ -58,6 +58,12 @@ export default function PrfDashboard() {
   }
 
   const canSeePOs = ['admin', 'procurement', 'purchasing'].includes(user?.role)
+  const isMaterialController = user?.role === 'material_controller'
+
+  const showRequests = (nextStatus = 'all') => {
+    setStatus(nextStatus)
+    window.requestAnimationFrame(() => document.getElementById('prf-request-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -149,7 +155,7 @@ export default function PrfDashboard() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold leading-tight text-secondary-700 sm:text-[28px]">Procurement Dashboard</h1>
-          <p className="mt-1 text-sm text-neutral-400">A single operational view for requests, suppliers, orders and receiving controls.</p>
+          <p className="mt-1 text-sm text-neutral-400">{isMaterialController ? 'Review purchase requests awaiting Material Controller action.' : 'A single operational view for requests, suppliers, orders and receiving controls.'}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchAll} disabled={loading}
@@ -165,8 +171,8 @@ export default function PrfDashboard() {
       </div>
 
       {/* Executive metrics */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {loading ? Array.from({ length: 4 }, (_, index) => (
+      <div className={`grid grid-cols-2 gap-4 ${isMaterialController ? 'xl:grid-cols-2' : 'xl:grid-cols-4'}`}>
+        {loading ? Array.from({ length: isMaterialController ? 2 : 4 }, (_, index) => (
           <div key={index} className="animate-pulse rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm sm:p-5">
             <div className="h-10 w-10 rounded-xl bg-neutral-100" />
             <div className="mt-4 h-7 w-14 rounded-lg bg-neutral-100" />
@@ -174,12 +180,14 @@ export default function PrfDashboard() {
             <div className="mt-1.5 h-2.5 w-20 rounded bg-neutral-50" />
           </div>
         )) : [
-          { label: 'Purchase Requests', value: prfs.length, note: `${statValues.pending} still in workflow`, icon: ClipboardList, tone: 'bg-blue-50 text-blue-600' },
-          { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600' },
-          { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-primary/10 text-primary' },
-          { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600' },
-        ].map(({ label, value, note, icon, tone }) => (
-          <div key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
+          { label: 'Purchase Requests', value: prfs.length, note: `${statValues.pending} still in workflow`, icon: ClipboardList, tone: 'bg-blue-50 text-blue-600', action: () => isMaterialController ? showRequests('all') : navigate('/procurement/master') },
+          ...(!isMaterialController ? [
+            { label: 'Active Orders', value: activeOrders, note: `${posDone.length} completed`, icon: ShoppingCart, tone: 'bg-amber-50 text-amber-600', action: () => navigate('/procurement/records?tab=log') },
+            { label: 'Approved Vendors', value: approvedSuppliers, note: `${suppliers.length} supplier records`, icon: Users, tone: 'bg-primary/10 text-primary', action: () => navigate('/procurement/records?tab=suppliers') },
+          ] : []),
+          { label: 'My Pending Actions', value: myPending.length, note: `${completedRate}% approval rate`, icon: AlertCircle, tone: 'bg-emerald-50 text-emerald-600', action: () => showRequests(isMaterialController ? 'pending_material' : 'all') },
+        ].map(({ label, value, note, icon, tone, action }) => (
+          <button type="button" onClick={action} key={label} className="group rounded-2xl border border-neutral-100 bg-white p-4 text-left shadow-sm transition-all hover:border-primary/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/20 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>{createElement(icon, { className: 'h-5 w-5' })}</div>
               <ArrowUpRight className="h-4 w-4 text-neutral-300 transition-colors group-hover:text-primary" />
@@ -187,7 +195,7 @@ export default function PrfDashboard() {
             <p className="mt-4 text-2xl font-extrabold leading-none text-secondary-700">{value}</p>
             <p className="mt-1.5 text-xs font-bold text-secondary-700">{label}</p>
             <p className="mt-0.5 text-[11px] text-neutral-400">{note}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -231,8 +239,8 @@ export default function PrfDashboard() {
                 hint:    'All purchase orders',
               },
             ].map(({ label, value, icon, iconBg, iconClr, hint, urgent }) => (
-              <div key={label}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 flex items-center gap-3 ${urgent ? 'border-amber-300 ring-1 ring-amber-200' : 'border-neutral-100'}`}>
+              <button type="button" onClick={() => navigate('/procurement/records?tab=log')} key={label}
+                className={`bg-white rounded-2xl border p-4 sm:p-5 flex items-center gap-3 text-left transition-all hover:border-primary/30 hover:shadow-sm ${urgent ? 'border-amber-300 ring-1 ring-amber-200' : 'border-neutral-100'}`}>
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
                   {createElement(icon, { className: `w-5 h-5 ${iconClr}` })}
                 </div>
@@ -241,15 +249,15 @@ export default function PrfDashboard() {
                   <p className="text-[11px] font-medium text-neutral-400 mt-0.5">{label}</p>
                   <p className="text-[10px] text-neutral-300 mt-0.5 hidden sm:block">{hint}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
 
       {/* Operational analytics */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <section className="rounded-2xl border border-neutral-100 bg-white p-5 shadow-sm xl:col-span-2">
+      <div className={`grid grid-cols-1 gap-4 ${isMaterialController ? '' : 'xl:grid-cols-3'}`}>
+        <section className={`rounded-2xl border border-neutral-100 bg-white p-5 shadow-sm ${isMaterialController ? '' : 'xl:col-span-2'}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-extrabold text-secondary-700">Purchase Request Trend</p>
@@ -298,7 +306,7 @@ export default function PrfDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-neutral-100 bg-white p-5 shadow-sm">
+        {!isMaterialController && <section className="rounded-2xl border border-neutral-100 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div><p className="text-sm font-extrabold text-secondary-700">Vendor Categories</p><p className="mt-1 text-[11px] text-neutral-400">Supplier portfolio breakdown</p></div>
             <Building2 className="h-5 w-5 text-primary" />
@@ -315,7 +323,7 @@ export default function PrfDashboard() {
           <button onClick={() => navigate('/procurement/records')} className="mt-6 flex w-full items-center justify-between rounded-xl bg-neutral-50 px-3 py-2.5 text-xs font-bold text-secondary-700 hover:bg-primary/10 hover:text-primary">
             Open vendor master list <ChevronRight className="h-4 w-4" />
           </button>
-        </section>
+        </section>}
       </div>
 
       {/* Needs IGI banner */}
@@ -367,7 +375,7 @@ export default function PrfDashboard() {
       )}
 
       {/* Filters + List */}
-      <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
+      <div id="prf-request-list" className="scroll-mt-20 bg-white rounded-2xl border border-neutral-100 overflow-hidden">
 
         {warning && <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-700">{warning} Core purchase requests remain available.</div>}
 

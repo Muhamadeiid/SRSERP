@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Notification;
 use App\Models\Prf;
 use App\Models\PrfApproval;
+use App\Models\PrfActivity;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -182,6 +183,68 @@ class PrfApprovalWorkflowTest extends TestCase
             'material_category' => ['Components and Parts'],
             'items' => [['description' => 'Next tracked item', 'quantity' => 1]],
         ])->assertCreated()->assertJsonPath('data.prf_number', 'PRF-EG1-2026-0124');
+    }
+
+    public function test_material_controller_can_edit_items_and_the_editor_is_audited(): void
+    {
+        $requester = $this->user('staff');
+        $materialController = $this->user('material_controller');
+
+        Sanctum::actingAs($requester);
+        $prfId = $this->postJson('/api/procurement/prfs', [
+            'date' => '2026-10-25',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
+            'items' => [
+                ['description' => 'Bearing', 'quantity' => 4, 'unit' => 'pcs'],
+                ['description' => 'Seal', 'quantity' => 2, 'unit' => 'pcs'],
+            ],
+        ])->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($materialController);
+        $this->putJson("/api/procurement/prfs/{$prfId}", [
+            'date' => '2026-10-25',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Components and Parts'],
+            'items' => [
+                ['description' => 'Bearing', 'quantity' => 6, 'unit' => 'pcs'],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.items.0.quantity', '6.00')
+            ->assertJsonPath('data.activities.0.actor.name', $materialController->name);
+
+        $activity = PrfActivity::where('prf_id', $prfId)->firstOrFail();
+        $this->assertSame($materialController->id, $activity->actor_id);
+        $this->assertSame('Seal', $activity->changes['removed_items'][0]['description']);
+        $this->assertSame(6.0, $activity->changes['quantity_changes'][0]['to']);
+    }
+
+    public function test_admin_can_delete_approved_prf_and_close_tracking_gap(): void
+    {
+        $requester = $this->user('staff');
+        $admin = $this->user('admin');
+
+        $first = Prf::create([
+            'prf_number' => 'PRF-EG1-2098-0401', 'requested_by' => $requester->id,
+            'date' => '2098-01-01', 'material_category' => ['Others'], 'status' => 'approved',
+        ]);
+        $deleted = Prf::create([
+            'prf_number' => 'PRF-EG1-2098-0402', 'requested_by' => $requester->id,
+            'date' => '2098-01-02', 'material_category' => ['Others'], 'status' => 'approved',
+        ]);
+        $later = Prf::create([
+            'prf_number' => 'PRF-EG1-2098-0403', 'requested_by' => $requester->id,
+            'date' => '2098-01-03', 'material_category' => ['Others'], 'status' => 'approved',
+        ]);
+
+        Sanctum::actingAs($admin);
+        $this->deleteJson("/api/procurement/prfs/{$deleted->id}")
+            ->assertOk();
+
+        $this->assertSoftDeleted('prfs', ['id' => $deleted->id]);
+        $this->assertSame('PRF-EG1-2098-0402', Prf::withTrashed()->findOrFail($deleted->id)->deleted_prf_number);
+        $this->assertSame('PRF-EG1-2098-0402', $later->fresh()->prf_number);
+        $this->assertSame('PRF-EG1-2098-0401', $first->fresh()->prf_number);
     }
 
     private function unreadFor(User $user, int $prfId): int

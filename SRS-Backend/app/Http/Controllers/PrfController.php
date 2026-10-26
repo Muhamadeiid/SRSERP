@@ -6,6 +6,7 @@ use App\Mail\PrfApprovalRequested;
 use App\Models\Notification;
 use App\Models\Prf;
 use App\Models\PrfApproval;
+use App\Models\PrfActivity;
 use App\Models\PrfItem;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -138,6 +139,7 @@ class PrfController extends Controller
             'items',
             'approvals.approver:id,name,e_signature,role',
             'purchaseOrder:id,prf_id,po_number,status',
+            'activities.actor:id,name,role',
         ]);
 
         // A signature can be saved on the user account (by its owner) or on the
@@ -248,7 +250,7 @@ class PrfController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  UPDATE / CANCEL — requester only, before the first approval
+    //  UPDATE / CANCEL — requester or Material Controller before first approval
     // ─────────────────────────────────────────────────────────────
     public function update(Request $request, Prf $prf): JsonResponse
     {
@@ -277,7 +279,8 @@ class PrfController extends Controller
 
         return DB::transaction(function () use ($prf, $v) {
             $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
-            if (!$this->requesterCanModify($lockedPrf)) {
+            $user = auth()->user();
+            if (!$this->userCanModify($user, $lockedPrf)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'This purchase request can no longer be edited',
@@ -285,6 +288,7 @@ class PrfController extends Controller
             }
 
             $data = $v->validated();
+            $before = $this->prfSnapshot($lockedPrf);
             $lockedPrf->update([
                 'date'              => $data['date'] ?? $lockedPrf->date,
                 'delivery_location' => $data['delivery_location'] ?? null,
@@ -310,11 +314,62 @@ class PrfController extends Controller
                 ]);
             }
 
+            $lockedPrf->refresh()->load('items');
+            $changes = $this->describePrfChanges($before, $this->prfSnapshot($lockedPrf));
+            if ($changes !== []) {
+                PrfActivity::create([
+                    'prf_id' => $lockedPrf->id,
+                    'actor_id' => $user->id,
+                    'action' => 'updated',
+                    'changes' => $changes,
+                ]);
+                if ($lockedPrf->requested_by !== $user->id) {
+                    Notification::notifyUser(
+                        $lockedPrf->requested_by,
+                        'prf_updated',
+                        "PRF Updated — {$lockedPrf->prf_number}",
+                        "{$user->name} updated your purchase request. Open it to review the changes.",
+                        ['prf_id' => $lockedPrf->id, 'path' => "/purchase-request/{$lockedPrf->id}"],
+                        true
+                    );
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Purchase request updated',
-                'data' => $lockedPrf->fresh(['requester', 'items', 'approvals.approver']),
+                'data' => $lockedPrf->fresh(['requester', 'items', 'approvals.approver', 'activities.actor']),
             ]);
+        });
+    }
+
+    public function destroy(Prf $prf): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Only Admin can delete an approved PRF'], 403);
+        }
+
+        return DB::transaction(function () use ($prf, $user) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            if ($lockedPrf->status !== 'approved') {
+                return response()->json(['success' => false, 'message' => 'Only a fully approved PRF can be deleted'], 422);
+            }
+            if ($lockedPrf->purchaseOrder()->exists()) {
+                return response()->json(['success' => false, 'message' => 'This PRF is linked to a PO and cannot be deleted'], 422);
+            }
+
+            $releasedNumber = $lockedPrf->prf_number;
+            $lockedPrf->update([
+                'deleted_prf_number' => $releasedNumber,
+                'deleted_by' => $user->id,
+                'prf_number' => "DELETED-{$lockedPrf->id}-{$releasedNumber}",
+            ]);
+            $lockedPrf->delete();
+            $this->closePrfTrackingGap($releasedNumber, $lockedPrf->id);
+            Notification::resolveFor('prf_id', $lockedPrf->id);
+
+            return response()->json(['success' => true, 'message' => 'Purchase request deleted and tracking numbers reordered']);
         });
     }
 
@@ -333,6 +388,7 @@ class PrfController extends Controller
                 ? $lockedPrf->prf_number
                 : $lockedPrf->prf_number . '-VOID';
             $lockedPrf->update(['status' => 'cancelled', 'prf_number' => $voidNumber]);
+            $this->closePrfTrackingGap($lockedPrf->prf_number, $lockedPrf->id);
             Notification::resolveFor('prf_id', $lockedPrf->id);
 
             return response()->json([
@@ -448,6 +504,7 @@ class PrfController extends Controller
             $voidNumber     = str_ends_with($originalNumber, '-VOID') ? $originalNumber : $originalNumber . '-VOID';
 
             $lockedPrf->update(['status' => 'rejected', 'prf_number' => $voidNumber]);
+            $this->closePrfTrackingGap($originalNumber, $lockedPrf->id);
 
             Notification::resolveFor('prf_id', $lockedPrf->id);
             if ($lockedPrf->requested_by) {
@@ -531,6 +588,104 @@ class PrfController extends Controller
         return $prf->requested_by === auth()->id()
             && $prf->status === 'pending_material'
             && !$prf->approvals()->exists();
+    }
+
+    private function userCanModify(User $user, Prf $prf): bool
+    {
+        if ($this->requesterCanModify($prf)) {
+            return true;
+        }
+
+        return $prf->status === 'pending_material'
+            && ($user->isAdmin() || $user->hasPermission('prf.approve_material'));
+    }
+
+    private function prfSnapshot(Prf $prf): array
+    {
+        $prf->loadMissing('items');
+
+        return [
+            'date' => optional($prf->date)->format('Y-m-d'),
+            'delivery_location' => $prf->delivery_location,
+            'delivery_contact' => $prf->delivery_contact,
+            'requester_phone' => $prf->requester_phone,
+            'requester_email' => $prf->requester_email,
+            'material_category' => $prf->material_category ?? [],
+            'notes' => $prf->notes,
+            'items' => $prf->items->map(fn (PrfItem $item) => [
+                'description' => $item->description,
+                'quantity' => (float) $item->quantity,
+                'unit' => $item->unit,
+                'technical_specifications' => $item->technical_specifications,
+                'ehs_requirements' => $item->ehs_requirements,
+                'required_by_date' => optional($item->required_by_date)->format('Y-m-d'),
+            ])->values()->all(),
+        ];
+    }
+
+    private function describePrfChanges(array $before, array $after): array
+    {
+        $changes = [];
+        foreach (['date', 'delivery_location', 'delivery_contact', 'requester_phone', 'requester_email', 'material_category', 'notes'] as $field) {
+            if (($before[$field] ?? null) !== ($after[$field] ?? null)) {
+                $changes['fields'][$field] = ['from' => $before[$field] ?? null, 'to' => $after[$field] ?? null];
+            }
+        }
+
+        $beforeItems = collect($before['items'] ?? []);
+        $afterItems = collect($after['items'] ?? []);
+        $removed = $beforeItems->filter(fn ($item) => !$afterItems->contains(fn ($new) => $new['description'] === $item['description']))->values();
+        $added = $afterItems->filter(fn ($item) => !$beforeItems->contains(fn ($old) => $old['description'] === $item['description']))->values();
+        $quantityChanges = $afterItems->map(function ($item) use ($beforeItems) {
+            $old = $beforeItems->firstWhere('description', $item['description']);
+            if (!$old || (float) $old['quantity'] === (float) $item['quantity']) return null;
+            return ['description' => $item['description'], 'from' => $old['quantity'], 'to' => $item['quantity']];
+        })->filter()->values();
+        $itemDetailChanges = $afterItems->map(function ($item) use ($beforeItems) {
+            $old = $beforeItems->firstWhere('description', $item['description']);
+            if (!$old) return null;
+            $changed = collect(['unit', 'technical_specifications', 'ehs_requirements', 'required_by_date'])
+                ->contains(fn ($field) => ($old[$field] ?? null) !== ($item[$field] ?? null));
+            return $changed ? ['description' => $item['description']] : null;
+        })->filter()->values();
+
+        if ($removed->isNotEmpty()) $changes['removed_items'] = $removed->all();
+        if ($added->isNotEmpty()) $changes['added_items'] = $added->all();
+        if ($quantityChanges->isNotEmpty()) $changes['quantity_changes'] = $quantityChanges->all();
+        if ($itemDetailChanges->isNotEmpty()) $changes['updated_items'] = $itemDetailChanges->all();
+
+        return $changes;
+    }
+
+    private function closePrfTrackingGap(string $released, int $excludedId): void
+    {
+        $released = preg_replace('/-VOID$/', '', trim($released));
+        if (!preg_match('/^(.*-)(\d+)$/', $released, $matches)) return;
+
+        $prefix = $matches[1];
+        $releasedSequence = (int) $matches[2];
+        $later = Prf::query()
+            ->where('id', '!=', $excludedId)
+            ->where('prf_number', 'like', $prefix . '%')
+            ->where('prf_number', 'not like', '%-VOID')
+            ->lockForUpdate()
+            ->get(['id', 'prf_number'])
+            ->map(function (Prf $candidate) use ($prefix) {
+                $tail = substr($candidate->prf_number, strlen($prefix));
+                return ctype_digit($tail) ? ['id' => $candidate->id, 'sequence' => (int) $tail] : null;
+            })
+            ->filter(fn ($candidate) => $candidate !== null && $candidate['sequence'] > $releasedSequence)
+            ->sortBy('sequence')
+            ->values();
+
+        foreach ($later as $candidate) {
+            DB::table('prfs')->where('id', $candidate['id'])->update(['prf_number' => "__PRF_SHIFT__{$candidate['id']}"]);
+        }
+        foreach ($later as $candidate) {
+            DB::table('prfs')->where('id', $candidate['id'])->update([
+                'prf_number' => $prefix . str_pad((string) ($candidate['sequence'] - 1), 4, '0', STR_PAD_LEFT),
+            ]);
+        }
     }
 
     private function notifyStageApprovers(Prf $prf, string $stageStatus): void

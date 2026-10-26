@@ -53,6 +53,7 @@ export default function PrfNewPage() {
   const [templatesOpen, setTemplatesOpen] = useState(true)
   const [addedTemplates, setAddedTemplates] = useState(new Set())
   const [loading, setLoading] = useState(isEditing)
+  const [editingRequester, setEditingRequester] = useState(null)
 
   useEffect(() => {
     if (!isEditing) return
@@ -61,10 +62,13 @@ export default function PrfNewPage() {
       .then(res => {
         const prf = res?.data
         if (!active || !prf) return
-        if (prf.status !== 'pending_material' || (prf.approvals ?? []).length > 0 || String(prf.requested_by) !== String(user?.id)) {
+        const isRequester = String(prf.requested_by) === String(user?.id) && (prf.approvals ?? []).length === 0
+        const canMaterialEdit = user?.role === 'admin' || (Array.isArray(user?.permissions) && user.permissions.includes('prf.approve_material'))
+        if (prf.status !== 'pending_material' || (!isRequester && !canMaterialEdit)) {
           navigate(`/purchase-request/${id}`, { replace: true })
           return
         }
+        setEditingRequester(prf.requester ?? null)
         setForm({
           prf_number: prf.prf_number ?? '',
           date: String(prf.date ?? '').slice(0, 10),
@@ -88,7 +92,7 @@ export default function PrfNewPage() {
       .catch(e => setErr(e.message || 'Failed to load purchase request'))
       .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [id, isEditing, navigate, user?.email, user?.id])
+  }, [id, isEditing, navigate, user?.email, user?.id, user?.role, user?.permissions])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -232,8 +236,8 @@ export default function PrfNewPage() {
           </div>
           <div className="px-4 py-3">
             <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide mb-1">Requested By</p>
-            <p className="text-sm font-bold text-secondary-700">{user?.name ?? '—'}</p>
-            <p className="text-[10px] text-neutral-400 capitalize">{user?.role?.replace('_', ' ')}</p>
+            <p className="text-sm font-bold text-secondary-700">{editingRequester?.name ?? user?.name ?? '—'}</p>
+            <p className="text-[10px] text-neutral-400 capitalize">{editingRequester?.role?.replace('_', ' ') ?? user?.role?.replace('_', ' ')}</p>
           </div>
         </div>
 

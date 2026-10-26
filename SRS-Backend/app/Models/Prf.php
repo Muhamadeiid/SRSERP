@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Prf extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'prfs';
 
     protected $fillable = [
         'prf_number',
+        'deleted_prf_number',
         'requested_by',
         'date',
         'delivery_location',
@@ -20,6 +24,7 @@ class Prf extends Model
         'notes',
         'notes_image',
         'status',
+        'deleted_by',
     ];
 
     protected $casts = [
@@ -45,6 +50,11 @@ class Prf extends Model
     public function purchaseOrder()
     {
         return $this->hasOne(PurchaseOrder::class, 'prf_id');
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(PrfActivity::class)->orderByDesc('created_at');
     }
 
     public function approvalFor(string $role): ?PrfApproval
