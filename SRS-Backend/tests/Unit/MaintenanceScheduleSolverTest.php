@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Carbon\CarbonPeriod;
 use Tests\TestCase;
 
 class MaintenanceScheduleSolverTest extends TestCase
@@ -87,5 +88,41 @@ class MaintenanceScheduleSolverTest extends TestCase
             $routine = array_filter($entries[$date->toDateString()] ?? [], fn ($code) => $code !== 'C' && ! str_starts_with($code, '9Y'));
             $this->assertNotEmpty($routine, $date->toDateString() . ' has no maintenance visit');
         }
+    }
+
+    public function test_nine_year_overhaul_lasts_thirty_working_days_excluding_fridays_and_public_holidays(): void
+    {
+        DB::table('trains')->insert([
+            ['id' => 'O1', 'name' => 'Overhaul Train', 'display_order' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 'O2', 'name' => 'Next Overhaul Train', 'display_order' => 2, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        foreach (CarbonPeriod::create('2026-09-20', '2026-09-30') as $date) {
+            DB::table('maintenance_schedule')->insert([
+                'schedule_date' => $date->toDateString(),
+                'train_id' => 'O1',
+                'code' => '9Y',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('public_holidays')->insert([
+            'date' => '2026-10-06',
+            'end_date' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $preview = app(MaintenanceScheduleGenerator::class)->preview(2026, 10);
+        $plannedDates = collect($preview['entries'])
+            ->filter(fn ($entries) => ($entries['O1'] ?? null) === '9Y')
+            ->keys();
+        $allDates = collect(CarbonPeriod::create('2026-09-20', $plannedDates->max()))
+            ->map(fn ($date) => $date->toDateString());
+        $workingDays = $allDates->filter(fn ($date) => !Carbon::parse($date)->isFriday() && $date !== '2026-10-06');
+
+        $this->assertCount(30, $workingDays);
+        $this->assertContains('2026-10-06', $plannedDates);
+        $this->assertTrue($plannedDates->contains(fn ($date) => Carbon::parse($date)->isFriday()));
     }
 }

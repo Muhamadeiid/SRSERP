@@ -8,7 +8,7 @@ import { useLookups } from '../../hooks/useLookups'
 import UserAvatar from '../../components/profile/UserAvatar'
 
 // ── Constants (kept as fallback / for permission gating; actual dropdown values come from lookups) ─
-const EMPTY_FORM  = { name: '', email: '', password: '', role: 'staff', department: 'admin', manager_id: '', is_team_manager: false }
+const EMPTY_FORM  = { name: '', email: '', company_email: '', mobile_number: '', password: '', role: 'staff', department: 'admin', manager_id: '', is_team_manager: false }
 
 const ROLE_CFG = {
   admin:         { label: 'Super Admin',   bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-400'    },
@@ -83,7 +83,7 @@ export default function Users() {
   }
 
   const openCreate = () => { setForm(EMPTY_FORM); setError(null); setModal('create') }
-  const openEdit   = u  => { setSelected(u); setForm({ name: u.name, email: u.email, role: u.role, department: u.department, manager_id: u.manager_id ?? '', is_team_manager: !!u.is_team_manager }); setError(null); setModal('edit') }
+  const openEdit   = u  => { setSelected(u); setForm({ name: u.name, email: u.email, company_email: u.company_email ?? '', mobile_number: u.mobile_number ?? '', role: u.role, department: u.department, manager_id: u.manager_id ?? '', is_team_manager: !!u.is_team_manager }); setError(null); setModal('edit') }
   const openReset  = u  => { setSelected(u); setForm({ password: '', password_confirmation: '' }); setError(null); setModal('reset') }
   const closeModal = ()  => { setModal(null); setSelected(null); setError(null) }
   const set        = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -138,6 +138,8 @@ export default function Users() {
     !search.trim() ||
     u.name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase()) ||
+    (u.company_email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.mobile_number || '').toLowerCase().includes(search.toLowerCase()) ||
     u.role.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -233,7 +235,12 @@ export default function Users() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-[#1a1f36]">{u.name}</p>
-                            <p className="text-xs text-[#8892ab]">{u.email}</p>
+                            <p className="text-xs text-[#8892ab]">Login: {u.email}</p>
+                            {(u.company_email || u.mobile_number) && (
+                              <p className="mt-0.5 text-[11px] text-[#a0a7b8]">
+                                {[u.company_email, u.mobile_number].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -351,8 +358,14 @@ export default function Users() {
               <Field label="Full Name" span>
                 <Input value={form.name} onChange={e => set('name', e.target.value)} required placeholder="Full name" />
               </Field>
-              <Field label="Email" span>
+              <Field label="Login Email" span>
                 <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} required placeholder="email@srs.com" />
+              </Field>
+              <Field label="Company Email">
+                <Input type="email" value={form.company_email} onChange={e => set('company_email', e.target.value)} placeholder="name@company.com" />
+              </Field>
+              <Field label="Mobile Number">
+                <Input type="tel" value={form.mobile_number} onChange={e => set('mobile_number', e.target.value)} placeholder="01x-xxxx-xxxx" />
               </Field>
               {modal === 'create' && (
                 <Field label="Password" span>

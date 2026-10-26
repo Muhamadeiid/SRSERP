@@ -23,7 +23,7 @@ class MaintenanceScheduleGenerator
 
     private const C_MIN_ROUTINE_GAP = 5;
 
-    private const NINE_YEAR_WORKING_DAYS = 33;
+    private const NINE_YEAR_WORKING_DAYS = 30;
 
     private const B_CYCLE = ['B1', 'B2', 'B3', 'G'];
 

@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::c
     // Auth & profile
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me',      [AuthController::class, 'me']);
+    Route::put('/auth/profile/contact', [AuthController::class, 'updateContactDetails']);
     Route::post('/auth/profile-photo',   [AuthController::class, 'saveProfilePhoto']);
     Route::get('/auth/profile-photo',    [AuthController::class, 'profilePhoto']);
     Route::get('/users/{user}/profile-photo', [AuthController::class, 'userProfilePhoto']);

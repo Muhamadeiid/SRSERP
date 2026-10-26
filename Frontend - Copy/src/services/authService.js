@@ -20,6 +20,11 @@ export const getMe = async () => {
   return data
 }
 
+export const updateProfileContact = async (contact) => {
+  const { data } = await api.put('/auth/profile/contact', contact)
+  return data
+}
+
 export const uploadProfilePhoto = async (photo) => {
   const form = new FormData()
   form.append('photo', photo)

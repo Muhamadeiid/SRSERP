@@ -74,6 +74,32 @@ class AuthController extends Controller
         return response()->json($user);
     }
 
+    public function updateContactDetails(Request $request)
+    {
+        $validated = $request->validate([
+            'company_email' => ['nullable', 'email', 'max:255'],
+            'mobile_number' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user = $request->user();
+        $user->update([
+            'company_email' => filled($validated['company_email'] ?? null)
+                ? strtolower(trim($validated['company_email']))
+                : null,
+            'mobile_number' => filled($validated['mobile_number'] ?? null)
+                ? trim($validated['mobile_number'])
+                : null,
+        ]);
+
+        $freshUser = $user->fresh();
+        $freshUser->permissions = $freshUser->permissionsList();
+
+        return response()->json([
+            'message' => 'Contact details updated.',
+            'user' => $freshUser,
+        ]);
+    }
+
     public function saveProfilePhoto(Request $request)
     {
         $request->validate([

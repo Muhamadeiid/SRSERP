@@ -37,6 +37,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users',
+            'company_email'   => 'nullable|email|max:255',
+            'mobile_number'   => 'nullable|string|max:50',
             'password'        => 'required|string|min:8',
             'role'            => 'required|in:admin,depot_manager,manager,staff,ccp,hr,material_controller,procurement,ehs,ehs_manager,store_staff',
             'department'      => [
@@ -69,6 +71,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name'            => 'sometimes|string|max:255',
             'email'           => 'sometimes|email|unique:users,email,' . $user->id,
+            'company_email'   => 'nullable|email|max:255',
+            'mobile_number'   => 'nullable|string|max:50',
             'role'            => 'sometimes|in:admin,depot_manager,manager,staff,ccp,hr,material_controller,procurement,ehs,ehs_manager,store_staff',
             'department'      => [
                 'sometimes',

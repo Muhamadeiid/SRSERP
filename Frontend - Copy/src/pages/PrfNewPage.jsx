@@ -40,8 +40,8 @@ export default function PrfNewPage() {
     date: today(),
     delivery_location: '',
     delivery_contact:  '',
-    requester_phone:   '',
-    requester_email:   user?.email ?? '',
+    requester_phone:   user?.mobile_number ?? '',
+    requester_email:   user?.company_email ?? '',
     notes: '',
     notes_image: '',                                // base64 data-URI (optional)
     material_category: [],
@@ -75,7 +75,7 @@ export default function PrfNewPage() {
           delivery_location: LEGACY_DELIVERY_LOCATIONS[prf.delivery_location] ?? prf.delivery_location ?? '',
           delivery_contact: prf.delivery_contact ?? '',
           requester_phone: prf.requester_phone ?? '',
-          requester_email: prf.requester_email ?? user?.email ?? '',
+          requester_email: prf.requester_email ?? user?.company_email ?? '',
           notes: prf.notes ?? '',
           notes_image: prf.notes_image ?? '',
           material_category: prf.material_category ?? [],
@@ -92,7 +92,7 @@ export default function PrfNewPage() {
       .catch(e => setErr(e.message || 'Failed to load purchase request'))
       .finally(() => active && setLoading(false))
     return () => { active = false }
-  }, [id, isEditing, navigate, user?.email, user?.id, user?.role, user?.permissions])
+  }, [id, isEditing, navigate, user?.company_email, user?.id, user?.role, user?.permissions])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

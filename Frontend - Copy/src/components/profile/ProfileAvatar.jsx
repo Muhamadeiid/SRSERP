@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Crop, Loader2, RotateCcw, Trash2, Upload, X, ZoomIn } from 'lucide-react'
+import { Camera, Check, Crop, Loader2, Mail, Phone, RotateCcw, Trash2, Upload, X, ZoomIn } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
-import { getProfilePhoto, removeProfilePhoto, uploadProfilePhoto } from '../../services/authService'
+import { getProfilePhoto, removeProfilePhoto, updateProfileContact, uploadProfilePhoto } from '../../services/authService'
 import { refreshUser } from '../../store/slices/authSlice'
 
 let cachedUserId = null
@@ -54,6 +54,8 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
   const [cropImage, setCropImage] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [contact, setContact] = useState({ company_email: '', mobile_number: '' })
+  const [contactSaved, setContactSaved] = useState(false)
   const inputRef = useRef(null)
   const dragRef = useRef(null)
 
@@ -72,6 +74,16 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
   }, [user?.has_profile_photo, user?.id])
 
   useEffect(() => { refreshPhoto() }, [refreshPhoto])
+
+  useEffect(() => {
+    if (!open) return
+    setContact({
+      company_email: user?.company_email || '',
+      mobile_number: user?.mobile_number || '',
+    })
+    setContactSaved(false)
+    setError('')
+  }, [open, user?.company_email, user?.mobile_number])
 
   useEffect(() => {
     const sync = () => refreshPhoto(true)
@@ -205,12 +217,32 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
     }
   }
 
+  const saveContact = async event => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setContactSaved(false)
+    try {
+      const result = await updateProfileContact({
+        company_email: contact.company_email.trim() || null,
+        mobile_number: contact.mobile_number.trim() || null,
+      })
+      dispatch(refreshUser(result.user))
+      setContactSaved(true)
+    } catch (requestError) {
+      const validation = requestError.response?.data?.errors
+      setError(validation ? Object.values(validation).flat()[0] : requestError.response?.data?.message || 'Could not update contact details.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={() => editable && setOpen(true)}
-        title={editable ? 'Change profile photo' : user?.name}
+        title={editable ? 'Open profile' : user?.name}
         className={`relative shrink-0 overflow-hidden rounded-full bg-primary text-white font-bold flex items-center justify-center ring-offset-2 hover:ring-2 hover:ring-primary/30 ${dimensions} ${className}`}
       >
         {photoUrl ? <img src={photoUrl} alt={user?.name || 'Profile'} className="h-full w-full object-cover" /> : initials(user?.name)}
@@ -219,11 +251,11 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
 
       {open && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-4" onMouseDown={event => event.target === event.currentTarget && !busy && setOpen(false)}>
-          <div className="w-full max-w-md rounded-xl border border-neutral-200 bg-white shadow-2xl">
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-2xl">
             <header className="flex items-center border-b border-neutral-100 px-5 py-4">
               <div>
-                <h2 className="text-sm font-bold text-secondary-700">Profile Photo</h2>
-                <p className="mt-0.5 text-[11px] text-neutral-400">JPG, PNG or WEBP · maximum 3 MB</p>
+                <h2 className="text-sm font-bold text-secondary-700">My Profile</h2>
+                <p className="mt-0.5 text-[11px] text-neutral-400">Photo and company contact details</p>
               </div>
               <button type="button" disabled={busy} onClick={() => { clearCrop(); setOpen(false) }} className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
             </header>
@@ -290,6 +322,38 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
                   </button>
                 )}
               </div>
+              {!cropImage && (
+                <form onSubmit={saveContact} className="mt-5 border-t border-neutral-100 pt-5 text-left">
+                  <label className="block text-[11px] font-bold uppercase text-neutral-500" htmlFor="profile-company-email">Company Email</label>
+                  <div className="relative mt-1.5">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      id="profile-company-email"
+                      type="email"
+                      value={contact.company_email}
+                      onChange={event => { setContact(current => ({ ...current, company_email: event.target.value })); setContactSaved(false) }}
+                      placeholder="name@company.com"
+                      className="h-10 w-full rounded-md border border-neutral-200 pl-10 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                    />
+                  </div>
+                  <label className="mt-4 block text-[11px] font-bold uppercase text-neutral-500" htmlFor="profile-mobile-number">Mobile Number</label>
+                  <div className="relative mt-1.5">
+                    <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      id="profile-mobile-number"
+                      type="tel"
+                      value={contact.mobile_number}
+                      onChange={event => { setContact(current => ({ ...current, mobile_number: event.target.value })); setContactSaved(false) }}
+                      placeholder="01x-xxxx-xxxx"
+                      className="h-10 w-full rounded-md border border-neutral-200 pl-10 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                    />
+                  </div>
+                  <button type="submit" disabled={busy} className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-xs font-bold text-white disabled:opacity-50">
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : contactSaved ? <Check className="h-4 w-4" /> : null}
+                    {contactSaved ? 'Contact Details Saved' : 'Save Contact Details'}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>

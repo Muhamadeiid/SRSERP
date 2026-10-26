@@ -185,6 +185,25 @@ class PrfApprovalWorkflowTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.prf_number', 'PRF-EG1-2026-0124');
     }
 
+    public function test_prf_uses_the_requesters_company_contact_instead_of_login_email(): void
+    {
+        $requester = $this->user('staff');
+        $requester->update([
+            'company_email' => 'employee@company.example',
+            'mobile_number' => '01012345678',
+        ]);
+
+        Sanctum::actingAs($requester);
+        $this->postJson('/api/procurement/prfs', [
+            'date' => '2026-10-26',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Others'],
+            'items' => [['description' => 'Contact test item', 'quantity' => 1]],
+        ])->assertCreated()
+            ->assertJsonPath('data.requester_email', 'employee@company.example')
+            ->assertJsonPath('data.requester_phone', '01012345678');
+    }
+
     public function test_material_controller_can_edit_items_and_the_editor_is_audited(): void
     {
         $requester = $this->user('staff');
