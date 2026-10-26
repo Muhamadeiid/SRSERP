@@ -33,6 +33,8 @@ export const getPrfs = (params = {}) => {
 export const getPrf       = (id)            => request(`/procurement/prfs/${id}`)
 export const createPrf    = (data)          => request('/procurement/prfs',                 { method: 'POST', body: JSON.stringify(data) })
 export const updatePrf    = (id, data)      => request(`/procurement/prfs/${id}`,            { method: 'PUT', body: JSON.stringify(data) })
+export const updatePrfEhsRequirements = (id, items) =>
+  request(`/procurement/prfs/${id}/ehs-requirements`, { method: 'PATCH', body: JSON.stringify({ items }) })
 export const cancelPrf    = (id)            => request(`/procurement/prfs/${id}/cancel`,     { method: 'POST' })
 export const deletePrf    = (id)            => request(`/procurement/prfs/${id}`,             { method: 'DELETE' })
 export const approvePrf   = (id, comment)   => request(`/procurement/prfs/${id}/approve`,    { method: 'POST', body: JSON.stringify({ comment }) })

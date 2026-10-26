@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Prf;
 use App\Models\PrfApproval;
 use App\Models\PrfActivity;
+use App\Models\PrfItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -236,6 +237,76 @@ class PrfApprovalWorkflowTest extends TestCase
         $this->assertSame($materialController->id, $activity->actor_id);
         $this->assertSame('Seal', $activity->changes['removed_items'][0]['description']);
         $this->assertSame(6.0, $activity->changes['quantity_changes'][0]['to']);
+    }
+
+    public function test_procurement_and_depot_manager_can_edit_during_their_stages(): void
+    {
+        $requester = $this->user('staff');
+        $procurement = $this->user('procurement');
+        $depotManager = $this->user('depot_manager');
+        $prf = Prf::create([
+            'prf_number' => 'PRF-EG1-2097-0101',
+            'requested_by' => $requester->id,
+            'date' => '2097-01-01',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Others'],
+            'status' => 'pending_procurement',
+        ]);
+        PrfItem::create([
+            'prf_id' => $prf->id, 'sn' => 1, 'description' => 'Original item',
+            'quantity' => 1, 'unit' => 'pcs', 'ehs_requirements' => 'No EHS Required',
+        ]);
+
+        $payload = [
+            'date' => '2097-01-01',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Others'],
+            'items' => [['description' => 'Procurement edit', 'quantity' => 2, 'unit' => 'pcs', 'ehs_requirements' => 'No EHS Required']],
+        ];
+
+        Sanctum::actingAs($procurement);
+        $this->putJson("/api/procurement/prfs/{$prf->id}", $payload)
+            ->assertOk()->assertJsonPath('data.items.0.description', 'Procurement edit');
+
+        $prf->update(['status' => 'pending_depot']);
+        $payload['items'][0]['description'] = 'Depot edit';
+        Sanctum::actingAs($depotManager);
+        $this->putJson("/api/procurement/prfs/{$prf->id}", $payload)
+            ->assertOk()->assertJsonPath('data.items.0.description', 'Depot edit');
+    }
+
+    public function test_ehs_can_only_update_safety_requirements_during_ehs_stage(): void
+    {
+        $requester = $this->user('staff');
+        $ehs = $this->user('ehs_manager');
+        $prf = Prf::create([
+            'prf_number' => 'PRF-EG1-2097-0102',
+            'requested_by' => $requester->id,
+            'date' => '2097-01-02',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Safety Equipment'],
+            'status' => 'pending_ehs',
+        ]);
+        $item = PrfItem::create([
+            'prf_id' => $prf->id, 'sn' => 1, 'description' => 'Safety item',
+            'quantity' => 3, 'unit' => 'pcs', 'ehs_requirements' => 'No EHS Required',
+        ]);
+
+        Sanctum::actingAs($ehs);
+        $this->putJson("/api/procurement/prfs/{$prf->id}", [
+            'date' => '2097-01-02',
+            'delivery_location' => 'Kozzika',
+            'material_category' => ['Safety Equipment'],
+            'items' => [['description' => 'Changed illegally', 'quantity' => 99]],
+        ])->assertForbidden();
+
+        $this->patchJson("/api/procurement/prfs/{$prf->id}/ehs-requirements", [
+            'items' => [['id' => $item->id, 'ehs_requirements' => 'SDS']],
+        ])->assertOk()
+            ->assertJsonPath('data.items.0.description', 'Safety item')
+            ->assertJsonPath('data.items.0.quantity', '3.00')
+            ->assertJsonPath('data.items.0.ehs_requirements', 'SDS')
+            ->assertJsonPath('data.activities.0.actor.name', $ehs->name);
     }
 
     public function test_admin_can_delete_approved_prf_and_close_tracking_gap(): void

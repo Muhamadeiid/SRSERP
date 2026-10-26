@@ -175,6 +175,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::c
         Route::post('/prfs',                 [PrfController::class, 'store']);
         Route::get('/prfs/{prf}',            [PrfController::class, 'show']);
         Route::put('/prfs/{prf}',            [PrfController::class, 'update']);
+        Route::patch('/prfs/{prf}/ehs-requirements', [PrfController::class, 'updateEhsRequirements']);
         Route::delete('/prfs/{prf}',         [PrfController::class, 'destroy']);
         Route::post('/prfs/{prf}/cancel',    [PrfController::class, 'cancel']);
         Route::post('/prfs/{prf}/approve',     [PrfController::class, 'approve']);

@@ -62,9 +62,16 @@ export default function PrfNewPage() {
       .then(res => {
         const prf = res?.data
         if (!active || !prf) return
-        const isRequester = String(prf.requested_by) === String(user?.id) && (prf.approvals ?? []).length === 0
-        const canMaterialEdit = user?.role === 'admin' || (Array.isArray(user?.permissions) && user.permissions.includes('prf.approve_material'))
-        if (prf.status !== 'pending_material' || (!isRequester && !canMaterialEdit)) {
+        const isRequester = String(prf.requested_by) === String(user?.id)
+          && prf.status === 'pending_material'
+          && (prf.approvals ?? []).length === 0
+        const permissions = Array.isArray(user?.permissions) ? user.permissions : []
+        const canStageEdit = user?.role === 'admin'
+          ? ['pending_material', 'pending_procurement', 'pending_ehs', 'pending_depot'].includes(prf.status)
+          : (prf.status === 'pending_material' && permissions.includes('prf.approve_material'))
+            || (prf.status === 'pending_procurement' && permissions.includes('prf.approve_procurement'))
+            || (prf.status === 'pending_depot' && permissions.includes('prf.approve_depot'))
+        if (!isRequester && !canStageEdit) {
           navigate(`/purchase-request/${id}`, { replace: true })
           return
         }
@@ -202,7 +209,7 @@ export default function PrfNewPage() {
             <FileText className="w-5 h-5 text-primary" />
             {isEditing ? 'Edit Purchase Request' : 'New Purchase Request'}
           </h1>
-          <p className="text-sm text-neutral-400 mt-0.5">{isEditing ? 'Update your request before the first approval' : 'Submit a new PRF for procurement approval'}</p>
+          <p className="text-sm text-neutral-400 mt-0.5">{isEditing ? 'Update this request during your approval stage' : 'Submit a new PRF for procurement approval'}</p>
         </div>
         <button onClick={() => navigate(-1)}
           className="px-4 py-2 text-xs font-bold text-neutral-500 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-all">

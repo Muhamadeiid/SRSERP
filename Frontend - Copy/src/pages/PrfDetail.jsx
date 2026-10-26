@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import {
   getPrf, approvePrf, rejectPrf, updatePrfNumber, cancelPrf, deletePrf,
+  updatePrfEhsRequirements,
   PRF_STATUS_LABELS, PRF_STATUS_STYLES, MATERIAL_CATEGORIES, canActOnStage, cleanPrfNumber,
 } from '../services/prfService'
 import { createQuotation, getQuotations, getSuppliers } from '../services/procurementRegistryService'
@@ -36,6 +37,7 @@ export default function PrfDetail() {
   const [quotations, setQuotations] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [quoteForm, setQuoteForm] = useState(null)
+  const [ehsEditor, setEhsEditor] = useState(null)
 
   // Inline PRF-number editor (procurement / admin only)
   const [editingNumber, setEditingNumber] = useState(false)
@@ -67,9 +69,15 @@ export default function PrfDetail() {
   const hasLinkedPO      = !!prf?.purchase_order
   const requesterCanModify = String(prf?.requested_by) === String(user?.id)
     && prf?.status === 'pending_material' && (prf?.approvals ?? []).length === 0
-  const materialCanModify = prf?.status === 'pending_material'
-    && (user?.role === 'admin' || (Array.isArray(user?.permissions) && user.permissions.includes('prf.approve_material')))
-  const canModify = requesterCanModify || materialCanModify
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : []
+  const stageCanModify = user?.role === 'admin'
+    ? ['pending_material', 'pending_procurement', 'pending_ehs', 'pending_depot'].includes(prf?.status)
+    : (prf?.status === 'pending_material' && permissions.includes('prf.approve_material'))
+      || (prf?.status === 'pending_procurement' && permissions.includes('prf.approve_procurement'))
+      || (prf?.status === 'pending_depot' && permissions.includes('prf.approve_depot'))
+  const canModify = requesterCanModify || stageCanModify
+  const canEditEhs = prf?.status === 'pending_ehs'
+    && (user?.role === 'admin' || permissions.includes('prf.approve_ehs'))
   const canDelete = prf?.status === 'approved' && user?.role === 'admin' && !hasLinkedPO
 
   const saveNumber = async () => {
@@ -151,6 +159,26 @@ export default function PrfDetail() {
       navigate('/procurement', { replace: true })
     } catch (e) {
       alert(e.message || 'Failed to delete purchase request')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openEhsEditor = () => setEhsEditor((prf.items ?? []).map(item => ({
+    id: item.id,
+    description: item.description,
+    ehs_requirements: item.ehs_requirements === 'SDS' ? 'SDS' : 'No EHS Required',
+  })))
+
+  const saveEhsRequirements = async event => {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      const response = await updatePrfEhsRequirements(id, ehsEditor.map(({ id: itemId, ehs_requirements }) => ({ id: itemId, ehs_requirements })))
+      setPrf(response?.data ?? prf)
+      setEhsEditor(null)
+    } catch (e) {
+      alert(e.message || 'Failed to update safety requirements')
     } finally {
       setBusy(false)
     }
@@ -242,16 +270,22 @@ export default function PrfDetail() {
 
         <div className="flex items-center gap-2 shrink-0">
           {canModify && (
-            <>
-              <button onClick={() => navigate(`/purchase-request/${prf.id}/edit`)} disabled={busy}
-                className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 text-secondary text-xs font-bold rounded-lg hover:border-primary hover:text-primary disabled:opacity-50">
-                <Pencil className="w-3.5 h-3.5" /> Edit
-              </button>
+            <button onClick={() => navigate(`/purchase-request/${prf.id}/edit`)} disabled={busy}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 text-secondary text-xs font-bold rounded-lg hover:border-primary hover:text-primary disabled:opacity-50">
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+          {requesterCanModify && (
               <button onClick={handleCancel} disabled={busy}
                 className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-100 disabled:opacity-50">
                 <Ban className="w-3.5 h-3.5" /> Cancel
               </button>
-            </>
+          )}
+          {canEditEhs && (
+            <button onClick={openEhsEditor} disabled={busy}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-blue-200 text-blue-700 text-xs font-bold rounded-lg hover:bg-blue-50 disabled:opacity-50">
+              <Pencil className="w-3.5 h-3.5" /> Edit Safety
+            </button>
           )}
           <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${PRF_STATUS_STYLES[prf.status]}`}>
             {PRF_STATUS_LABELS[prf.status]}
@@ -547,6 +581,13 @@ export default function PrfDetail() {
         </div>
       )}
 
+      {ehsEditor && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onMouseDown={event => event.target === event.currentTarget && !busy && setEhsEditor(null)}>
+        <form onSubmit={saveEhsRequirements} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+          <div className="flex items-center border-b px-5 py-4"><div><h2 className="font-extrabold text-secondary-700">Edit Safety Requirements</h2><p className="text-xs text-neutral-400">EHS can change the safety requirement only.</p></div><button type="button" onClick={() => setEhsEditor(null)} disabled={busy} className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-100"><X className="h-4 w-4" /></button></div>
+          <div className="space-y-3 p-5">{ehsEditor.map((item, index) => <div key={item.id} className="grid grid-cols-[1fr_190px] items-center gap-3 rounded-lg border border-neutral-200 p-3"><div><p className="text-[10px] font-bold uppercase text-neutral-400">Item {index + 1}</p><p className="text-sm font-bold text-secondary-700">{item.description}</p></div><select value={item.ehs_requirements} onChange={event => setEhsEditor(current => current.map((row, rowIndex) => rowIndex === index ? { ...row, ehs_requirements: event.target.value } : row))} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm"><option value="SDS">SDS</option><option value="No EHS Required">No EHS Required</option></select></div>)}</div>
+          <div className="flex justify-end gap-2 border-t px-5 py-4"><button type="button" onClick={() => setEhsEditor(null)} disabled={busy} className="h-9 rounded-md border border-neutral-200 px-4 text-xs font-bold text-neutral-600">Cancel</button><button disabled={busy} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-xs font-bold text-white disabled:opacity-50">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Save Safety</button></div>
+        </form>
+      </div>}
       {quoteForm && <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><form onSubmit={saveQuote} className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto space-y-4"><div className="flex justify-between"><div><h2 className="font-extrabold">Add Supplier Quotation</h2><p className="text-xs text-neutral-400">Quotation data required by SOP clause 6.2.2</p></div><button type="button" onClick={()=>setQuoteForm(null)}><X/></button></div><div className="grid sm:grid-cols-2 gap-3"><select required value={quoteForm.supplier_id} onChange={e=>setQuoteForm({...quoteForm,supplier_id:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"><option value="">Approved Supplier</option>{suppliers.map(s=><option value={s.id} key={s.id}>{s.company_name}</option>)}</select>{[['reference','Quotation reference'],['requested_date','Requested date'],['received_date','Received date'],['expiry_date','Expiry date'],['incoterm','Incoterm'],['lead_time_days','Lead time days'],['available_quantity','Available quantity'],['minimum_order_quantity','Minimum order quantity'],['price_before_vat','Price before VAT'],['vat','VAT amount']].map(([k,p])=><input key={k} required={k==='price_before_vat'} type={k.includes('date')?'date':['lead_time_days','available_quantity','minimum_order_quantity','price_before_vat','vat'].includes(k)?'number':'text'} step="any" value={quoteForm[k]} placeholder={p} onChange={e=>setQuoteForm({...quoteForm,[k]:e.target.value})} className="border rounded-lg px-3 py-2 text-sm"/>)}</div><div className="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" checked={quoteForm.technical_compliant} onChange={e=>setQuoteForm({...quoteForm,technical_compliant:e.target.checked})}/> Technical compliant</label><label><input type="checkbox" checked={quoteForm.ehs_compliant} onChange={e=>setQuoteForm({...quoteForm,ehs_compliant:e.target.checked})}/> EHS compliant</label><label><input type="checkbox" checked={quoteForm.selected} onChange={e=>setQuoteForm({...quoteForm,selected:e.target.checked})}/> Selected quote</label></div><textarea value={quoteForm.supporting_documents} onChange={e=>setQuoteForm({...quoteForm,supporting_documents:e.target.value})} placeholder="Datasheets, QC sheets, validation tests, MSDS, manufacturing / shelf-life and packing references" className="w-full border rounded-lg p-3 text-sm"/><textarea value={quoteForm.notes} onChange={e=>setQuoteForm({...quoteForm,notes:e.target.value})} placeholder="Additional notes" className="w-full border rounded-lg p-3 text-sm"/><button disabled={busy} className="w-full py-3 bg-primary text-white rounded-xl font-bold">Save Quotation</button></form></div>}
     </div>
   )

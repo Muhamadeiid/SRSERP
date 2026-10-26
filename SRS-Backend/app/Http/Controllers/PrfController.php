@@ -343,6 +343,69 @@ class PrfController extends Controller
         });
     }
 
+    public function updateEhsRequirements(Request $request, Prf $prf): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['required', 'integer'],
+            'items.*.ehs_requirements' => ['required', Rule::in(['SDS', 'No EHS Required'])],
+        ]);
+
+        return DB::transaction(function () use ($prf, $validated) {
+            $lockedPrf = Prf::query()->lockForUpdate()->findOrFail($prf->id);
+            $user = auth()->user();
+            $canEditSafety = $lockedPrf->status === 'pending_ehs'
+                && ($user->isAdmin() || $user->hasPermission('prf.approve_ehs'));
+
+            if (!$canEditSafety) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Safety requirements can only be edited by EHS during the EHS review stage',
+                ], 403);
+            }
+
+            $before = $this->prfSnapshot($lockedPrf);
+            $items = $lockedPrf->items()->lockForUpdate()->get()->keyBy('id');
+            foreach ($validated['items'] as $row) {
+                $item = $items->get($row['id']);
+                if (!$item) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'One or more items do not belong to this purchase request',
+                    ], 422);
+                }
+                $item->update(['ehs_requirements' => $row['ehs_requirements']]);
+            }
+
+            $lockedPrf->refresh()->load('items');
+            $changes = $this->describePrfChanges($before, $this->prfSnapshot($lockedPrf));
+            if ($changes !== []) {
+                PrfActivity::create([
+                    'prf_id' => $lockedPrf->id,
+                    'actor_id' => $user->id,
+                    'action' => 'safety_updated',
+                    'changes' => $changes,
+                ]);
+                if ($lockedPrf->requested_by !== $user->id) {
+                    Notification::notifyUser(
+                        $lockedPrf->requested_by,
+                        'prf_updated',
+                        "PRF Safety Updated — {$lockedPrf->prf_number}",
+                        "{$user->name} updated the safety requirements on your purchase request.",
+                        ['prf_id' => $lockedPrf->id, 'path' => "/purchase-request/{$lockedPrf->id}"],
+                        true
+                    );
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Safety requirements updated',
+                'data' => $lockedPrf->fresh(['requester', 'items', 'approvals.approver', 'activities.actor']),
+            ]);
+        });
+    }
+
     public function destroy(Prf $prf): JsonResponse
     {
         $user = auth()->user();
@@ -596,8 +659,16 @@ class PrfController extends Controller
             return true;
         }
 
-        return $prf->status === 'pending_material'
-            && ($user->isAdmin() || $user->hasPermission('prf.approve_material'));
+        if ($user->isAdmin()) {
+            return in_array($prf->status, ['pending_material', 'pending_procurement', 'pending_ehs', 'pending_depot'], true);
+        }
+
+        return match ($prf->status) {
+            'pending_material' => $user->hasPermission('prf.approve_material'),
+            'pending_procurement' => $user->hasPermission('prf.approve_procurement'),
+            'pending_depot' => $user->hasPermission('prf.approve_depot'),
+            default => false,
+        };
     }
 
     private function prfSnapshot(Prf $prf): array
