@@ -63,6 +63,14 @@ class LeaveRequestController extends Controller
         ) {
             // Full visibility.
         } else {
+            $finalizableTypes = [];
+            if ($user->hasPermission('leaves.finalize')) {
+                $finalizableTypes[] = 'lrf';
+            }
+            if ($user->hasPermission('overtime.finalize')) {
+                $finalizableTypes[] = 'otr';
+            }
+
             $myEmp = Employee::active()->where('user_id', $user->id)->first();
             $managedEmployees = Employee::active()
                 ->where(function ($employees) use ($user, $myEmp) {
@@ -74,12 +82,15 @@ class LeaveRequestController extends Controller
                 ->get(['id', 'name']);
             $empIds = $managedEmployees->pluck('id');
             $empNames = $managedEmployees->pluck('name');
-            $query->where(function ($q) use ($user, $empIds, $empNames) {
+            $query->where(function ($q) use ($user, $empIds, $empNames, $finalizableTypes) {
                 $q->where('user_id', $user->id)
                     ->orWhereIn('employee_id', $empIds)
                     ->orWhere(function ($legacy) use ($empNames) {
                         $legacy->whereNull('employee_id')->whereIn('employee_name', $empNames);
                     });
+                if ($finalizableTypes !== []) {
+                    $q->orWhereIn('type', $finalizableTypes);
+                }
             });
         }
 
@@ -410,6 +421,7 @@ class LeaveRequestController extends Controller
         if (
             !in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
             && !$user->hasPermission('leaves.approve_hr')
+            && !$this->canFinalize($leaveRequest, $user)
             && (int) $leaveRequest->user_id !== (int) $user->id
             && !$this->isDirectManager($leaveRequest, $user->id)
         ) {
@@ -539,6 +551,7 @@ class LeaveRequestController extends Controller
         abort_unless(
             in_array($user->role, ['admin', 'depot_manager', 'hr'], true)
                 || $user->hasPermission('leaves.approve_hr')
+                || $user->hasPermission('leaves.finalize')
                 || (int) $leaveRequest->user_id === (int) $user->id
                 || $this->isDirectManager($leaveRequest, $user->id),
             403,
@@ -618,9 +631,9 @@ class LeaveRequestController extends Controller
         });
 
         $typeLabel = $leaveRequest->type === 'lrf' ? 'Leave Request' : 'Overtime Request';
-        // Depot manager now owns the final step — push.
+        // Notify the roles selected for the request-type final approval step.
         Notification::resolveFor('leave_request_id', $leaveRequest->id);
-        Notification::notifyDepotManagers($leaveRequest->type . '_hr_approved', "{$typeLabel} - Final Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} {$this->ref($leaveRequest)} passed manager and HR review. Awaiting your final approval.", ['leave_request_id' => $leaveRequest->id]);
+        Notification::notifyPermission($this->finalizePermissionKey($leaveRequest), $leaveRequest->type . '_hr_approved', "{$typeLabel} - Final Approval Required", "{$leaveRequest->employee_name}'s {$typeLabel} {$this->ref($leaveRequest)} passed manager and HR review. Awaiting your final approval.", ['leave_request_id' => $leaveRequest->id]);
 
         return response()->json(['success' => true, 'data' => $leaveRequest->fresh(['approver:id,name,e_signature,role', 'managerApprover:id,name,e_signature,role', 'hrApprover:id,name,e_signature,role'])]);
     }
@@ -628,8 +641,8 @@ class LeaveRequestController extends Controller
     public function approve(Request $request, LeaveRequest $leaveRequest): JsonResponse
     {
         $user = auth()->user();
-        if (!in_array($user->role, ['admin', 'depot_manager'])) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        if (!$this->canFinalize($leaveRequest, $user)) {
+            return response()->json(['success' => false, 'message' => 'You do not have final approval permission for this request type'], 403);
         }
         if (!in_array($leaveRequest->status, ['pending', 'manager_approved', 'hr_approved'], true)) {
             return response()->json(['success' => false, 'message' => 'Request is not awaiting approval'], 422);
@@ -637,7 +650,7 @@ class LeaveRequestController extends Controller
 
         $changes = $this->validatedApprovalRequestChanges($request, $leaveRequest);
 
-        // Depot Manager and Super Admin may finalize an outstanding request directly.
+        // A role granted the request-type finalization permission may close any outstanding stage.
         // Skipped approval stages remain unsigned so the printed form stays truthful.
         DB::transaction(function () use ($leaveRequest, $changes, $user) {
             $locked = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
@@ -676,7 +689,7 @@ class LeaveRequestController extends Controller
             || $this->isDirectManager($leaveRequest, $user->id);
         $canApproveHr = in_array($user->role, ['admin', 'hr'], true)
             || $user->hasPermission('leaves.approve_hr');
-        $canApproveDepot = in_array($user->role, ['admin', 'depot_manager'], true);
+        $canApproveDepot = $this->canFinalize($leaveRequest, $user);
 
         if (!($canApproveManager || $canApproveHr || $canApproveDepot)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
@@ -1382,6 +1395,17 @@ class LeaveRequestController extends Controller
         return $matches->count() === 1 ? $matches->first() : null;
     }
 
+    private function finalizePermissionKey(LeaveRequest $leaveRequest): string
+    {
+        return $leaveRequest->type === 'otr' ? 'overtime.finalize' : 'leaves.finalize';
+    }
+
+    private function canFinalize(LeaveRequest $leaveRequest, User $user): bool
+    {
+        return $user->role === 'admin'
+            || $user->hasPermission($this->finalizePermissionKey($leaveRequest));
+    }
+
     private function attachWorkflowAccess($requests, User $user): void
     {
         $isDepotAdmin = in_array($user->role, ['admin', 'depot_manager'], true);
@@ -1411,7 +1435,7 @@ class LeaveRequestController extends Controller
             );
             $request->setAttribute(
                 'can_approve_depot',
-                $isDepotAdmin && in_array($request->status, ['pending', 'manager_approved', 'hr_approved'], true)
+                $this->canFinalize($request, $user) && in_array($request->status, ['pending', 'manager_approved', 'hr_approved'], true)
             );
             $request->setAttribute(
                 'can_approve_cancellation',

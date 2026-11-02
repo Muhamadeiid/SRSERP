@@ -130,6 +130,24 @@ class Notification extends Model
         static::notifyRole($role, $type, $title, $body, $data, $push, $options);
     }
 
+    /** Notify every active role granted a workflow permission. Super Admin remains a fallback owner. */
+    public static function notifyPermission(string $permissionKey, string $type, string $title, string $body, array $data = [], bool $push = true, array $options = []): void
+    {
+        $roles = \DB::table('role_permissions')
+            ->where('permission_key', $permissionKey)
+            ->pluck('role')
+            ->unique()
+            ->values();
+
+        if (!$roles->contains('admin')) {
+            $roles->push('admin');
+        }
+
+        foreach ($roles as $role) {
+            static::notifyRole($role, $type, $title, $body, $data, $push, $options);
+        }
+    }
+
     public static function notifyRole(string $role, string $type, string $title, string $body, array $data = [], bool $push = false, array $options = []): void
     {
         $data = static::withNavigationPath($type, $data);

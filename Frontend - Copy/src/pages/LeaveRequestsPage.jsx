@@ -2318,7 +2318,7 @@ function ApprovalProgress({ req }) {
 }
 
 // ── request detail modal ──────────────────────────────────────
-function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, onRequestCancellation, onCancelApproved, onApproveCancellation, onRejectCancellation, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, onUpdated, focusApproval = false }) {
+function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApprove, onReject, onReschedule, onCancel, onRequestCancellation, onCancelApproved, onApproveCancellation, onRejectCancellation, userRole, userDepartment, currentUserId, isDirectManager, hasHrApprovalAccess = false, hasFinalApprovalAccess = false, onUpdated, focusApproval = false }) {
   const { departments } = useLookups()
   const resolveDept = (raw) => {
     if (!raw) return ''
@@ -2414,6 +2414,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
   const isLRF       = req.type === 'lrf'
   const isDepotAdmin = userRole === 'admin' || userRole === 'depot_manager'
   const canHrApprove = userRole === 'admin' || userRole === 'hr' || hasHrApprovalAccess
+  const canFinalize  = userRole === 'admin' || hasFinalApprovalAccess
   const isHR         = isDepotAdmin || canHrApprove
   const canWithdraw  = ['pending','manager_approved','hr_approved','approved'].includes(req.status)
     && req.user_id != null
@@ -2993,8 +2994,8 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {/* Depot Manager / Super Admin may finalize any outstanding stage. */}
-            {['pending', 'manager_approved'].includes(req.status) && isDepotAdmin && (
+            {/* Any role granted the request-type finalization permission may close an outstanding stage. */}
+            {['pending', 'manager_approved', 'hr_approved'].includes(req.status) && canFinalize && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule" aria-label="Reschedule"
@@ -3017,7 +3018,7 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
               </>
             )}
 
-            {awaitingHrApproval && canHrApprove && !isDepotAdmin && (
+            {awaitingHrApproval && canHrApprove && !canFinalize && (
               <>
                 <button onClick={() => onReschedule(req.id)}
                   title="Reschedule" aria-label="Reschedule"
@@ -3042,18 +3043,22 @@ function RequestDetailModal({ req, onClose, onManagerApprove, onHrApprove, onApp
 
             {isDepotAdmin && req.status === 'hr_approved' && (
               <>
-                <button onClick={() => onReschedule(req.id)}
-                  title="Reschedule" aria-label="Reschedule"
-                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
-                  <CalendarClock className="w-4 h-4" />
-                  <span className="sm:hidden">Reschedule</span>
-                </button>
-                <button onClick={() => onReject(req.id)}
-                  title="Reject" aria-label="Reject"
-                  className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
-                  <XCircle className="w-4 h-4" />
-                  <span className="sm:hidden">Reject</span>
-                </button>
+                {isDepotAdmin && (
+                  <>
+                    <button onClick={() => onReschedule(req.id)}
+                      title="Reschedule" aria-label="Reschedule"
+                      className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-amber-700 sm:text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
+                      <CalendarClock className="w-4 h-4" />
+                      <span className="sm:hidden">Reschedule</span>
+                    </button>
+                    <button onClick={() => onReject(req.id)}
+                      title="Reject" aria-label="Reject"
+                      className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-red-700 sm:text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all text-sm font-semibold sm:font-normal">
+                      <XCircle className="w-4 h-4" />
+                      <span className="sm:hidden">Reject</span>
+                    </button>
+                  </>
+                )}
                 <button onClick={submitFinalApproval}
                   title="Final Approve" aria-label="Final Approve"
                   className="w-full sm:w-10 sm:h-10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2 sm:gap-0 px-4 sm:px-0 text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all text-sm font-bold sm:font-normal">
@@ -4071,6 +4076,9 @@ export default function LeaveRequestsPage({ initialTab = 'lrf', showOnly }) {
           currentUserId={user?.id}
           isDirectManager={Boolean(viewReq.is_direct_manager || viewReq.can_approve_manager || isDirectManagerOf(viewReq))}
           hasHrApprovalAccess={Boolean(viewReq.can_approve_hr || isHrApprover)}
+          hasFinalApprovalAccess={Boolean(viewReq.can_approve_depot || (viewReq.type === 'otr'
+            ? permissions.includes('overtime.finalize')
+            : permissions.includes('leaves.finalize')))}
           onUpdated={handleRequestUpdated}
           focusApproval={focusApproval}
         />
