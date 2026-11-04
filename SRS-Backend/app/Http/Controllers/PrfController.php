@@ -211,9 +211,13 @@ class PrfController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($data, $user) {
+        $requestYear = isset($data['date'])
+            ? (int) date('Y', strtotime($data['date']))
+            : (int) now()->year;
+
+        $prf = DB::transaction(function () use ($data, $user, $requestYear) {
             $prf = Prf::create([
-                'prf_number'        => filled($data['prf_number'] ?? null) ? $data['prf_number'] : Prf::generateNumber(),
+                'prf_number'        => filled($data['prf_number'] ?? null) ? $data['prf_number'] : Prf::generateNumber($requestYear),
                 'requested_by'      => $user->id,
                 'date'              => $data['date']              ?? now()->toDateString(),
                 'delivery_location' => $data['delivery_location'] ?? null,
@@ -239,14 +243,21 @@ class PrfController extends Controller
                 ]);
             }
 
+            return $prf;
+        });
+
+        // Notifications must never roll back an otherwise valid purchase request.
+        try {
             $this->notifyStageApprovers($prf, 'pending_material');
             $this->notifyFutureStageApprovers($prf);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
 
-            return response()->json([
-                'success' => true,
-                'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
-            ], 201);
-        });
+        return response()->json([
+            'success' => true,
+            'data'    => $prf->fresh(['requester', 'items', 'approvals.approver']),
+        ], 201);
     }
 
     // ─────────────────────────────────────────────────────────────

@@ -205,6 +205,22 @@ class PrfApprovalWorkflowTest extends TestCase
             ->assertJsonPath('data.requester_phone', '01012345678');
     }
 
+    public function test_procurement_can_create_a_prf_without_notification_failures_rolling_it_back(): void
+    {
+        $procurement = $this->user('procurement');
+
+        Sanctum::actingAs($procurement);
+        $this->postJson('/api/procurement/prfs', [
+            'date' => '2096-11-03',
+            'delivery_location' => 'Ganz depot',
+            'material_category' => ['Components and Parts'],
+            'items' => [['description' => 'Procurement item', 'quantity' => 1, 'unit' => 'pcs']],
+        ])->assertCreated()
+            ->assertJsonPath('data.requested_by', $procurement->id)
+            ->assertJsonPath('data.status', 'pending_material')
+            ->assertJsonPath('data.prf_number', 'PRF-EG1-2096-0001');
+    }
+
     public function test_material_controller_can_edit_items_and_the_editor_is_audited(): void
     {
         $requester = $this->user('staff');
