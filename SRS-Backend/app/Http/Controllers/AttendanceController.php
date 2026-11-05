@@ -134,7 +134,12 @@ class AttendanceController extends Controller
             'department',
         ]);
 
-        $attendances = $this->attendanceService->getAttendance($filters);
+        $attendanceFilters = $filters;
+        if (!empty($filters['date']) && empty($filters['employee_id'])) {
+            $attendanceFilters['active_only'] = true;
+        }
+
+        $attendances = $this->attendanceService->getAttendance($attendanceFilters);
 
         // Never surface attendance records before an employee's starting date.
         // This also protects historical views from any legacy/manual rows that
@@ -228,6 +233,13 @@ class AttendanceController extends Controller
         // employees are represented for display as either Absent or Day Off;
         // these virtual rows are never written to the attendance table.
         if (!empty($filters['date']) && empty($filters['employee_id'])) {
+            // A daily overview represents one row per active employee. Keep the
+            // newest row if an old database contains legacy duplicates.
+            $attendances = $attendances
+                ->sortByDesc('updated_at')
+                ->unique(fn ($attendance) => (int) $attendance->employee_id)
+                ->values();
+
             $date = Carbon::parse($filters['date'])->startOfDay();
             $dateKey = $date->toDateString();
             $isHoliday = $holidays->contains(function ($holiday) use ($dateKey) {

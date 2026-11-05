@@ -562,6 +562,10 @@ class AttendanceService
             $query->forEmployee($filters['employee_id']);
         }
 
+        if (!empty($filters['active_only'])) {
+            $query->whereHas('employee', fn ($employeeQuery) => $employeeQuery->active());
+        }
+
         // Filter by date range
         if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
             $query->dateRange($filters['start_date'], $filters['end_date']);
