@@ -134,12 +134,18 @@ class AttendanceController extends Controller
             'department',
         ]);
 
-        $attendanceFilters = $filters;
-        if (!empty($filters['date']) && empty($filters['employee_id'])) {
-            $attendanceFilters['active_only'] = true;
+        // An empty date must not fall through to every record ever stored: the
+        // daily screen would show months of punches under a single date.
+        $hasPeriod = !empty($filters['date'])
+            || (!empty($filters['start_date']) && !empty($filters['end_date']));
+        if (!$hasPeriod && empty($filters['employee_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Choose a date or a date range.',
+            ], 422);
         }
 
-        $attendances = $this->attendanceService->getAttendance($attendanceFilters);
+        $attendances = $this->attendanceService->getAttendance($filters);
 
         // Never surface attendance records before an employee's starting date.
         // This also protects historical views from any legacy/manual rows that
@@ -233,13 +239,6 @@ class AttendanceController extends Controller
         // employees are represented for display as either Absent or Day Off;
         // these virtual rows are never written to the attendance table.
         if (!empty($filters['date']) && empty($filters['employee_id'])) {
-            // A daily overview represents one row per active employee. Keep the
-            // newest row if an old database contains legacy duplicates.
-            $attendances = $attendances
-                ->sortByDesc('updated_at')
-                ->unique(fn ($attendance) => (int) $attendance->employee_id)
-                ->values();
-
             $date = Carbon::parse($filters['date'])->startOfDay();
             $dateKey = $date->toDateString();
             $isHoliday = $holidays->contains(function ($holiday) use ($dateKey) {
@@ -343,22 +342,30 @@ class AttendanceController extends Controller
             }
         }
 
+        $totalWorkforce = null;
+        if (empty($filters['employee_id'])) {
+            $workforceIds = Employee::active()
+                ->when(!empty($filters['date']), function ($query) use ($filters) {
+                    $query->where(function ($hired) use ($filters) {
+                        $hired->whereNull('hiring_date')
+                            ->orWhereDate('hiring_date', '<=', $filters['date']);
+                    });
+                })
+                ->pluck('id');
+            // Someone who has left since still counts on the days they worked
+            if (!empty($filters['date'])) {
+                $workforceIds = $workforceIds->merge($attendances->pluck('employee_id'));
+            }
+            $totalWorkforce = $workforceIds->map(fn ($id) => (int) $id)->unique()->count();
+        }
+
         return response()->json([
             'success'  => true,
             'data'     => $attendances,
             'leaves'   => $leaves,
             'otrs'     => $otrs,
             'holidays' => $holidays,
-            'total_workforce' => empty($filters['employee_id'])
-                ? Employee::active()
-                    ->when(!empty($filters['date']), function ($query) use ($filters) {
-                        $query->where(function ($hired) use ($filters) {
-                            $hired->whereNull('hiring_date')
-                                ->orWhereDate('hiring_date', '<=', $filters['date']);
-                        });
-                    })
-                    ->count()
-                : null,
+            'total_workforce' => $totalWorkforce,
         ], 200);
     }
 

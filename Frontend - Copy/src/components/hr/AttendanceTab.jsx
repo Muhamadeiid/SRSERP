@@ -900,6 +900,7 @@ export default function AttendanceTab() {
   const [overviewDate,   setOverviewDate]   = useState(todayStr)
   const [overviewRecs,   setOverviewRecs]   = useState([])
   const [overviewBusy,   setOverviewBusy]   = useState(false)
+  const overviewRequestRef = useRef(0)
   const [overviewSearch, setOverviewSearch] = useState('')
   const [overviewErr,    setOverviewErr]    = useState(null)
   const [overviewMetricFilter, setOverviewMetricFilter] = useState(() => {
@@ -964,10 +965,18 @@ export default function AttendanceTab() {
   // ── Overview data ─────────────────────────────────────────────────────────
   const loadOverview = async (dateOverride) => {
     const date = typeof dateOverride === 'string' ? dateOverride : overviewDate
+    // Only the newest request may fill the screen: a slower older answer must
+    // not replace the date the user is looking at.
+    const requestId = ++overviewRequestRef.current
+    if (!date) {
+      setOverviewBusy(false)
+      return
+    }
     setOverviewBusy(true)
     setOverviewErr(null)
     try {
       const res = await attendanceService.getAttendance({ date })
+      if (requestId !== overviewRequestRef.current) return
       if (res.success) {
         setOverviewRecs(res.data ?? [])
         setOverviewLeaves(res.leaves ?? [])
@@ -980,13 +989,16 @@ export default function AttendanceTab() {
         setOverviewErr('Server returned an error — check console')
       }
     } catch (e) {
+      if (requestId !== overviewRequestRef.current) return
       setOverviewRecs([])
       const msg = e?.response?.status === 401
         ? 'Session expired — please log in again'
         : e?.response?.data?.message || e?.message || 'Cannot reach the server — is the API running?'
       setOverviewErr(msg)
     }
-    finally { setOverviewBusy(false) }
+    finally {
+      if (requestId === overviewRequestRef.current) setOverviewBusy(false)
+    }
   }
 
   useEffect(() => {

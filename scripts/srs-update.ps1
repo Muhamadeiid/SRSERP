@@ -91,7 +91,9 @@ if ($repoScriptHash -and ($PSCommandPath -ne $repoUpdateScript -or $scriptHashBe
 # What changed?
 $changed = git diff --name-only "$local..HEAD" 2>&1
 $composerNeeded = $changed -match 'composer\.(json|lock)|SRS-Backend/app/|SRS-Backend/routes/|SRS-Backend/config/'
-$migrationsNeeded = $forceFrontendRefresh -or ($changed -match 'SRS-Backend/database/migrations/')
+# Always migrate: Laravel skips what already ran, and a migration that failed on
+# an earlier run must be retried even though the source is now up to date.
+$migrationsNeeded = $true
 
 # Track what was actually deployed, independently from the Git working tree.
 # The source tree hash changes only when Frontend - Copy changes. The deployed
@@ -137,7 +139,7 @@ if ($composerNeeded) {
 }
 
 if ($migrationsNeeded) {
-    Log "Migrations changed - running artisan migrate..."
+    Log "Running artisan migrate..."
     Set-Location $backend
     & $php artisan migrate --force 2>&1 | ForEach-Object { Log "  $_" }
     if ($LASTEXITCODE -ne 0) {

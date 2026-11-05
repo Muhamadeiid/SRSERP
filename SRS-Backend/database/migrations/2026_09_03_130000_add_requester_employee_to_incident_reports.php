@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // The create migration already adds this column on a fresh database
+        if (Schema::hasColumn('incident_reports', 'requester_employee_id')) {
+            return;
+        }
+
         Schema::table('incident_reports', function (Blueprint $table) {
             $table->foreignId('requester_employee_id')
                 ->nullable()
