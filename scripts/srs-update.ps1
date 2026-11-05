@@ -15,6 +15,12 @@ function Log($m) {
     Add-Content -Path $log -Value $line
 }
 
+function Stop-Update($m) {
+    Log "ERROR: $m"
+    Log "=== UPDATE FAILED ==="
+    throw $m
+}
+
 Add-Content -Path $log -Value ""
 Log "=== SRS UPDATE STARTED ==="
 
@@ -38,6 +44,9 @@ Log "Snapped .env and machine_lock"
 # Fetch and figure out if there is anything new
 Log "Fetching from origin..."
 git fetch origin main 2>&1 | ForEach-Object { Log "  $_" }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Update "Could not fetch the latest source from GitHub."
+}
 
 $local = (git rev-parse HEAD).Trim()
 $remote = (git rev-parse origin/main).Trim()
@@ -52,6 +61,9 @@ Log "Updating..."
 
 # Hard reset — assumes no local edits worth keeping outside .env / machine_lock
 git reset --hard origin/main 2>&1 | ForEach-Object { Log "  $_" }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Update "Could not update the local repository."
+}
 
 # Restore protected files
 Copy-Item $snapEnv "$backend\.env" -Force -EA SilentlyContinue
@@ -118,6 +130,9 @@ if ($composerNeeded) {
     Log "Backend files changed - reinstalling composer packages..."
     Set-Location $backend
     & $php $composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | Select-Object -Last 5 | ForEach-Object { Log "  $_" }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Update "Composer install failed. The backend was not safely updated."
+    }
     Set-Location $bd
 }
 
@@ -125,6 +140,9 @@ if ($migrationsNeeded) {
     Log "Migrations changed - running artisan migrate..."
     Set-Location $backend
     & $php artisan migrate --force 2>&1 | ForEach-Object { Log "  $_" }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Update "Database migration failed. Fix the migration error before using the new code."
+    }
     Set-Location $bd
 }
 
@@ -175,7 +193,13 @@ if ($frontendNeeded) {
 Set-Location $backend
 Log "Rebuilding Laravel production caches..."
 & $php artisan optimize:clear 2>&1 | ForEach-Object { Log "  $_" }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Update "Laravel cache cleanup failed."
+}
 & $php artisan optimize 2>&1 | ForEach-Object { Log "  $_" }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Update "Laravel production cache rebuild failed."
+}
 
 # Restart the PHP HTTP server
 Log "Restarting PHP server..."

@@ -108,6 +108,23 @@ class AttendanceController extends Controller
      */
     public function index(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'employee_id' => 'nullable|integer|min:1',
+            'start_date' => 'nullable|date_format:Y-m-d',
+            'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
+            'date' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|string|max:50',
+            'department' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid attendance filters.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
         $filters = $request->only([
             'employee_id',
             'start_date',

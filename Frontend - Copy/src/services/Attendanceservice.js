@@ -2,6 +2,14 @@
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
 
+const normalizeDateParam = (value) => {
+  if (typeof value === 'string') return value
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10)
+  }
+  return undefined
+}
+
 // Create axios instance with auth token
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -59,7 +67,13 @@ export const attendanceService = {
    * Get attendance records with filters
    */
   getAttendance: async (filters = {}) => {
-    const response = await api.get('/attendance', { params: filters })
+    const params = {
+      ...filters,
+      date: normalizeDateParam(filters.date),
+      start_date: normalizeDateParam(filters.start_date),
+      end_date: normalizeDateParam(filters.end_date),
+    }
+    const response = await api.get('/attendance', { params })
     return response.data
   },
   getDashboardWeek: async (startDate, endDate) => {

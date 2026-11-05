@@ -963,7 +963,7 @@ export default function AttendanceTab() {
 
   // ── Overview data ─────────────────────────────────────────────────────────
   const loadOverview = async (dateOverride) => {
-    const date = dateOverride ?? overviewDate
+    const date = typeof dateOverride === 'string' ? dateOverride : overviewDate
     setOverviewBusy(true)
     setOverviewErr(null)
     try {
@@ -1346,7 +1346,7 @@ export default function AttendanceTab() {
               <p className="text-sm text-neutral-400 mt-0.5">Biometric overview — daily punch records</p>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={loadOverview} disabled={overviewBusy}
+              <button onClick={() => loadOverview()} disabled={overviewBusy}
                 className="flex items-center gap-1.5 px-3 h-9 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 transition-all">
                 <RefreshCw className={`w-4 h-4 ${overviewBusy?'animate-spin':''}`} />Refresh
               </button>
