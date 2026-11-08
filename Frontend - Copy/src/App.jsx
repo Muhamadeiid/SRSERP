@@ -76,6 +76,7 @@ const MaintenanceSchedulePage = lazyWithRetry(() => import('./pages/MaintenanceS
 const FleetChecksPage      = lazyWithRetry(() => import('./pages/FleetChecksPage'))
 const WithdrawalsPage      = lazyWithRetry(() => import('./pages/WithdrawalsPage'))
 const ReleaseNotesPage     = lazyWithRetry(() => import('./pages/ReleaseNotesPage'))
+const PartsCataloguePage   = lazyWithRetry(() => import('./pages/PartsCataloguePage'))
 
 // HR tab components — each mounted at its own route
 const WorkforceTab      = lazyWithRetry(importWorkforce)
@@ -291,6 +292,7 @@ export default function App() {
           </ProtectedRoute>
         }>
           <Route index element={<ProductsPage />} />
+          <Route path="catalog" element={<PartsCataloguePage />} />
           <Route path="rotable" element={<ComingSoon title="Rotable Parts" />} />
           <Route path="bad"     element={<ComingSoon title="Bad Items"     />} />
           <Route path="reports" element={<ComingSoon title="Reports"       />} />

@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../store/slices/authSlice'
 import {
   Package, RotateCcw, AlertTriangle, BarChart3, FileOutput,
-  ChevronLeft, ChevronRight, LogOut, Plus, Download, Menu,
+  ChevronLeft, ChevronRight, LogOut, Plus, Download, Menu, Boxes,
 } from 'lucide-react'
 import { useSidebar } from '../hooks/useSidebar'
 import ProfileAvatar from '../components/profile/ProfileAvatar'
@@ -12,6 +12,7 @@ import CommandCenterSearch from '../components/dashboard/CommandCenterSearch'
 
 const NAV_ITEMS = [
   { label: 'Material Ledger', path: '/inventory',         icon: Package,       end: true },
+  { label: 'Parts Catalogue', path: '/inventory/catalog', icon: Boxes                 },
   // Lives outside the Inventory shell so every signed-in user can raise one.
   { label: 'Release Notes',   path: '/release-notes',     icon: FileOutput            },
   { label: 'Rotable Parts',   path: '/inventory/rotable', icon: RotateCcw             },
