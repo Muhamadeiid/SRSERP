@@ -40,6 +40,10 @@ use Illuminate\Support\Facades\Route;
 // ── Public ────────────────────────────────────────────────────────────────────
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
+// Licence: reachable while the system is locked
+Route::get('/license', [\App\Http\Controllers\LicenseController::class, 'status']);
+Route::post('/license/activate', [\App\Http\Controllers\LicenseController::class, 'activate'])->middleware('throttle:10,1');
+
 // ── Authenticated (all roles) ─────────────────────────────────────────────────
 Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::class])->group(function () {
 
