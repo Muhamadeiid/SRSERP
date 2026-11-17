@@ -175,14 +175,16 @@ class AttendanceService
                 continue;
             }
 
-            // A reviewed manual day is authoritative, including deliberately
-            // missing punches and status overrides. Keep the raw device logs
-            // without replacing that decision on new or duplicate uploads.
+            // A reviewed manual day is authoritative: new or duplicate uploads
+            // never replace what was entered. The one exception is a manual
+            // check-in with no check-out yet (e.g. the device was down in the
+            // morning): a later device punch fills only the missing check-out.
             $manual = Attendance::where('employee_id', $employee->id)
                 ->whereDate('date', $date)
                 ->where('is_manual', true)
-                ->exists();
+                ->first();
             if ($manual) {
+                $this->fillManualCheckOut($manual, $employee, $date, $punchCode);
                 foreach ($newLogs as $log) {
                     $log->update(['processed' => true]);
                 }
@@ -275,6 +277,39 @@ class AttendanceService
             'processed' => $processedCount,
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Completes a manual day that has a check-in but no check-out with the
+     * last device punch of that day. Check-in, status and every other value
+     * entered by hand stay as they are.
+     */
+    private function fillManualCheckOut(Attendance $day, Employee $employee, string $date, string $punchCode): void
+    {
+        if (! $day->check_in || $day->check_out) {
+            return;
+        }
+
+        $lastPunch = AttendanceLog::whereDate('timestamp', $date)
+            ->orderBy('timestamp')
+            ->get()
+            ->filter(fn ($log) => $this->normalizePunchCode($log->punch_code) === $punchCode)
+            ->last()?->timestamp;
+        $checkIn = Carbon::parse($date . ' ' . $day->check_in);
+
+        // Only a punch clearly after the check-in counts as leaving
+        if (! $lastPunch || $checkIn->diffInMinutes($lastPunch, false) < AttendancePolicy::int('attendance_single_punch_gap_minutes')) {
+            return;
+        }
+
+        $expectedHours = (float) ($day->expected_hours ?: $this->getExpectedHours($employee));
+        $calculated = $this->calculateAttendance($checkIn, $lastPunch, $expectedHours, $employee->isIntervention());
+
+        $day->update([
+            'check_out'      => $calculated['check_out'],
+            'work_hours'     => $calculated['work_hours'],
+            'overtime_hours' => $calculated['overtime_hours'],
+        ] + ($day->status === 'incomplete' ? ['status' => $calculated['status']] : []));
     }
 
     private function normalizePunchCode(?string $punchCode): string
