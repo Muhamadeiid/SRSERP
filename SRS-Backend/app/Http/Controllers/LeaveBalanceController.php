@@ -99,13 +99,41 @@ class LeaveBalanceController extends Controller
             ], 403);
         }
 
+        return response()->json(['success' => true, 'data' => $this->enriched($this->balanceFor($employee))]);
+    }
+
+    // GET /my/leave-balance — the signed-in user's own remaining days, when
+    // the account is linked to an employee. Only totals and remainings: the
+    // full breakdown stays with HR and approvers.
+    public function mine(): JsonResponse
+    {
+        $employee = Employee::where('user_id', auth()->id())->first();
+        if (!$employee) {
+            return response()->json(['success' => true, 'data' => null]);
+        }
+
+        $balance = $this->enriched($this->balanceFor($employee));
+
+        return response()->json(['success' => true, 'data' => [
+            'annual_total'     => (float) ($balance['annual'] ?? 0),
+            'annual_remaining' => (float) $balance['annual_remaining_effective'],
+            'casual_total'     => (float) ($balance['casual'] ?? 0),
+            'casual_remaining' => (float) $balance['casual_remaining_effective'],
+            'sick_total'       => (float) ($balance['sick'] ?? 0),
+            'sick_remaining'   => (float) $balance['sick_remaining_effective'],
+            'pending_days'     => (float) ($balance['reserved_annual_days'] + $balance['reserved_casual_days'] + $balance['reserved_early_days']),
+        ]]);
+    }
+
+    private function balanceFor(Employee $employee): LeaveBalance
+    {
         $this->deductions->processDue($employee->id);
         $this->leaveYears->refreshDue($employee->id);
 
         $settings = SystemSetting::whereIn('key', ['default_annual_days','default_casual_days','default_sick_days'])
             ->pluck('value', 'key');
 
-        $balance = LeaveBalance::firstOrCreate(
+        return LeaveBalance::firstOrCreate(
             ['employee_id' => $employee->id],
             [
                 'annual' => (int) ($settings['default_annual_days'] ?? 21),
@@ -115,8 +143,6 @@ class LeaveBalanceController extends Controller
                 'leave_cycle_started_on' => $this->leaveYears->currentCycleStart()->toDateString(),
             ]
         );
-
-        return response()->json(['success' => true, 'data' => $this->enriched($balance)]);
     }
 
     // PUT /employees/{employee}/leave-balance  (HR/admin/depot_manager only)

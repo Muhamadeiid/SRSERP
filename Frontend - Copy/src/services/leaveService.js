@@ -60,6 +60,7 @@ async function request(path, options = {}) {
 }
 
 export const getLeaveBalance   = (employeeId) => cachedRequest(`/employees/${employeeId}/leave-balance`, 30_000)
+export const getMyLeaveBalance = () => request('/my/leave-balance')
 export const updateLeaveBalance = (employeeId, data) => mutate(`/employees/${employeeId}/leave-balance`, { method: 'PUT', body: JSON.stringify(data) })
 
 export const getLeaveRequests  = (params = {}) => {

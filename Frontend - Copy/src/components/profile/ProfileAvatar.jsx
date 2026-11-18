@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Check, Crop, Loader2, Mail, Phone, RotateCcw, Trash2, Upload, X, ZoomIn } from 'lucide-react'
+import { CalendarDays, Camera, Check, Crop, Loader2, Mail, Phone, RotateCcw, Trash2, Upload, X, ZoomIn } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { getProfilePhoto, removeProfilePhoto, updateProfileContact, uploadProfilePhoto } from '../../services/authService'
+import { getMyLeaveBalance } from '../../services/leaveService'
 import { refreshUser } from '../../store/slices/authSlice'
 
 let cachedUserId = null
@@ -40,6 +41,8 @@ const initials = name => String(name || 'User')
   .join('')
   .toUpperCase()
 
+const days = value => Number(value || 0).toLocaleString('en', { maximumFractionDigits: 2 })
+
 const CROP_SIZE = 280
 const OUTPUT_SIZE = 512
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
@@ -56,6 +59,8 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [contact, setContact] = useState({ company_email: '', mobile_number: '' })
   const [contactSaved, setContactSaved] = useState(false)
+  // undefined while loading, null when the account has no linked employee
+  const [leaveBalance, setLeaveBalance] = useState(undefined)
   const inputRef = useRef(null)
   const dragRef = useRef(null)
 
@@ -84,6 +89,16 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
     setContactSaved(false)
     setError('')
   }, [open, user?.company_email, user?.mobile_number])
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    setLeaveBalance(undefined)
+    getMyLeaveBalance()
+      .then(response => { if (active) setLeaveBalance(response.data ?? null) })
+      .catch(() => { if (active) setLeaveBalance(null) })
+    return () => { active = false }
+  }, [open])
 
   useEffect(() => {
     const sync = () => refreshPhoto(true)
@@ -255,7 +270,7 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
             <header className="flex items-center border-b border-neutral-100 px-5 py-4">
               <div>
                 <h2 className="text-sm font-bold text-secondary-700">My Profile</h2>
-                <p className="mt-0.5 text-[11px] text-neutral-400">Photo and company contact details</p>
+                <p className="mt-0.5 text-[11px] text-neutral-400">Photo, contact details and leave balance</p>
               </div>
               <button type="button" disabled={busy} onClick={() => { clearCrop(); setOpen(false) }} className="ml-auto rounded p-1 text-neutral-400 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
             </header>
@@ -322,6 +337,33 @@ export default function ProfileAvatar({ size = 'md', editable = true, className 
                   </button>
                 )}
               </div>
+              {!cropImage && leaveBalance !== null && (
+                <section className="mt-5 border-t border-neutral-100 pt-5 text-left">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-neutral-500"><CalendarDays className="h-3.5 w-3.5" />My Leave Balance</p>
+                  {leaveBalance === undefined ? (
+                    <div className="mt-3 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                  ) : (
+                    <>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {[
+                          ['Annual', leaveBalance.annual_remaining, leaveBalance.annual_total],
+                          ['Casual', leaveBalance.casual_remaining, leaveBalance.casual_total],
+                          ['Sick', leaveBalance.sick_remaining, leaveBalance.sick_total],
+                        ].map(([label, remaining, total]) => (
+                          <div key={label} className="rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-2.5 text-center">
+                            <p className="text-lg font-bold text-secondary-700">{days(remaining)}</p>
+                            <p className="text-[11px] text-neutral-500">{label} · of {days(total)}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-neutral-400">
+                        Days you can still take. Casual leave also counts against your annual days.
+                        {leaveBalance.pending_days > 0 && ` ${days(leaveBalance.pending_days)} day(s) in requests waiting for approval are already deducted.`}
+                      </p>
+                    </>
+                  )}
+                </section>
+              )}
               {!cropImage && (
                 <form onSubmit={saveContact} className="mt-5 border-t border-neutral-100 pt-5 text-left">
                   <label className="block text-[11px] font-bold uppercase text-neutral-500" htmlFor="profile-company-email">Company Email</label>

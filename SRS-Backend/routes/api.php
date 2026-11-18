@@ -220,6 +220,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\ProtectFormSignatures::c
     Route::get('/employees/autocomplete', [EmployeeController::class, 'autocomplete']);
     Route::get('/employees/{employee}/form-profile', [EmployeeController::class, 'formProfile']);
     Route::get('/employees/{employee}/leave-balance', [LeaveBalanceController::class, 'show']);
+    Route::get('/my/leave-balance', [LeaveBalanceController::class, 'mine']);
 
     // ── HR Only — Admin, Depot Manager, HR department ─────────────────────────
     Route::middleware('hr.only')->group(function () {
