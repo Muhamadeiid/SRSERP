@@ -11,6 +11,7 @@ use App\Services\AttendancePolicy;
 use App\Services\AttendanceService;
 use App\Services\AbsenceDeductionService;
 use App\Services\LateDeductionService;
+use App\Services\PayrollAttendanceSheet;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1294,61 +1295,77 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Export one project's employees as an XLSX, or both project workbooks in
-     * one ZIP when project is omitted. Every workbook keeps one standard
-     * attendance sheet per employee.
+     * The HR payroll attendance form (SRS-HR-P03-F01) as four workbooks:
+     * CML1 IBS, CML1 Direct, GZ IBS and GZ Direct, one sheet per employee.
+     * One group downloads as its XLSX; without a group all four come in a ZIP.
      *
-     * GET /api/attendance/export-all?project=ganz|line1
+     * GET /api/attendance/export-all?group=cml1-ibs|cml1-direct|gz-ibs|gz-direct
      */
     public function exportAllExcel(Request $request): StreamedResponse
     {
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate   = $request->input('end_date',   now()->endOfMonth()->toDateString());
 
-        $projectSheet = match (strtolower((string) $request->input('project'))) {
-            'ganz' => 'Ganz',
-            'line1', 'line 1' => 'Line 1',
-            default => null,
-        };
+        $groups = $this->employeesByExportGroup(Employee::active()->orderBy('name')->get());
+        $group = strtolower((string) $request->input('group'));
 
-        $employees = Employee::active()->orderBy('name')->get();
-        if ($projectSheet) {
-            $employees = $this->employeesByProjectSheet($employees)[$projectSheet];
-            $spreadsheet = $this->buildAttendanceWorkbook($employees, $startDate, $endDate);
+        if (isset($groups[$group])) {
+            $spreadsheet = $this->buildAttendanceWorkbook($groups[$group]['employees'], $startDate, $endDate, $groups[$group]['project']);
             $writer = new Xlsx($spreadsheet);
-            $label = str_replace(' ', '', $projectSheet);
-            $filename = "Attendance_{$label}_{$startDate}_{$endDate}.xlsx";
 
             return response()->streamDownload(
                 fn () => $writer->save('php://output'),
-                $filename,
+                $groups[$group]['file'],
                 ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
             );
         }
 
-        $groups = $this->employeesByProjectSheet($employees);
-        return $this->downloadWorkbookArchive(
-            "Attendance_{$startDate}_{$endDate}.zip",
-            [
-                "Attendance_Ganz_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildAttendanceWorkbook($groups['Ganz'], $startDate, $endDate),
-                "Attendance_Line1_{$startDate}_{$endDate}.xlsx" => fn () => $this->buildAttendanceWorkbook($groups['Line 1'], $startDate, $endDate),
-            ]
-        );
+        $workbooks = [];
+        foreach ($groups as $entry) {
+            $workbooks[$entry['file']] = fn () => $this->buildAttendanceWorkbook($entry['employees'], $startDate, $endDate, $entry['project']);
+        }
+
+        return $this->downloadWorkbookArchive('SRS-HR-P03-F01 PAS-' . now()->format('ymd') . '.zip', $workbooks);
     }
 
-    private function buildAttendanceWorkbook($employees, string $startDate, string $endDate): Spreadsheet
+    /**
+     * The project decides CML1 or GZ (same rules as the rest of the system);
+     * the employer decides IBS or Direct (PayrollAttendanceSheet::layoutFor).
+     *
+     * @return array<string, array{project:string, file:string, employees:\Illuminate\Support\Collection}>
+     */
+    private function employeesByExportGroup($employees): array
     {
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
+        $date = now()->format('ymd');
+        $groups = [];
+        foreach ([['cml1', 'CML1', 'Line1', 'Line 1'], ['gz', 'GZ', 'Ganz', 'Ganz']] as [$key, $code, $projectName, $projectSheet]) {
+            foreach ([PayrollAttendanceSheet::LAYOUT_IBS => 'IBS', PayrollAttendanceSheet::LAYOUT_DIRECT => 'Direct'] as $layout => $label) {
+                $groups["{$key}-{$layout}"] = [
+                    'project' => $projectName,
+                    'file' => "SRS-HR-P03-F01 PAS-{$code}-{$date} {$label}.xlsx",
+                    'employees' => $this->employeesByProjectSheet($employees)[$projectSheet]
+                        ->filter(fn ($employee) => PayrollAttendanceSheet::layoutFor($employee) === $layout)
+                        ->values(),
+                ];
+            }
+        }
+
+        return $groups;
+    }
+
+    private function buildAttendanceWorkbook($employees, string $startDate, string $endDate, string $projectName): Spreadsheet
+    {
+        $sheets = app(PayrollAttendanceSheet::class);
+        $spreadsheet = $sheets->newWorkbook();
 
         $usedTitles = [];
         foreach ($employees->values() as $idx => $employee) {
             $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet(
                 $spreadsheet,
-                $this->uniqueSheetTitle((string) $employee->name, $usedTitles)
+                $this->uniqueSheetTitle(PayrollAttendanceSheet::sheetName((string) $employee->name), $usedTitles)
             );
             $spreadsheet->addSheet($sheet, $idx);
-            $this->buildEmployeeSheet($sheet, $employee, $startDate, $endDate);
+            $sheets->fill($sheet, $employee, $startDate, $endDate, $projectName);
         }
 
         if ($spreadsheet->getSheetCount() === 0) {
@@ -1452,397 +1469,6 @@ class AttendanceController extends Controller
         }
         $used[] = mb_strtolower($title);
         return $title;
-    }
-
-    /**
-     * Build a single employee's attendance sheet (reused by both export methods).
-     */
-    private function buildEmployeeSheet(
-        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
-        Employee $employee,
-        string $startDate,
-        string $endDate
-    ): void {
-        $balance     = LeaveBalance::where('employee_id', $employee->id)->first();
-        $attendances = $this->attendanceService->getAttendance([
-            'employee_id' => $employee->id,
-            'start_date'  => $startDate,
-            'end_date'    => $endDate,
-        ]);
-        $approvedLeaves = LeaveRequest::where('employee_id', $employee->id)
-            ->where('type', 'lrf')
-            ->whereIn('status', ['approved', 'cancellation_pending', 'amendment_pending'])
-            ->whereDate('start_date', '<=', $endDate)
-            ->whereDate('end_date', '>=', $startDate)
-            ->get();
-        $absenceDeductions = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
-
-        // ── helpers ──────────────────────────────────────────────
-        $timeStr = function($t): ?string {
-            if (!$t) return null;
-            if ($t instanceof Carbon) return $t->format('H:i:s');
-            $s = (string) $t;
-            return strlen($s) > 8 ? substr($s, -8) : $s;
-        };
-        $toMin = function($t) use ($timeStr): ?int {
-            $s = $timeStr($t);
-            if (!$s) return null;
-            return intval(substr($s,0,2))*60 + intval(substr($s,3,2));
-        };
-        $fmt12 = function(string $s): string {
-            $h = intval(substr($s,0,2)); $m = intval(substr($s,3,2));
-            return sprintf('%d:%02d %s', $h%12?:12, $m, $h>=12?'PM':'AM');
-        };
-        $decHHMM = function($h): string {
-            if (!$h || (float)$h <= 0) return '0:00';
-            $tot = (int) round((float)$h * 60);
-            return sprintf('%d:%02d', intdiv($tot,60), $tot%60);
-        };
-
-        // ── build date rows ──────────────────────────────────────
-        $dateRows = [];
-        $cur = Carbon::parse($startDate);
-        $end = Carbon::parse($endDate);
-        $sn  = 1;
-        $isEmpIntervention = $employee->isIntervention();
-        $nightStartMin     = 19 * 60; // 7 PM
-
-        while ($cur->lte($end)) {
-            $ds  = $cur->toDateString();
-            $rec = $attendances->first(fn($a) => $a->date?->format('Y-m-d') === $ds);
-            $off = $rec?->status === 'off' || !$employee->isWorkingDay($cur->copy());
-            $dateRows[] = ['sn' => $sn++, 'date' => $cur->copy(), 'isDayOff' => $off, 'record' => $rec, 'absence' => $absenceDeductions[$ds] ?? null];
-            $cur->addDay();
-        }
-
-        // ── totals ───────────────────────────────────────────────
-        $totalDedMin  = collect($absenceDeductions)->sum(fn ($absence) => (float) $absence['deduction_hours'] * 60);
-        $totalDedHrs  = $totalDedMin / 60;
-        $totalDayOT   = 0;
-        $totalNightOT = 0;
-
-        foreach ($dateRows as $dr) {
-            $r = $dr['record'];
-            if (!$r || !$r->overtime_hours || (float)$r->overtime_hours <= 0) continue;
-            $outM = $toMin($r->check_out);
-            if ($outM === null) continue;
-            if ($isEmpIntervention) {
-                $inM = $toMin($r->check_in);
-                if ($inM === null) continue;
-                $otSt = $inM + ($r->expected_hours ?? 9) * 60;
-            } else {
-                $otSt = 17 * 60; // 5 PM fixed for regular employees
-            }
-            if ($outM <= $otSt) continue;
-            $dayMins   = max(0, min($outM, $nightStartMin) - $otSt);
-            $nightMins = max(0, $outM - max($otSt, $nightStartMin));
-            $totalDayOT   += (int) round($dayMins / 60);
-            $totalNightOT += (int) round($nightMins / 60);
-        }
-        $totalOTHrs = $totalDayOT + $totalNightOT;
-
-        // ── balance ──────────────────────────────────────────────
-        $annual         = $balance?->annual  ?? 21;
-        $casual         = $balance?->casual  ?? 6;
-        $annualRemain   = $balance?->annual_remaining ?? $annual;
-        $casualRemain   = $balance?->casual_remaining ?? $casual;
-        $consumedAnnual = $annual - $annualRemain;
-        $consumedCasual = $casual - $casualRemain;
-
-        // ── colours & borders ─────────────────────────────────────
-        $C_HDR     = '1E3A2F';
-        $C_SECTION = '4B5563';
-        $C_LABEL   = 'D1D5DB';
-        $C_YELLOW  = 'FEF9C3';
-        $C_BLUE    = 'BFDBFE';
-        $C_DAYOFF  = 'D5D5D5';
-        $C_OT      = 'FFF9C4';
-        $C_ABSENT  = 'F4CCCC';
-        $C_WHITE   = 'FFFFFF';
-        $C_ALT     = 'F3F4F6';
-
-        $thin  = ['borderStyle' => Border::BORDER_THIN,   'color' => ['rgb' => '9CA3AF']];
-        $black = ['borderStyle' => Border::BORDER_THIN,   'color' => ['rgb' => '000000']];
-
-        // ── styling helpers ───────────────────────────────────────
-        $styleLabel = function(string $range) use ($sheet, $C_LABEL, $thin) {
-            $sheet->getStyle($range)->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $C_LABEL]],
-                'font'      => ['name' => 'Arial', 'size' => 8],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'horizontal' => Alignment::HORIZONTAL_LEFT],
-                'borders'   => ['allBorders' => $thin],
-            ]);
-        };
-        $styleValue = function(string $range, bool $bold = false) use ($sheet, $thin) {
-            $sheet->getStyle($range)->applyFromArray([
-                'font'      => ['name' => 'Arial', 'size' => 8, 'bold' => $bold],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'horizontal' => Alignment::HORIZONTAL_LEFT],
-                'borders'   => ['allBorders' => $thin],
-            ]);
-        };
-        $styleSection = function(string $cellA, string $cellB) use ($sheet, $C_SECTION, $black) {
-            $sheet->mergeCells("{$cellA}:{$cellB}");
-            $sheet->getStyle("{$cellA}:{$cellB}")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $C_SECTION]],
-                'font'      => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 9],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                'borders'   => ['allBorders' => $black],
-            ]);
-        };
-
-        // ── left panel ────────────────────────────────────────────
-        $leftDefs = [
-            ['IBS No',                    $employee->ibs_code ?? '',                              'normal'],
-            ['Project Name',              'Line 1',                                               'normal'],
-            ['Employee Name',             $employee->name ?? '',                                  'normal'],
-            ['Employee ID',               $employee->ibs_code ?? '',                              'yellow'],
-            ['Hiring Date',               $employee->hiring_date?->format('j-M-Y') ?? '',         'normal'],
-            ['Probation Period End Date', '',                                                      'normal'],
-            ['Title',                     $employee->position ?? '',                               'normal'],
-            ['Location',                  $employee->work_location ?? '',                          'blue'],
-            ['Department',                $employee->department ?? '',                             'normal'],
-            ['No Of Warning Letter',      $employee->no_warning_letters ?? '',                    'normal'],
-            ['Employer',                  '',                                                      'section'],
-            ['Balance Effective Date',    Carbon::parse($startDate)->format('j-M-Y'),              'normal'],
-            ['Available Balance',         $annual,                                                 'normal'],
-            ['Annual Balance',            $annualRemain,                                           'normal'],
-            ['Casual Balance',            $casualRemain,                                           'normal'],
-            ['Consumed Annual Balance',   $consumedAnnual,                                         'normal'],
-            ['Consumed Casual Balance',   $consumedCasual,                                         'normal'],
-            ['Remain Annual Balance',     $annualRemain,                                           'normal'],
-            ['Remain Casual Balance',     $casualRemain,                                           'normal'],
-            ['Early Leave',               '',                                                      'normal'],
-            ['Zero Balanced Vacations',   '',                                                      'normal'],
-            ['Deduction in Minutes',      number_format($totalDedMin, 2),                          'normal'],
-            ['Deduction in Hours',        number_format($totalDedHrs, 2),                          'normal'],
-            ['Over Time in Hours',        number_format($totalOTHrs, 2),                           'normal'],
-            ['',                          '',                                                      'normal'],
-            ['Start',                     '8:00:00 AM',                                            'normal'],
-            ['End',                       '5:00:00 PM',                                            'normal'],
-            ['',                          '',                                                      'normal'],
-            ['',                          '',                                                      'normal'],
-            ['Attendace Transaction Role','',                                                      'section'],
-            ['Salary',                    '',                                                      'normal'],
-            ['Day Rate',                  0,                                                       'normal'],
-            ['Day Over Time Rate',        0,                                                       'normal'],
-            ['Night Over Time Rate',      0,                                                       'normal'],
-            ['Hour Rate',                 0,                                                       'normal'],
-        ];
-
-        foreach ($leftDefs as $ri => $def) {
-            $row   = $ri + 1;
-            $style = $def[2];
-            $sheet->getRowDimension($row)->setRowHeight(16);
-            if ($style === 'section') {
-                $sheet->setCellValue("A{$row}", $def[0]);
-                $styleSection("A{$row}", "B{$row}");
-            } else {
-                $sheet->setCellValue("A{$row}", $def[0]);
-                $sheet->setCellValue("B{$row}", $def[1]);
-                $styleLabel("A{$row}");
-                $styleValue("B{$row}", true);
-                if ($style === 'yellow') {
-                    $sheet->getStyle("A{$row}:B{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($C_YELLOW);
-                } elseif ($style === 'blue') {
-                    $sheet->getStyle("A{$row}:B{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($C_BLUE);
-                }
-            }
-        }
-
-        // ── attendance summary ────────────────────────────────────
-        $sumHeaderRow = count($leftDefs) + 2;
-        $sheet->setCellValue("A{$sumHeaderRow}", 'Attendance Summary');
-        $styleSection("A{$sumHeaderRow}", "B{$sumHeaderRow}");
-        $sheet->getRowDimension($sumHeaderRow)->setRowHeight(16);
-
-        $summaryDefs = [
-            ['Total Deduction in Minutes', number_format($totalDedMin, 1)],
-            ['Total Deduction in Hours',   number_format($totalDedHrs, 1)],
-            ['Total Day Over Time',        number_format($totalDayOT,  1)],
-            ['Total Night Over Time',      number_format($totalNightOT,1)],
-            ['Total Double Pay Over Time', '0.0'],
-            ['Total Over Time',            number_format($totalOTHrs,  1)],
-        ];
-        foreach ($summaryDefs as $si => $sd) {
-            $row = $sumHeaderRow + 1 + $si;
-            $sheet->setCellValue("A{$row}", $sd[0]);
-            $sheet->setCellValue("B{$row}", $sd[1]);
-            $styleLabel("A{$row}");
-            $styleValue("B{$row}", true);
-            $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getRowDimension($row)->setRowHeight(15);
-        }
-
-        // ── attendance table ──────────────────────────────────────
-        $TC         = 4;
-        $HDR_ROW    = 1;
-        $DATA_START = 2;
-
-        $tableHeaders = [
-            'Sn', 'Date (Day)', 'Day', 'Check IN', 'Check Out',
-            'Total working Hrs', 'Hour Rate',
-            'Over Time Start', 'Over Time End',
-            'Day OverTime Rate', 'Night Over Time Rate', 'Double Pay',
-            'Total Over Time',
-            'DEDUCTIONS (HOURS)', 'DEDUCTIONS (MIN)',
-            'Notes',
-        ];
-        $firstCol = Coordinate::stringFromColumnIndex($TC);
-        $lastCol  = Coordinate::stringFromColumnIndex($TC + count($tableHeaders) - 1);
-
-        foreach ($tableHeaders as $ci => $hdr) {
-            $col = Coordinate::stringFromColumnIndex($TC + $ci);
-            $sheet->setCellValue("{$col}{$HDR_ROW}", $hdr);
-        }
-        $sheet->getStyle("{$firstCol}{$HDR_ROW}:{$lastCol}{$HDR_ROW}")->applyFromArray([
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $C_HDR]],
-            'font'      => ['name' => 'Arial', 'bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 8],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
-            'borders'   => ['allBorders' => $black],
-        ]);
-        $sheet->getRowDimension($HDR_ROW)->setRowHeight(28);
-
-        foreach ($dateRows as $ri => $dr) {
-            $row = $DATA_START + $ri;
-            $rec = $dr['record'];
-            $off = $dr['isDayOff'];
-            $dt  = $dr['date'];
-            $dateKey = $dt->toDateString();
-            $dayLeaves = $approvedLeaves->filter(function ($leave) use ($dateKey) {
-                $from = $leave->start_date?->toDateString();
-                $to = $leave->end_date?->toDateString() ?? $from;
-                return $from && $from <= $dateKey && $to >= $dateKey;
-            });
-            $fullDayLeave = $dayLeaves->first(fn($leave) => in_array($leave->leave_type, ['annual', 'casual', 'sick'], true));
-            $companyPaidLeave = $dayLeaves->first(fn($leave) => (bool) $leave->company_paid);
-            $earlyLeave = $dayLeaves->first(fn($leave) => $leave->leave_type === 'early');
-
-            $otStartStr = $otEndStr = '';
-            $dayRate = $nightRate = 0;
-            $totalOTVal = '0.0';
-
-            if ($rec && $rec->overtime_hours && (float)$rec->overtime_hours > 0 && $rec->check_out) {
-                $outM = $toMin($rec->check_out);
-                if ($outM !== null) {
-                    if ($isEmpIntervention) {
-                        $inM  = $toMin($rec->check_in);
-                        $otStM = $inM !== null ? $inM + ($rec->expected_hours ?? 9) * 60 : null;
-                    } else {
-                        $otStM = 17 * 60; // 5 PM fixed for regular employees
-                    }
-                    if ($otStM !== null && $outM > $otStM) {
-                        $otStartStr = $fmt12(sprintf('%02d:%02d:00', intdiv($otStM,60), $otStM%60));
-                        $otEndStr   = $fmt12(sprintf('%02d:%02d:00', intdiv($outM,60), $outM%60));
-                        $dayMins    = max(0, min($outM,$nightStartMin) - $otStM);
-                        $nightMins  = max(0, $outM - max($otStM,$nightStartMin));
-                        $dayRate    = (int) round($dayMins / 60);
-                        $nightRate  = (int) round($nightMins / 60);
-                        $totalOTVal = $dayRate + $nightRate;
-                    }
-                }
-            }
-
-            $dedHrs = $dedMin = '';
-            if ($dr['absence']) {
-                $dedHrs = (float) $dr['absence']['deduction_hours'];
-                $dedMin = $dedHrs * 60;
-            }
-
-            $workHrsStr = '';
-            if ($rec) {
-                $workHrsStr = $rec->status === 'absent' ? '0:00' : $decHHMM($rec->work_hours);
-            } elseif ($dr['absence']) {
-                $workHrsStr = '0:00';
-            } elseif ($off) {
-                $workHrsStr = '0:00';
-            }
-
-            $ciStr = $timeStr($rec?->check_in);
-            $coStr = $timeStr($rec?->check_out);
-            $leaveLabel = $fullDayLeave
-                ? ['annual' => 'Annual', 'casual' => 'Casual', 'sick' => 'Sick'][$fullDayLeave->leave_type]
-                : null;
-            // Company-paid leave is deliberately styled like a scheduled day
-            // off and its approved purpose is always visible in Notes.
-            $notes = $companyPaidLeave
-                ? trim((string) $companyPaidLeave->purpose)
-                : trim((string) ($rec?->notes ?? ''));
-            if ($earlyLeave) {
-                if (preg_match('/^(?:إذن|اذن|permission)\s*\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}$/iu', $notes)) {
-                    $notes = '';
-                }
-                $fraction = rtrim(rtrim(number_format((float) $earlyLeave->days, 2, '.', ''), '0'), '.');
-                $elrNote = 'ELR ' . $fraction;
-                $notes = $notes === '' ? $elrNote : $notes . ' | ' . $elrNote;
-            }
-
-            $values = [
-                $dr['sn'],
-                $dt->format('j-M-Y'),
-                $dt->format('D'),
-                $leaveLabel ?? ($ciStr ? $fmt12($ciStr) : ''),
-                $leaveLabel ?? ($coStr ? $fmt12($coStr) : ''),
-                $workHrsStr,
-                '0.00',
-                $otStartStr,
-                $otEndStr,
-                $dayRate,
-                $nightRate,
-                0,
-                $totalOTVal,
-                $dedHrs !== '' ? $dedHrs : '',
-                $dedMin !== '' ? $dedMin : '',
-                $notes,
-            ];
-
-            foreach ($values as $ci => $val) {
-                $col = Coordinate::stringFromColumnIndex($TC + $ci);
-                $sheet->setCellValue("{$col}{$row}", $val);
-            }
-
-            $companyPaidDay = (bool) $companyPaidLeave;
-            $bg = $dr['absence']
-                ? $C_ABSENT
-                : (($off || $companyPaidDay) ? $C_DAYOFF : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
-
-            $sheet->getStyle("{$firstCol}{$row}:{$lastCol}{$row}")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $bg]],
-                'font'      => ['name' => 'Arial', 'size' => 8, 'color' => ['rgb' => ($off || $companyPaidDay) ? 'AAAAAA' : '000000']],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                'borders'   => ['allBorders' => $thin],
-            ]);
-            $this->applyAttendanceTimeWarnings(
-                $sheet,
-                $row,
-                $toMin($rec?->check_in),
-                $toMin($rec?->check_out),
-                (bool) $rec && !$off && !$companyPaidDay && !$fullDayLeave && $rec->status !== 'absent'
-            );
-            $sheet->getRowDimension($row)->setRowHeight(14);
-        }
-
-        // ── column widths ─────────────────────────────────────────
-        $sheet->getColumnDimension('A')->setWidth(25);
-        $sheet->getColumnDimension('B')->setWidth(18);
-        $sheet->getColumnDimension('C')->setWidth(1.2);
-        foreach ([4,11,5,9,9,9,7,10,10,8,10,7,9,10,9,10] as $ci => $w) {
-            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($TC + $ci))->setWidth($w);
-        }
-
-        $sheet->getPageSetup()
-              ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
-              ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
-              ->setFitToWidth(1)->setFitToHeight(0)->setFitToPage(true);
-        $sheet->getPageMargins()->setTop(0.4)->setBottom(0.4)->setLeft(0.3)->setRight(0.3);
-        $sheet->getHeaderFooter()
-              ->setOddHeader('&C&B&14 Monthly Attendance Transaction Record')
-              ->setOddFooter('&L&"Arial,Bold"SRS-HR-ATT-01  Rev.01&R&BPage &P of &N');
-        $sheet->freezePane('D2');
-
-        $lastDataRow  = $DATA_START + count($dateRows) - 1;
-        $sumLastRow   = $sumHeaderRow + count($summaryDefs);
-        $printLastRow = max($lastDataRow, $sumLastRow);
-        $sheet->getPageSetup()->setPrintArea("A1:{$lastCol}{$printLastRow}");
     }
 
     private function applyAttendanceTimeWarnings(

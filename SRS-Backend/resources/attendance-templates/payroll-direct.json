@@ -1,0 +1,5538 @@
+{
+ "name": "Direct",
+ "headerRow": 2,
+ "firstDataRow": 3,
+ "lastLeftRow": 41,
+ "zoom": 73,
+ "colWidths": {
+  "A": 30.71,
+  "B": 32.57,
+  "C": 43.71,
+  "D": 3.29,
+  "E": 13.86,
+  "F": 4.57,
+  "G": 9.29,
+  "H": 10.43,
+  "I": 17.86,
+  "J": 10.29,
+  "K": 15.71,
+  "L": 14.29,
+  "M": 18.86,
+  "N": 21.29,
+  "O": 11.43,
+  "P": 16,
+  "Q": 23.29,
+  "R": 20.29,
+  "S": 22.57,
+  "T": 13
+ },
+ "rowHeights": {
+  "1": 16.5,
+  "2": 19.5,
+  "3": 17.25,
+  "4": 17.25,
+  "5": 17.25,
+  "6": 17.25,
+  "7": 17.25,
+  "8": 17.25,
+  "9": 17.25,
+  "10": 18,
+  "11": 19.5,
+  "12": 19.5,
+  "13": 18.75,
+  "14": 17.25,
+  "15": 17.25,
+  "16": 17.25,
+  "17": 17.25,
+  "18": 17.25,
+  "19": 17.25,
+  "20": 17.25,
+  "21": 21.75,
+  "22": 17.25,
+  "23": 17.25,
+  "24": 18,
+  "25": 17.25,
+  "26": 17.25,
+  "27": 17.25,
+  "28": 15.75,
+  "29": 15.75,
+  "30": 15.75,
+  "31": 17.25,
+  "32": 18,
+  "33": 18,
+  "34": 18,
+  "35": 15.75,
+  "36": 15.75,
+  "37": 15.75,
+  "38": 15.75,
+  "39": 15.75,
+  "40": 15.75,
+  "41": 16.5
+ },
+ "dataRowHeight": 17.25,
+ "merges": [
+  "A2:A10",
+  "A12:A24",
+  "A25:A33",
+  "A35:B35"
+ ],
+ "cells": {
+  "A1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "C1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A2": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Employee Data"
+  },
+  "B2": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "D9E1F2",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Project Name"
+  },
+  "C2": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "D9E1F2",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A3": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B3": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Employee Name"
+  },
+  "C3": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A4": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B4": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Employee ID"
+  },
+  "C4": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A5": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B5": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Hiring Date"
+  },
+  "C5": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]d-mmm-yyyy;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A6": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B6": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Probation Period End Date"
+  },
+  "C6": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]d-mmm-yyyy;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C5+(3*30)"
+  },
+  "A7": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B7": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Title"
+  },
+  "C7": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A8": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B8": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "D9E1F2",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Location"
+  },
+  "C8": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "D9E1F2",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A9": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B9": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Department"
+  },
+  "C9": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A10": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B10": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "No Of Warning Letter"
+  },
+  "C10": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A11": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B11": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 14,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Employer"
+  },
+  "C11": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 14,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Rotem SRS"
+  },
+  "A12": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Monthly Transactions Record"
+  },
+  "B12": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Balance Effictive Date"
+  },
+  "C12": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]d-mmm-yyyy;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A13": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B13": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Available Balance"
+  },
+  "C13": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A14": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B14": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Annual Blance"
+  },
+  "C14": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C13-7"
+  },
+  "A15": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B15": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Casual Balance"
+  },
+  "C15": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C13-C14"
+  },
+  "A16": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B16": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Conusmed Annual Balance"
+  },
+  "C16": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A17": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B17": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Consumed Casual Balance"
+  },
+  "C17": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A18": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B18": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Remain Annual Balance"
+  },
+  "C18": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A19": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B19": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Remain Casual Balance"
+  },
+  "C19": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C15-C17"
+  },
+  "A20": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B20": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Early Leave"
+  },
+  "C20": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A21": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B21": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Zero Balanced Vacations"
+  },
+  "C21": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A22": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B22": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Deduction in Minutes"
+  },
+  "C22": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(R3:R23)"
+  },
+  "A23": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B23": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Deduction in Hours"
+  },
+  "C23": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(Q3:Q23)"
+  },
+  "A24": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B24": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Over Time in Hours"
+  },
+  "C24": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(P3:P23)"
+  },
+  "A25": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Attendace Transaction Role"
+  },
+  "B25": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Start"
+  },
+  "C25": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-F400]h:mm:ss AM/PM",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": 0.333333333333333
+  },
+  "A26": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B26": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "End"
+  },
+  "C26": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-F400]h:mm:ss AM/PM",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": 0.708333333333333
+  },
+  "A27": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B27": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "C27": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-F400]h:mm:ss AM/PM",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A28": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B28": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Salary"
+  },
+  "C28": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$EGP] #,##0.00",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A29": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B29": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "C29": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$EGP] #,##0.00",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A30": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B30": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Day Rate"
+  },
+  "C30": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C28/30"
+  },
+  "A31": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B31": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Day Over Time Rate"
+  },
+  "C31": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C28/30/9*1.35"
+  },
+  "A32": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B32": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Night Over Time Rate"
+  },
+  "C32": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C28/30/9*1.7"
+  },
+  "A33": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B33": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 11,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Hour Rate"
+  },
+  "C33": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=C28/30/9"
+  },
+  "A34": {
+   "style": {
+    "font": {
+     "name": "Calibri",
+     "size": 12,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "general",
+    "v": "center",
+    "wrap": true,
+    "fill": "FFFFFF",
+    "borders": {
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "B34": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "C34": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 11,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A35": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Attendance Summary"
+  },
+  "B35": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "C35": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A36": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Deduction in Minutes"
+  },
+  "B36": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(R2:R275)"
+  },
+  "C36": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A37": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Deduction in Hours"
+  },
+  "B37": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(Q2:Q275)"
+  },
+  "C37": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A38": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Day Over Time "
+  },
+  "B38": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(M2:M275)"
+  },
+  "C38": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A39": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Night Over Time"
+  },
+  "B39": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(N2:N275)"
+  },
+  "C39": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A40": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Double Pay Over Time"
+  },
+  "B40": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=SUM(O2:O275)"
+  },
+  "C40": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "A41": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Over Time"
+  },
+  "B41": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "top": {
+      "style": "thin",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   },
+   "formula": "=B38+B39+B40"
+  },
+  "C41": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "D1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "E1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "F1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "G1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]h:mm AM/PM;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "H1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]h:mm AM/PM;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "I1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "J1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "K1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "L1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "M1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "N1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "O1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "P1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "Q1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "R1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "S1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "bottom": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  },
+  "T1": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF"
+   }
+  },
+  "D2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Sn"
+  },
+  "E2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Day (Date)"
+  },
+  "F2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Day"
+  },
+  "G2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]h:mm AM/PM;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Check IN"
+  },
+  "H2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "[$-409]h:mm AM/PM;@",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Check Out"
+  },
+  "I2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total working Hrs"
+  },
+  "J2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Hour Rate"
+  },
+  "K2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Over Time Start"
+  },
+  "L2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Over Time End"
+  },
+  "M2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Day OverTime Rate"
+  },
+  "N2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Night Over Time Rate"
+  },
+  "O2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Double Pay"
+  },
+  "P2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "0.0",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Total Over Time"
+  },
+  "Q2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "DEDUCTIONS (HOURS)"
+  },
+  "R2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "DEDUCTIONS (MIN)"
+  },
+  "S2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": true,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "mm",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "top": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "right": {
+      "style": "medium",
+      "color": "000000"
+     },
+     "bottom": {
+      "style": "thin",
+      "color": "000000"
+     }
+    }
+   },
+   "value": "Notes"
+  },
+  "T2": {
+   "style": {
+    "font": {
+     "name": "Gill Sans MT",
+     "size": 9,
+     "bold": false,
+     "italic": false,
+     "color": "000000"
+    },
+    "numFmt": "General",
+    "h": "center",
+    "v": "center",
+    "wrap": false,
+    "fill": "FFFFFF",
+    "borders": {
+     "left": {
+      "style": "medium",
+      "color": "000000"
+     }
+    }
+   }
+  }
+ },
+ "dataStyle": {
+  "D": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "E": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]d-mmm-yyyy;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "F": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-F800]dddd, mmmm dd, yyyy",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "G": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]h:mm AM/PM;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "H": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]h:mm AM/PM;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "I": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "h:mm;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "J": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "0.00",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "K": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]h:mm AM/PM;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "L": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]h:mm AM/PM;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "M": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "N": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "O": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "P": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "0.0",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "Q": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "R": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "S": {
+   "font": {
+    "name": "Calibri",
+    "size": 11,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "[$-409]h:mm AM/PM;@",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "top": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "right": {
+     "style": "thin",
+     "color": "000000"
+    },
+    "bottom": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  },
+  "T": {
+   "font": {
+    "name": "Gill Sans MT",
+    "size": 9,
+    "bold": false,
+    "italic": false,
+    "color": "000000"
+   },
+   "numFmt": "General",
+   "h": "center",
+   "v": "center",
+   "wrap": false,
+   "fill": "FFFFFF",
+   "borders": {
+    "left": {
+     "style": "thin",
+     "color": "000000"
+    }
+   }
+  }
+ },
+ "page": {
+  "centerHeader": "&\"-,Bold\"&36Payroll Attendance Sheet",
+  "leftFooter": "&\"-,Bold\"&16Document No: &KC00000SRS-HR-P03-F01 | Rev.: 03&K01+000 | Rev. Date 04/05/2025",
+  "rightFooter": "&\"-,Bold\"&16 |     Page &P of &N",
+  "margins": {
+   "top": 0.75,
+   "bottom": 0.75,
+   "left": 0.25,
+   "right": 0.25
+  }
+ }
+}

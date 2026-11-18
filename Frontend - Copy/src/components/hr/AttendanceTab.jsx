@@ -1324,12 +1324,14 @@ export default function AttendanceTab() {
   const doExportAll = async () => {
     setExportAllBusy(true)
     try {
-      // Two separate Excel files, one per project, each with a sheet per employee
-      for (const [project, label] of [['ganz', 'Ganz'], ['line1', 'Line1']]) {
-        const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd, project })
+      // The HR payroll form as four files (project × IBS/Direct), a sheet per employee
+      const today = new Date()
+      const stamp = `${String(today.getFullYear()).slice(2)}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
+      for (const [group, project, label] of [['cml1-ibs', 'CML1', 'IBS'], ['cml1-direct', 'CML1', 'Direct'], ['gz-ibs', 'GZ', 'IBS'], ['gz-direct', 'GZ', 'Direct']]) {
+        const blob = await attendanceService.exportAllExcel({ start_date: exportAllStart, end_date: exportAllEnd, group })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a'); a.href = url
-        a.download = `Attendance_${label}_${exportAllStart}_${exportAllEnd}.xlsx`
+        a.download = `SRS-HR-P03-F01 PAS-${project}-${stamp} ${label}.xlsx`
         document.body.appendChild(a); a.click(); a.remove()
         setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
@@ -1967,7 +1969,7 @@ export default function AttendanceTab() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="font-bold text-secondary-700">Export All Employees</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Two files (Ganz and Line 1), one sheet per employee</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Four files (CML1 / GZ × IBS / Direct), one sheet per employee</p>
               </div>
               <button onClick={() => setShowExportAllPicker(false)} className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-400">
                 <X className="w-4 h-4" />

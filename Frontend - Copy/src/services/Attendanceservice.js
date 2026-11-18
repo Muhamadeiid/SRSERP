@@ -151,8 +151,8 @@ export const attendanceService = {
   },
 
   /**
-   * Export attendance as a ZIP containing Ganz and Line 1 workbooks, with one
-   * sheet per employee. Passing project keeps the single-workbook API available.
+   * Export the HR payroll attendance form. Pass group (cml1-ibs, cml1-direct,
+   * gz-ibs or gz-direct) for one workbook; without it all four come in a ZIP.
    */
   exportAllExcel: async (filters = {}) => {
     const response = await api.get('/attendance/export-all', {
