@@ -7,6 +7,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Services\ApprovedOvertime;
 use App\Services\AttendancePolicy;
 use App\Services\AttendanceService;
 use App\Services\AbsenceDeductionService;
@@ -915,8 +916,6 @@ class AttendanceController extends Controller
         $cur = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
         $sn  = 1;
-        $nightStartMin    = 19 * 60; // 7 PM
-        $isEmpIntervention = $employee ? $employee->isIntervention() : false;
 
         while ($cur->lte($end)) {
             $ds  = $cur->toDateString();
@@ -928,34 +927,14 @@ class AttendanceController extends Controller
         }
 
         // ── totals ───────────────────────────────────────────────
-        // OT is rounded the same way as the OT-rate columns: floor(mins/60) per row
+        // Overtime only from approved overtime requests, never from punches
+        $overtimeByDate = $employee ? $this->approvedOvertimeByDate($employee, $attendances, $startDate, $endDate) : [];
         $totalDedMin  = collect($absenceDeductions)->sum(fn ($absence) => (float) $absence['deduction_hours'] * 60);
         $totalDedHrs  = $totalDedMin / 60;
-        $totalDayOT   = 0;   // integer — sum of per-row floor(dayMins/60)
-        $totalNightOT = 0;   // integer — sum of per-row max(1,floor(nightMins/60))
-
-        foreach ($dateRows as $dr) {
-            $r = $dr['record'];
-            if (!$r || !$r->overtime_hours || (float)$r->overtime_hours <= 0) continue;
-            $outM = $toMin($r->check_out);
-            if ($outM === null) continue;
-            if ($isEmpIntervention) {
-                $inM = $toMin($r->check_in);
-                if ($inM === null) continue;
-                $otSt = $inM + ($r->expected_hours ?? 9) * 60;
-            } else {
-                $otSt = 17 * 60; // 5 PM fixed for regular employees
-            }
-            if ($outM <= $otSt) continue;
-            $dayMins   = max(0, min($outM, $nightStartMin) - $otSt);
-            $nightMins = max(0, $outM - max($otSt, $nightStartMin));
-            // >= 30 min → full hour; < 30 min → 0
-            $totalDayOT   += (int) round($dayMins / 60);
-            $totalNightOT += (int) round($nightMins / 60);
-        }
-
-        // Total OT = day + night (floored integer hours, same as the table columns)
-        $totalOTHrs = $totalDayOT + $totalNightOT;
+        $totalDayOT   = array_sum(array_column($overtimeByDate, 'day'));
+        $totalNightOT = array_sum(array_column($overtimeByDate, 'night'));
+        $totalDoubleOT = array_sum(array_column($overtimeByDate, 'double'));
+        $totalOTHrs = $totalDayOT + $totalNightOT + $totalDoubleOT;
 
         // ── balance ──────────────────────────────────────────────
         $annual        = $balance?->annual  ?? 21;
@@ -1107,7 +1086,7 @@ class AttendanceController extends Controller
             ['Total Deduction in Hours',   number_format($totalDedHrs, 1)],
             ['Total Day Over Time',        number_format($totalDayOT,  1)],
             ['Total Night Over Time',      number_format($totalNightOT,1)],
-            ['Total Double Pay Over Time', '0.0'],
+            ['Total Double Pay Over Time', number_format($totalDoubleOT, 1)],
             ['Total Over Time',            number_format($totalOTHrs,  1)],
         ];
         foreach ($summaryDefs as $si => $sd) {
@@ -1163,31 +1142,18 @@ class AttendanceController extends Controller
             $off = $dr['isDayOff'];
             $dt  = $dr['date'];
 
-            // OT
+            // OT: approved overtime requests only
             $otStartStr = $otEndStr = '';
-            $dayRate = $nightRate = 0;
+            $dayRate = $nightRate = $doubleRate = 0;
             $totalOTVal = '0.0';
-
-            if ($rec && $rec->overtime_hours && (float)$rec->overtime_hours > 0 && $rec->check_out) {
-                $outM = $toMin($rec->check_out);
-                if ($outM !== null) {
-                    if ($isEmpIntervention) {
-                        $inM  = $toMin($rec->check_in);
-                        $otStM = $inM !== null ? $inM + ($rec->expected_hours ?? 9) * 60 : null;
-                    } else {
-                        $otStM = 17 * 60; // 5 PM fixed for regular employees
-                    }
-                    if ($otStM !== null && $outM > $otStM) {
-                        $otStartStr = $fmt12(sprintf('%02d:%02d:00', intdiv($otStM,60), $otStM%60));
-                        $otEndStr   = $fmt12(sprintf('%02d:%02d:00', intdiv($outM,60), $outM%60));
-                        $dayMins    = max(0, min($outM,$nightStartMin) - $otStM);
-                        $nightMins  = max(0, $outM - max($otStM,$nightStartMin));
-                        // >= 30 min → full hour; < 30 min → 0
-                        $dayRate    = (int) round($dayMins / 60);
-                        $nightRate  = (int) round($nightMins / 60);
-                        $totalOTVal = $dayRate + $nightRate;
-                    }
-                }
+            if ($overtime = $overtimeByDate[$dt->toDateString()] ?? null) {
+                $clock = fn (int $minutes) => $fmt12(sprintf('%02d:%02d:00', intdiv($minutes % 1440, 60), $minutes % 60));
+                $otStartStr = $clock($overtime['start']);
+                $otEndStr   = $clock($overtime['end']);
+                $dayRate    = $overtime['day'];
+                $nightRate  = $overtime['night'];
+                $doubleRate = $overtime['double'];
+                $totalOTVal = $dayRate + $nightRate + $doubleRate;
             }
 
             // Deductions
@@ -1222,7 +1188,7 @@ class AttendanceController extends Controller
                 $otEndStr,
                 $dayRate,
                 $nightRate,
-                0,
+                $doubleRate,
                 $totalOTVal,
                 $dedHrs !== '' ? $dedHrs : '',
                 $dedMin !== '' ? $dedMin : '',
@@ -1238,7 +1204,7 @@ class AttendanceController extends Controller
                 ? 'F4CCCC'
                 : ($off
                 ? $C_DAYOFF
-                : ($rec && (float)($rec->overtime_hours??0) > 0 ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
+                : (isset($overtimeByDate[$dt->toDateString()]) ? $C_OT : ($ri%2===0 ? $C_WHITE : $C_ALT)));
 
             $txtRgb = $off ? 'AAAAAA' : '000000';
 
@@ -1469,6 +1435,52 @@ class AttendanceController extends Controller
         }
         $used[] = mb_strtolower($title);
         return $title;
+    }
+
+    /**
+     * Approved overtime requests of one employee by date, split like the
+     * internal salary sheet (double pay on days off and public holidays).
+     *
+     * @return array<string, array{start:int, end:int, day:int, night:int, double:int}>
+     */
+    private function approvedOvertimeByDate(Employee $employee, $attendances, string $startDate, string $endDate): array
+    {
+        $holidays = [];
+        $publicHolidays = \App\Models\PublicHoliday::query()
+            ->whereDate('date', '<=', $endDate)
+            ->where(fn ($q) => $q->whereDate('end_date', '>=', $startDate)
+                ->orWhere(fn ($single) => $single->whereNull('end_date')->whereDate('date', '>=', $startDate)))
+            ->get(['date', 'end_date']);
+        foreach ($publicHolidays as $holiday) {
+            for ($day = Carbon::parse($holiday->date); $day->lte($holiday->end_date ?? $holiday->date); $day->addDay()) {
+                $holidays[$day->toDateString()] = true;
+            }
+        }
+        $daysOff = $attendances->filter(fn ($a) => $a->status === 'off')
+            ->mapWithKeys(fn ($a) => [$a->date->toDateString() => true]);
+
+        $byDate = [];
+        $requests = LeaveRequest::where('employee_id', $employee->id)
+            ->where('type', 'otr')
+            ->whereIn('status', ApprovedOvertime::STATUSES)
+            ->whereDate('ot_date', '>=', $startDate)
+            ->whereDate('ot_date', '<=', $endDate)
+            ->get();
+        foreach ($requests as $otr) {
+            $date = Carbon::parse($otr->ot_date);
+            $key = $date->toDateString();
+            $split = ApprovedOvertime::split($otr, !$employee->isWorkingDay($date->copy()) || isset($holidays[$key]) || $daysOff->has($key));
+            if (!$split) continue;
+            $byDate[$key] = isset($byDate[$key]) ? [
+                'start' => min($byDate[$key]['start'], $split['start']),
+                'end' => max($byDate[$key]['end'], $split['end']),
+                'day' => $byDate[$key]['day'] + $split['day'],
+                'night' => $byDate[$key]['night'] + $split['night'],
+                'double' => $byDate[$key]['double'] + $split['double'],
+            ] : $split;
+        }
+
+        return $byDate;
     }
 
     private function applyAttendanceTimeWarnings(
@@ -1747,14 +1759,6 @@ class AttendanceController extends Controller
 
     private function calcSalaryRow(Employee $employee, $attendances, string $startDate, string $endDate, $approvedOTRs = null, $holidays = null, $approvedLeaves = null, $disciplinaryCases = null): array
     {
-        $timeToMin = function($t): ?int {
-            if (!$t) return null;
-            $s = (string) $t;
-            if (strlen($s) > 8) $s = substr($s, -8);
-            return intval(substr($s,0,2))*60 + intval(substr($s,3,2));
-        };
-
-        $nightStartMin = 19 * 60;
         $dailyHours = AttendancePolicy::float('attendance_salary_daily_hours');
         $totalDayOT    = 0;
         $totalNightOT  = 0;
@@ -1831,50 +1835,19 @@ class AttendanceController extends Controller
             ->mapWithKeys(fn ($attendance) => [$attendance->date->toDateString() => true]);
 
         foreach ($empOTRs as $otr) {
-            $startM = $timeToMin($otr->start_time);
-            $endM   = $timeToMin($otr->end_time);
-            if ($startM === null || $endM === null) continue;
-            if ($endM <= $startM) $endM += 24 * 60;
-
-            $dayMins   = max(0, min($endM, $nightStartMin) - max($startM, 17 * 60));
-            $nightMins = max(0, $endM - max($startM, $nightStartMin));
-            $approvedHours = (int) round(
-                $otr->hours ?? (($endM - $startM) / 60),
-                0,
-                PHP_ROUND_HALF_UP
-            );
-
             // Double pay always requires an approved OTR. Public holidays and
             // scheduled days off only decide how that approved OTR is classified.
             $otDate = Carbon::parse($otr->ot_date);
-            if (
+            $split = ApprovedOvertime::split($otr,
                 !$employee->isWorkingDay($otDate)
                 || isset($holidaysSet[$otDate->toDateString()])
                 || $manualDayOffDates->has($otDate->toDateString())
-            ) {
-                $doublePayOT += $approvedHours;
-                continue;
-            }
+            );
+            if (!$split) continue;
 
-            // Split the approved whole-hour total without creating fractional salary hours.
-            $dayHours = intdiv($dayMins, 60);
-            $nightHours = intdiv($nightMins, 60);
-            $remaining = max(0, $approvedHours - $dayHours - $nightHours);
-            $dayRemainder = $dayMins % 60;
-            $nightRemainder = $nightMins % 60;
-            while ($remaining > 0) {
-                if ($nightRemainder > $dayRemainder) {
-                    $nightHours++;
-                    $nightRemainder = -1;
-                } else {
-                    $dayHours++;
-                    $dayRemainder = -1;
-                }
-                $remaining--;
-            }
-
-            $totalDayOT += $dayHours;
-            $totalNightOT += $nightHours;
+            $doublePayOT += $split['double'];
+            $totalDayOT += $split['day'];
+            $totalNightOT += $split['night'];
         }
 
         // Unpaid leave always deducts the approved day fraction at 8 hours per day.

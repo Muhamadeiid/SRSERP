@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
+use App\Models\PublicHoliday;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -30,7 +31,6 @@ class PayrollAttendanceSheet
     private const TABLE_COLUMNS = 'DEFGHIJKLMNOPQRS';
     private const DAY_OFF_FILL = 'D9D9D9';
     private const ABSENCE_FILL = 'FF0000';
-    private const NIGHT_START_MINUTES = 19 * 60;
 
     /** @var array<string, array> */
     private array $templates = [];
@@ -233,6 +233,7 @@ class PayrollAttendanceSheet
             $sheet->setCellValue("L{$row}", $day['otEnd']);
             $sheet->setCellValue("M{$row}", $day['dayOt'] ?: null);
             $sheet->setCellValue("N{$row}", $day['nightOt'] ?: null);
+            $sheet->setCellValue("O{$row}", $day['doubleOt'] ?: null);
             $this->formula($sheet, "P{$row}", "=M{$row}+N{$row}+O{$row}");
             $sheet->setCellValue("Q{$row}", $day['deductionHours']);
             $sheet->setCellValue("S{$row}", $day['notes'] !== '' ? $day['notes'] : null);
@@ -323,7 +324,15 @@ class PayrollAttendanceSheet
             ->whereDate('end_date', '>=', $startDate)
             ->get();
         $absences = $this->absenceDeductions->forEmployee($employee, $startDate, $endDate);
-        $isIntervention = $employee->isIntervention();
+        // Overtime only from approved overtime requests, never from punches
+        $overtimeRequests = LeaveRequest::where('employee_id', $employee->id)
+            ->where('type', 'otr')
+            ->whereIn('status', ApprovedOvertime::STATUSES)
+            ->whereDate('ot_date', '>=', $startDate)
+            ->whereDate('ot_date', '<=', $endDate)
+            ->get()
+            ->groupBy(fn ($otr) => Carbon::parse($otr->ot_date)->toDateString());
+        $holidays = $this->holidayDates($startDate, $endDate);
 
         $minutes = function ($time): ?int {
             if (!$time) return null;
@@ -352,21 +361,22 @@ class PayrollAttendanceSheet
             $out = $minutes($record?->check_out);
             $leaveLabel = $fullDay ? ['annual' => 'Annual', 'casual' => 'Casual', 'sick' => 'Sick'][$fullDay->leave_type] : null;
 
-            // Overtime as on the form: from 17:00 (or the end of an intervention
-            // shift) to check-out, split at 19:00 into day and night hours
+            // Approved overtime requests of the day, split like the salary sheet;
+            // on a day off or public holiday it is double pay
             $otStart = $otEnd = null;
-            $dayOt = $nightOt = 0;
-            if ($record && (float) $record->overtime_hours > 0 && $out !== null) {
-                $from = $isIntervention
-                    ? ($in !== null ? $in + (int) (($record->expected_hours ?? 9) * 60) : null)
-                    : 17 * 60;
-                if ($from !== null && $out > $from) {
-                    $otStart = $fraction($from);
-                    $otEnd = $fraction($out);
-                    $dayOt = (int) round(max(0, min($out, self::NIGHT_START_MINUTES) - $from) / 60);
-                    $nightOt = (int) round(max(0, $out - max($from, self::NIGHT_START_MINUTES)) / 60);
-                }
+            $dayOt = $nightOt = $doubleOt = 0;
+            $doublePayDay = !$employee->isWorkingDay($date->copy()) || $record?->status === 'off' || isset($holidays[$key]);
+            foreach ($overtimeRequests->get($key, collect()) as $otr) {
+                $split = ApprovedOvertime::split($otr, $doublePayDay);
+                if (!$split) continue;
+                $otStart = min($otStart ?? PHP_INT_MAX, $split['start']);
+                $otEnd = max($otEnd ?? 0, $split['end']);
+                $dayOt += $split['day'];
+                $nightOt += $split['night'];
+                $doubleOt += $split['double'];
             }
+            $otStart = $otStart === null ? null : $fraction($otStart % 1440);
+            $otEnd = $otEnd === null ? null : $fraction($otEnd % 1440);
 
             $notes = $companyPaid ? trim((string) $companyPaid->purpose) : trim((string) ($record?->notes ?? ''));
             if ($early) {
@@ -389,10 +399,30 @@ class PayrollAttendanceSheet
                 'otEnd' => $otEnd,
                 'dayOt' => $dayOt,
                 'nightOt' => $nightOt,
+                'doubleOt' => $doubleOt,
                 'notes' => $notes,
             ];
         }
 
         return $days;
+    }
+
+    /** @return array<string, true> public holiday dates within the period */
+    private function holidayDates(string $startDate, string $endDate): array
+    {
+        $dates = [];
+        $holidays = PublicHoliday::query()
+            ->whereDate('date', '<=', $endDate)
+            ->where(fn ($q) => $q->whereDate('end_date', '>=', $startDate)
+                ->orWhere(fn ($single) => $single->whereNull('end_date')->whereDate('date', '>=', $startDate)))
+            ->get(['date', 'end_date']);
+        foreach ($holidays as $holiday) {
+            $to = $holiday->end_date ?? $holiday->date;
+            for ($day = Carbon::parse($holiday->date); $day->lte($to); $day->addDay()) {
+                $dates[$day->toDateString()] = true;
+            }
+        }
+
+        return $dates;
     }
 }
