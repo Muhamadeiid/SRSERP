@@ -1101,7 +1101,11 @@ class LeaveRequestController extends Controller
                     $changes['available_balance'] = $balance->getEffectiveRemaining('annual');
                     $changes['casual_available_balance'] = $balance->getEffectiveRemaining('casual');
                     $companyPaid = (bool) ($changes['company_paid'] ?? $locked->company_paid);
-                    if (!$companyPaid && ($changes['paid'] ?? $locked->paid) !== false && !$balance->deduct($changes['leave_type'], (float) $changes['days'])) {
+                    // The amendment holds only the fields that changed; a moved
+                    // date or new early-leave time keeps the type and days
+                    $leaveType = $changes['leave_type'] ?? $locked->leave_type;
+                    $days = (float) ($changes['days'] ?? $locked->days);
+                    if (!$companyPaid && ($changes['paid'] ?? $locked->paid) !== false && !$balance->deduct($leaveType, $days)) {
                         throw ValidationException::withMessages(['balance' => 'The employee does not have enough balance for the amended request.']);
                     }
                     $changes['balance_deducted_at'] = (!$companyPaid && ($changes['paid'] ?? $locked->paid) !== false) ? now() : null;
