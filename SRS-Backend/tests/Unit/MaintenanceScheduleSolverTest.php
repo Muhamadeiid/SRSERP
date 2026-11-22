@@ -90,6 +90,27 @@ class MaintenanceScheduleSolverTest extends TestCase
         }
     }
 
+    public function test_a_g_check_takes_two_consecutive_working_days(): void
+    {
+        // G is due on Thursday 26 Nov 2026 (three months after the B3): the two
+        // G days must not straddle Friday 27 Nov
+        foreach (['G1', 'G2'] as $i => $train) {
+            DB::table('trains')->insert(['id' => $train, 'name' => "TS {$train}", 'display_order' => $i + 1]);
+            foreach (['2026-08-26' => 'B3', '2026-10-15' => 'A', '2026-10-29' => 'A'] as $date => $code) {
+                DB::table('maintenance_schedule')->insert(['schedule_date' => $date, 'train_id' => $train, 'code' => $code]);
+            }
+        }
+
+        $entries = app(MaintenanceScheduleGenerator::class)->preview(2026, 11)['entries'];
+
+        foreach (['G1', 'G2'] as $train) {
+            $gDays = collect($entries)->filter(fn ($row) => ($row[$train] ?? null) === 'G')->keys()->values();
+            $this->assertCount(2, $gDays, "{$train} should have a two-day G");
+            $this->assertSame(1, (int) Carbon::parse($gDays[0])->diffInDays(Carbon::parse($gDays[1])), "{$train} G days must be back to back");
+            $this->assertFalse(Carbon::parse($gDays[0])->isFriday() || Carbon::parse($gDays[1])->isFriday());
+        }
+    }
+
     public function test_nine_year_overhaul_lasts_thirty_working_days_excluding_fridays_and_public_holidays(): void
     {
         DB::table('trains')->insert([

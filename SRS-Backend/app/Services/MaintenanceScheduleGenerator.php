@@ -319,11 +319,8 @@ class MaintenanceScheduleGenerator
             $visitCode = $isB ? self::B_CYCLE[((int) array_search($code, self::B_CYCLE, true) + 1) % count(self::B_CYCLE)] : 'A';
             $second = [];
             if ($visitCode === 'G') {
-                $next = $date->copy()->addDay();
-                while ($next->lte($end) && ! $this->isWorkingDay($next, $holidays)) {
-                    $next->addDay();
-                }
-                if (! $usable($next)) {
+                $next = $this->secondGDay($date, $end, $holidays);
+                if (! $next || ! $usable($next)) {
                     return null;
                 }
                 $second[] = $next->toDateString();
@@ -753,11 +750,8 @@ class MaintenanceScheduleGenerator
 
     private function planSecondGDay(Carbon $first, Carbon $end, string $trainId, array &$plan, array $blocked, array $holidays, array &$warnings): void
     {
-        $second = $first->copy()->addDay();
-        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
-            $second->addDay();
-        }
-        if ($second->gt($end) || ! empty($blocked[$trainId][$second->toDateString()]) || ! empty($plan[$second->toDateString()][$trainId])) {
+        $second = $this->secondGDay($first, $end, $holidays);
+        if (! $second || ! empty($blocked[$trainId][$second->toDateString()]) || ! empty($plan[$second->toDateString()][$trainId])) {
             $warnings[] = "Train {$trainId}: the second G day falls outside the available schedule.";
 
             return;
@@ -845,9 +839,8 @@ class MaintenanceScheduleGenerator
 
     private function prepareSecondGDay(Carbon $first, Carbon $start, Carbon $end, string $trainId, Collection $past, array &$plan, array $blocked, array $holidays): bool
     {
-        $second = $first->copy()->addDay();
-        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) $second->addDay();
-        if ($second->gt($end)) return false;
+        $second = $this->secondGDay($first, $end, $holidays);
+        if (! $second) return false;
 
         $key = $second->toDateString();
         if (!empty($blocked[$trainId][$key]) || !empty($plan[$key][$trainId]) || $this->hasHeavyVisit($plan[$key] ?? [])) return false;
@@ -1050,11 +1043,8 @@ class MaintenanceScheduleGenerator
         }
         $this->put($plan, $first, $trainId, $nextCode);
         if ($nextCode === 'G') {
-            $second = $first->copy()->addDay();
-            while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
-                $second->addDay();
-            }
-            if ($second->lte($end) && empty($plan[$second->toDateString()][$trainId])) {
+            $second = $this->secondGDay($first, $end, $holidays);
+            if ($second && empty($plan[$second->toDateString()][$trainId])) {
                 $this->put($plan, $second, $trainId, 'G');
             }
         }
@@ -1079,11 +1069,8 @@ class MaintenanceScheduleGenerator
             return;
         }
 
-        $second = $date->copy()->addDay();
-        while ($second->lte($end) && ! $this->isWorkingDay($second, $holidays)) {
-            $second->addDay();
-        }
-        if ($second->lte($end) && empty($plan[$second->toDateString()][$trainId])) {
+        $second = $this->secondGDay($date, $end, $holidays);
+        if ($second && empty($plan[$second->toDateString()][$trainId])) {
             $this->put($plan, $second, $trainId, 'G');
         }
     }
@@ -1312,6 +1299,17 @@ class MaintenanceScheduleGenerator
         });
 
         return $dates;
+    }
+
+    /**
+     * A G check takes two consecutive days with no Friday or holiday between:
+     * the day after the first, when that is a working day inside the month.
+     */
+    private function secondGDay(Carbon $first, Carbon $end, array $holidays): ?Carbon
+    {
+        $second = $first->copy()->addDay();
+
+        return $second->lte($end) && $this->isWorkingDay($second, $holidays) ? $second : null;
     }
 
     private function isWorkingDay(Carbon $date, array $holidays): bool
