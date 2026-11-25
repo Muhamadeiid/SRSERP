@@ -47,6 +47,9 @@ class PrfController extends Controller
         'regex:/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/',
     ];
 
+    // Several note images per PRF; six fit the printed form on one page or two.
+    private const MAX_NOTES_IMAGES = 6;
+
     // ─────────────────────────────────────────────────────────────
     //  LIST
     // ─────────────────────────────────────────────────────────────
@@ -61,7 +64,7 @@ class PrfController extends Controller
             'items',
             'approvals.approver:id,name,role',
         ]);
-        $forList = fn ($prfs) => $prfs->each->makeHidden('notes_image');
+        $forList = fn ($prfs) => $prfs->each->makeHidden(['notes_image', 'notes_images']);
 
         if ($request->boolean('mine')) {
             $query->where('requested_by', $user->id);
@@ -187,6 +190,8 @@ class PrfController extends Controller
             'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
             'notes_image'                   => self::NOTES_IMAGE_RULE,
+            'notes_images'                  => 'nullable|array|max:' . self::MAX_NOTES_IMAGES,
+            'notes_images.*'                => array_merge(['required'], array_slice(self::NOTES_IMAGE_RULE, 1)),
             'items'                         => 'required|array|min:1',
             'items.*.description'           => 'required|string|max:500',
             'items.*.technical_specifications' => 'nullable|string|max:2000',
@@ -226,7 +231,7 @@ class PrfController extends Controller
                 'requester_email'   => $data['requester_email']   ?? $user->company_email,
                 'material_category' => $data['material_category'] ?? [],
                 'notes'             => $data['notes']             ?? null,
-                'notes_image'       => $data['notes_image']       ?? null,
+                ...$this->notesImages($data),
                 'status'            => 'pending_material',
             ]);
 
@@ -275,6 +280,8 @@ class PrfController extends Controller
             'material_category.*'           => ['required', 'string', Rule::in(self::MATERIAL_CATEGORIES)],
             'notes'                         => 'nullable|string|max:2000',
             'notes_image'                   => self::NOTES_IMAGE_RULE,
+            'notes_images'                  => 'nullable|array|max:' . self::MAX_NOTES_IMAGES,
+            'notes_images.*'                => array_merge(['required'], array_slice(self::NOTES_IMAGE_RULE, 1)),
             'items'                         => 'required|array|min:1',
             'items.*.description'           => 'required|string|max:500',
             'items.*.technical_specifications' => 'nullable|string|max:2000',
@@ -308,7 +315,7 @@ class PrfController extends Controller
                 'requester_email'   => $data['requester_email'] ?? auth()->user()->company_email,
                 'material_category' => $data['material_category'] ?? [],
                 'notes'             => $data['notes'] ?? null,
-                'notes_image'       => $data['notes_image'] ?? null,
+                ...$this->notesImages($data),
             ]);
 
             $lockedPrf->items()->delete();
@@ -680,6 +687,19 @@ class PrfController extends Controller
             'pending_depot' => $user->hasPermission('prf.approve_depot'),
             default => false,
         };
+    }
+
+    /**
+     * The note images sent with a PRF. Older screens send a single
+     * notes_image; notes_image keeps the first image for anything reading it.
+     */
+    private function notesImages(array $data): array
+    {
+        $images = array_key_exists('notes_images', $data)
+            ? array_values(array_filter($data['notes_images'] ?? []))
+            : array_values(array_filter([$data['notes_image'] ?? null]));
+
+        return ['notes_images' => $images ?: null, 'notes_image' => $images[0] ?? null];
     }
 
     private function prfSnapshot(Prf $prf): array

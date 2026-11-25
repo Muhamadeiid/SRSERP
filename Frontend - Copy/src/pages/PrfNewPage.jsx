@@ -9,6 +9,14 @@ import { createPrf, getPrf, updatePrf, MATERIAL_CATEGORIES } from '../services/p
 import { PRF_TEMPLATES } from '../utils/prfTemplates'
 
 const today = () => new Date().toISOString().slice(0, 10)
+const MAX_NOTES_IMAGES = 6
+const NOTES_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const readAsDataUrl = file => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = () => reject(reader.error)
+  reader.readAsDataURL(file)
+})
 const INPUT = 'w-full px-3 py-2 text-sm bg-white border border-neutral-200 rounded-lg outline-none focus:border-primary transition-colors'
 const DELIVERY_LOCATIONS = ['Ganz depot', 'Tura workshop', 'Kozzika', 'Katamya']
 const EHS_REQUIREMENTS = ['SDS', 'No EHS Required']
@@ -43,7 +51,7 @@ export default function PrfNewPage() {
     requester_phone:   user?.mobile_number ?? '',
     requester_email:   user?.company_email ?? '',
     notes: '',
-    notes_image: '',                                // base64 data-URI (optional)
+    notes_images: [],                               // base64 data-URIs (optional)
     material_category: [],
     items: [ { ...EMPTY_ITEM }, { ...EMPTY_ITEM }, { ...EMPTY_ITEM } ],   // start with 3 rows
   })
@@ -84,7 +92,7 @@ export default function PrfNewPage() {
           requester_phone: prf.requester_phone ?? '',
           requester_email: prf.requester_email ?? user?.company_email ?? '',
           notes: prf.notes ?? '',
-          notes_image: prf.notes_image ?? '',
+          notes_images: prf.notes_images?.length ? prf.notes_images : (prf.notes_image ? [prf.notes_image] : []),
           material_category: prf.material_category ?? [],
           items: (prf.items ?? []).map(item => ({
             description: item.description ?? '',
@@ -143,22 +151,28 @@ export default function PrfNewPage() {
     items: f.items.length > 1 ? f.items.filter((_, idx) => idx !== i) : f.items,
   }))
 
-  // ── Notes image upload (file → base64 data-URI) ─────────────────────────
-  const handleNotesImage = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-      alert('Please upload a PNG, JPG, WEBP or GIF image')
+  // ── Notes images upload (files → base64 data-URIs) ───────────────────────
+  const handleNotesImages = async (e) => {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (files.length === 0) return
+    const room = MAX_NOTES_IMAGES - form.notes_images.length
+    if (files.length > room) {
+      alert(`You can attach up to ${MAX_NOTES_IMAGES} images`)
       return
     }
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Image must be smaller than 2MB')
+    if (files.some(file => !NOTES_IMAGE_TYPES.includes(file.type))) {
+      alert('Please upload PNG, JPG, WEBP or GIF images')
       return
     }
-    const reader = new FileReader()
-    reader.onload = (ev) => set('notes_image', ev.target.result)
-    reader.readAsDataURL(file)
+    if (files.some(file => file.size > 2 * 1024 * 1024)) {
+      alert('Each image must be smaller than 2MB')
+      return
+    }
+    const added = await Promise.all(files.map(readAsDataUrl))
+    setForm(f => ({ ...f, notes_images: [...f.notes_images, ...added].slice(0, MAX_NOTES_IMAGES) }))
   }
+  const removeNotesImage = (index) => setForm(f => ({ ...f, notes_images: f.notes_images.filter((_, i) => i !== index) }))
 
   const submit = async (e) => {
     e.preventDefault()
@@ -421,28 +435,32 @@ export default function PrfNewPage() {
         <div className="border-b-2 border-neutral-200">
           <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between">
             <p className="text-xs font-bold text-secondary-700">Additional Notes / Instructions:</p>
-            {!form.notes_image ? (
+            {form.notes_images.length < MAX_NOTES_IMAGES && (
               <label className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold text-primary bg-white hover:bg-primary/5 border border-primary/30 rounded-lg cursor-pointer transition-all">
-                <Upload className="w-3 h-3" /> Attach Image
-                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleNotesImage} className="hidden" />
+                <Upload className="w-3 h-3" /> {form.notes_images.length ? 'Add Images' : 'Attach Images'}
+                <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleNotesImages} className="hidden" />
               </label>
-            ) : (
-              <button type="button" onClick={() => set('notes_image', '')}
-                className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold text-red-600 bg-white hover:bg-red-50 border border-red-200 rounded-lg transition-all">
-                <X className="w-3 h-3" /> Remove Image
-              </button>
             )}
           </div>
           <div className="px-4 py-3 space-y-3">
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3}
               className={INPUT + ' resize-none'} placeholder="Any additional context or special instructions..." />
 
-            {form.notes_image && (
-              <div className="relative inline-block max-w-full">
-                <img src={form.notes_image} alt="Notes attachment"
-                  className="max-h-64 max-w-full rounded-lg border border-neutral-200 shadow-sm" />
+            {form.notes_images.length > 0 && (
+              <div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {form.notes_images.map((image, index) => (
+                    <div key={index} className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 shadow-sm">
+                      <img src={image} alt={`Notes attachment ${index + 1}`} className="h-40 w-full object-contain" />
+                      <button type="button" onClick={() => removeNotesImage(index)} aria-label={`Remove image ${index + 1}`}
+                        className="absolute right-1.5 top-1.5 rounded-full border border-red-200 bg-white/95 p-1 text-red-600 shadow-sm hover:bg-red-50">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
                 <div className="mt-1 flex items-center gap-1 text-[10px] text-neutral-400">
-                  <ImageIcon className="w-3 h-3" /> Image will be embedded in the printed PRF
+                  <ImageIcon className="w-3 h-3" /> {form.notes_images.length} of {MAX_NOTES_IMAGES} images · embedded side by side in the printed PRF
                 </div>
               </div>
             )}

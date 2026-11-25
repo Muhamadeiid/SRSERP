@@ -221,6 +221,8 @@ export default function PrfDetail() {
     )
   }
 
+  const notesImages = prf.notes_images?.length ? prf.notes_images : (prf.notes_image ? [prf.notes_image] : [])
+
   return (
     <div className="w-full p-4 sm:p-6 lg:p-7 space-y-6">
 
@@ -419,15 +421,20 @@ export default function PrfDetail() {
       </div>
 
       {/* Notes (text + optional image) */}
-      {(prf.notes || prf.notes_image) && (
+      {(prf.notes || notesImages.length > 0) && (
         <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 space-y-3">
           <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Additional Notes</p>
           {prf.notes && (
             <p className="text-xs text-secondary-700 whitespace-pre-wrap leading-relaxed">{prf.notes}</p>
           )}
-          {prf.notes_image && (
-            <img src={prf.notes_image} alt="Notes attachment"
-              className="max-h-96 max-w-full rounded-lg border border-neutral-200 shadow-sm" />
+          {notesImages.length > 0 && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {notesImages.map((image, index) => (
+                <a key={index} href={image} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 shadow-sm">
+                  <img src={image} alt={`Notes attachment ${index + 1}`} className="max-h-72 w-full object-contain" />
+                </a>
+              ))}
+            </div>
           )}
         </div>
       )}

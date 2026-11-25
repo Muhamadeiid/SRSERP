@@ -23,6 +23,9 @@ const T_TOP = 0, T_CATEGORY = 1, T_ITEMS = 2, T_DELIVERY = 3, T_CONTACT = 4, T_N
 const MIN_ITEM_ROWS = 1   // only the requested items; an empty PRF still shows one blank row
 const EMU_PER_INCH = 914400
 const NOTES_IMAGE_MAX_H = 1.0  // inches
+const NOTES_WIDTH = 6.9        // inches available in the notes cell
+const NOTES_IMAGES_PER_ROW = 3
+const NOTES_IMAGE_GAP = 0.25   // inches between pictures on a row
 // Fixed signature box (inches) — fits the 1.83in approval column with padding
 const SIGNATURE_W = 1.5
 const SIGNATURE_H = 0.45
@@ -367,20 +370,38 @@ async function fillNotes(tbl, prf, images) {
   const vAlign = tcPr && kid(tcPr, 'vAlign')
   if (prf?.notes && vAlign) setW(vAlign, 'val', 'top')
 
-  if (prf?.notes_image) {
-    // Height capped so a fully-signed PRF with an attachment still fits on one page
-    const run = await images.run(doc, prf.notes_image, 6.9, NOTES_IMAGE_MAX_H)
-    if (run) {
-      const proto = kids(tc, 'p')[0]
-      const p = proto.cloneNode(true)
-      clearRuns(p)
-      setAlign(p, 'center')
-      setSpacing(p, { before: 60, after: 60 })
+  const attachments = prf?.notes_images?.length ? prf.notes_images : (prf?.notes_image ? [prf.notes_image] : [])
+  if (attachments.length === 0) return
+
+  // Side by side, up to three per row. Height is capped so a fully-signed PRF
+  // with up to three attachments still fits on one page.
+  const perRow = Math.min(NOTES_IMAGES_PER_ROW, attachments.length)
+  const boxW = (NOTES_WIDTH - NOTES_IMAGE_GAP * (perRow - 1)) / perRow
+  const proto = kids(tc, 'p')[0]
+  for (let start = 0; start < attachments.length; start += NOTES_IMAGES_PER_ROW) {
+    const p = proto.cloneNode(true)
+    clearRuns(p)
+    setAlign(p, 'center')
+    setSpacing(p, { before: 60, after: 60 })
+    for (const [i, uri] of attachments.slice(start, start + NOTES_IMAGES_PER_ROW).entries()) {
+      const run = await images.run(doc, uri, boxW, NOTES_IMAGE_MAX_H)
+      if (!run) continue
+      if (i > 0) p.appendChild(spaceRun(doc))
       p.appendChild(run)
-      tc.appendChild(p)
-      if (vAlign) setW(vAlign, 'val', 'top')
     }
+    if (kids(p, 'r').length) tc.appendChild(p)
   }
+  if (vAlign) setW(vAlign, 'val', 'top')
+}
+
+// Plain spaces between two pictures on the same line
+function spaceRun(doc) {
+  const r = wEl(doc, 'r')
+  const t = wEl(doc, 't')
+  t.setAttribute('xml:space', 'preserve')
+  t.textContent = '    '
+  r.appendChild(t)
+  return r
 }
 
 async function fillApprovals(tbl, prf, images) {

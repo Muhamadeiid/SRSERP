@@ -23,6 +23,7 @@ class Prf extends Model
         'material_category',
         'notes',
         'notes_image',
+        'notes_images',
         'status',
         'deleted_by',
     ];
@@ -30,6 +31,7 @@ class Prf extends Model
     protected $casts = [
         'date'              => 'date',
         'material_category' => 'array',
+        'notes_images'      => 'array',
     ];
 
     public function requester()
